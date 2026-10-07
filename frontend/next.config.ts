@@ -15,4 +15,6 @@ export default nextConfig;
 
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-initOpenNextCloudflareForDev();
+if (process.env.SKIP_CLOUDFLARE_DEV_INIT !== "true") {
+  initOpenNextCloudflareForDev();
+}

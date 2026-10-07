@@ -10,7 +10,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d honeysummer"]
       interval: 3s
@@ -28,7 +28,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/honeysummer
     command: ["./docker-entrypoint.dev.sh"]
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8001}:8000"
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
@@ -57,6 +57,7 @@ services:
     environment:
       DJANGO_API_URL: http://backend:8000
       NEXT_TELEMETRY_DISABLED: "1"
+      SKIP_CLOUDFLARE_DEV_INIT: "true"
     ports:
       - "3000:3000"
     volumes:

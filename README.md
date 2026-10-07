@@ -17,7 +17,7 @@ With OrbStack or Docker Desktop running, start PostgreSQL, Django, and Next.js t
 docker compose up --build
 ```
 
-The first startup builds both application images, waits for PostgreSQL, and runs Django migrations automatically. Open [http://localhost:3000](http://localhost:3000); the API remains available at [http://localhost:8000](http://localhost:8000). Source changes are mounted into both application containers.
+The first startup builds both application images, waits for PostgreSQL, and runs Django migrations automatically. Open [http://localhost:3000](http://localhost:3000); the Dockerized API is available at [http://localhost:8001](http://localhost:8001). Source changes are mounted into both application containers. Set `BACKEND_PORT` before starting Compose if you prefer another host port; container-to-container traffic always uses port 8000.
 
 Stop the stack with `Ctrl+C`, followed by `docker compose down`. Database data remains in the `honeysummer_postgres_data` Docker volume. Use `docker compose down --volumes` only when you intentionally want to erase local data.
 

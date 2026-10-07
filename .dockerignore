@@ -1,0 +1,14 @@
+.git
+.gitignore
+.openchamber
+node_modules
+frontend/node_modules
+frontend/.next
+frontend/.open-next
+frontend/.wrangler
+backend/.venv
+backend/__pycache__
+backend/**/__pycache__
+backend/staticfiles
+*.pyc
+.DS_Store
