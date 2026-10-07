@@ -86,3 +86,33 @@ def send_inquiry_emails(inquiry):
         )
     except Exception:  # pragma: no cover - defensive
         logger.exception("Unable to send inquiry emails for inquiry %s", inquiry.pk)
+
+
+def send_order_emails(order):
+    lines = [
+        f"Thank you for your Honey Summer wholesale order #{order.pk}.", "",
+        *[f"{item.quantity} × {item.name_snapshot} (${item.price_snapshot} each)" for item in order.items.all()],
+        "", f"Fulfillment: {order.get_fulfillment_display()}",
+    ]
+    if order.pickup_window:
+        lines.append(f"Pickup window: {order.pickup_window}")
+    if order.delivery_address:
+        lines.append(f"Delivery address: {order.delivery_address}")
+    body = "\n".join(lines) + "\n\nIsabella will be in touch with final pickup or delivery details.\n\nWith warmth,\nHoney Summer"
+    try:
+        send_mail(f"Honey Summer wholesale order #{order.pk}", body, settings.DEFAULT_FROM_EMAIL, [order.customer.email], reply_to=[settings.INQUIRY_NOTIFICATION_EMAIL])
+        send_mail(f"New Honey Summer wholesale order #{order.pk}", body, settings.DEFAULT_FROM_EMAIL, [settings.INQUIRY_NOTIFICATION_EMAIL], reply_to=[order.customer.email])
+    except Exception:  # pragma: no cover
+        logger.exception("Unable to send order emails for order %s", order.pk)
+
+
+def send_signup_notification(profile):
+    try:
+        send_mail(
+            "New Honey Summer wholesale account request",
+            f"{profile.business_name} ({profile.user.email}) requested wholesale access. Review and approve them in Django admin.",
+            settings.DEFAULT_FROM_EMAIL,
+            [settings.INQUIRY_NOTIFICATION_EMAIL],
+        )
+    except Exception:  # pragma: no cover
+        logger.exception("Unable to send wholesale signup notification")

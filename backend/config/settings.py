@@ -120,6 +120,10 @@ DEFAULT_FROM_EMAIL = os.getenv(
 INQUIRY_NOTIFICATION_EMAIL = os.getenv(
     "INQUIRY_NOTIFICATION_EMAIL", DEFAULT_FROM_EMAIL
 )
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+CHECKOUT_SUCCESS_URL = os.getenv("CHECKOUT_SUCCESS_URL", "http://localhost:3000/wholesale?checkout=success")
+CHECKOUT_CANCEL_URL = os.getenv("CHECKOUT_CANCEL_URL", "http://localhost:3000/wholesale?checkout=cancelled")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -132,4 +136,7 @@ REST_FRAMEWORK = {
 
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+# Keep the local Honey Summer session separate from other Django apps that may
+# be running on localhost during development.
+SESSION_COOKIE_NAME = "honeysummer_sessionid"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

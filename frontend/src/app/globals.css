@@ -101,6 +101,27 @@ textarea {
   margin: 0;
 }
 
+.wholesale-access,
+.wholesale-shop { margin-block: 5rem; }
+.wholesale-access { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; padding: 3rem; background: var(--paper); border-radius: 1.5rem; box-shadow: var(--shadow); }
+.wholesale-auth { display: grid; gap: 1rem; align-content: start; }
+.wholesale-auth label, .quantity label { display: grid; gap: .35rem; font-family: var(--font-geist), sans-serif; font-size: .8rem; }
+.wholesale-auth input, .quantity input { border: 1px solid var(--taupe); border-radius: .5rem; background: var(--cream-light); padding: .7rem; }
+.wholesale-shop__heading { display: flex; justify-content: space-between; align-items: end; margin-bottom: 1.5rem; }
+.flower-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.flower-card { overflow: hidden; background: var(--paper); border-radius: 1rem; box-shadow: var(--shadow); }
+.flower-card img, .flower-card__placeholder { width: 100%; height: 220px; object-fit: cover; background: var(--pink-light); }
+.flower-card__placeholder { display: grid; place-items: center; color: var(--cocoa); font-size: 3rem; }
+.flower-card__body { display: grid; gap: .45rem; padding: 1.2rem; }
+.flower-card__body h3, .flower-card__body p { margin: 0; }
+.flower-card__body strong { margin-top: .4rem; }
+.quantity { display: flex; justify-content: space-between; align-items: center; margin-top: .5rem; }
+.quantity input { width: 5rem; padding: .4rem; }
+.sold-out { color: var(--cocoa); font-family: var(--font-geist), sans-serif; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; }
+.cart-bar { position: sticky; bottom: 1rem; z-index: 2; display: flex; justify-content: space-between; align-items: center; margin-top: 2rem; padding: 1rem 1.25rem; background: var(--cocoa); color: var(--cream-light); border-radius: 999px; box-shadow: var(--shadow); }
+.form-message { font-family: var(--font-geist), sans-serif; font-size: .85rem; }
+@media (max-width: 700px) { .wholesale-access, .flower-grid { grid-template-columns: 1fr; } .wholesale-access { padding: 1.5rem; } .cart-bar { border-radius: 1rem; gap: 1rem; } }
+
 .site-header {
   min-height: 9rem;
   display: flex;

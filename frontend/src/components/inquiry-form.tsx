@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { AlertCircle, Loader2, Lock } from "lucide-react";
 
 import { submitInquiry } from "@/lib/actions";
@@ -176,4 +176,70 @@ export function InquiryForm({
       </div>
     </form>
   );
+}
+type Flower = { id: number; name: string; variety: string; color: string; photo_url: string; stem_notes: string; price: string; unit: string; quantity_available: number; sold_out: boolean; available: boolean };
+type Cart = Record<number, number>;
+
+async function api(path: string, options?: RequestInit) {
+  const response = await fetch(`/api/${path}`, { ...options, headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) } });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.detail || "Something went wrong.");
+  return data;
+}
+
+export function WholesaleShop() {
+  const [account, setAccount] = useState<{ authenticated: boolean; approved: boolean; business_name: string } | null>(null);
+  const [flowers, setFlowers] = useState<Flower[]>([]);
+  const [cart, setCart] = useState<Cart>({});
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { api("auth/me/").then(setAccount).catch(() => setAccount({ authenticated: false, approved: false, business_name: "" })); }, []);
+  useEffect(() => { if (account?.authenticated && account.approved) api("flowers/").then(setFlowers).catch(() => undefined); }, [account]);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    const form = new FormData(event.currentTarget);
+    try {
+      const body: Record<string, string> = { email: String(form.get("email")), password: String(form.get("password")) };
+      if (mode === "signup") { body.business_name = String(form.get("business_name")); body.phone = String(form.get("phone")); }
+      const data = await api(`auth/${mode}/`, { method: "POST", body: JSON.stringify(body) });
+      if (mode === "signup") setMessage(data.detail);
+      else setAccount(data);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to continue."); }
+    setBusy(false);
+  }
+
+  async function checkout() {
+    setBusy(true); setMessage("");
+    try {
+      const data = await api("checkout/", { method: "POST", body: JSON.stringify({ items: Object.entries(cart).map(([id, quantity]) => ({ id: Number(id), quantity })) }) });
+      if (data.checkout_url) window.location.href = data.checkout_url;
+      else setMessage(`Order #${data.order_id} received. Isabella will confirm your pickup details.`);
+      setCart({});
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Checkout failed."); }
+    setBusy(false);
+  }
+
+  if (!account?.authenticated || !account.approved) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">
+    <div><p className="eyebrow">Wholesale shop</p><h2 id="shop-title">Sign in to see what is blooming.</h2><p>Approved Honey Summer florist accounts see live availability and wholesale pricing here.</p></div>
+    <form className="wholesale-auth" onSubmit={submit}>
+      {mode === "signup" && <><label>Business name<input name="business_name" required /></label><label>Phone<input name="phone" /></label></>}
+      <label>Email<input name="email" type="email" required /></label><label>Password<input name="password" type="password" minLength={8} required /></label>
+      <button className="button button--dark" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Request account"}</button>
+      <button type="button" className="text-link" onClick={() => setMode(mode === "login" ? "signup" : "login")}>{mode === "login" ? "Need wholesale access? Request an account" : "Already approved? Sign in"}</button>
+      {message && <p role="status" className="form-message">{message}</p>}
+    </form>
+  </section>;
+
+  const cartTotal = Object.entries(cart).reduce((sum, [id, quantity]) => sum + Number(flowers.find((flower) => flower.id === Number(id))?.price ?? 0) * quantity, 0);
+  return <section className="wholesale-shop section-wrap" aria-labelledby="shop-title">
+    <div className="wholesale-shop__heading"><div><p className="eyebrow">Welcome, {account.business_name}</p><h2 id="shop-title">This week’s stems.</h2></div><button className="text-link" onClick={() => api("auth/logout/", { method: "POST" }).then(() => setAccount({ authenticated: false, approved: false, business_name: "" }))}>Sign out</button></div>
+    {flowers.length === 0 ? <p>Nothing is listed today — check back soon.</p> : <div className="flower-grid">{flowers.map((flower) => <article className="flower-card" key={flower.id}>
+      {flower.photo_url ? <img src={flower.photo_url} alt="" /> : <div className="flower-card__placeholder">✿</div>}<div className="flower-card__body"><p className="eyebrow">{flower.color || "Seasonal"}</p><h3>{flower.name}</h3><p>{flower.variety} {flower.stem_notes && `· ${flower.stem_notes}`}</p><strong>${flower.price} / {flower.unit}</strong>{flower.available ? <div className="quantity"><label htmlFor={`flower-${flower.id}`}>Quantity</label><input id={`flower-${flower.id}`} type="number" min="0" max={flower.quantity_available} value={cart[flower.id] ?? 0} onChange={(event) => setCart({ ...cart, [flower.id]: Math.min(flower.quantity_available, Math.max(0, Number(event.target.value))) })} /></div> : <span className="sold-out">Sold out</span>}</div>
+    </article>)}</div>}
+    {Object.keys(cart).length > 0 && <div className="cart-bar"><span>{Object.values(cart).reduce((sum, quantity) => sum + quantity, 0)} stems · ${cartTotal.toFixed(2)}</span><button className="button button--dark" disabled={busy} onClick={checkout}>Continue to checkout</button></div>}
+    {message && <p role="status" className="form-message">{message}</p>}
+  </section>;
 }

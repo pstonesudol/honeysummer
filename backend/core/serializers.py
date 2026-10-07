@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Announcement, GalleryImage, Inquiry
+from .models import Announcement, FlowerListing, GalleryImage, Inquiry
 
 MAX_PHOTO_BYTES = 10 * 1024 * 1024  # 10 MB
 
@@ -45,3 +45,15 @@ class InquirySerializer(serializers.ModelSerializer):
         if content_type and not content_type.startswith("image/"):
             raise serializers.ValidationError("Please upload an image file.")
         return value
+
+
+class FlowerListingSerializer(serializers.ModelSerializer):
+    available = serializers.ReadOnlyField()
+    photo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FlowerListing
+        fields = ("id", "name", "variety", "color", "photo_url", "stem_notes", "price", "unit", "quantity_available", "sold_out", "available")
+
+    def get_photo_url(self, obj):
+        return obj.photo.url if obj.photo else ""

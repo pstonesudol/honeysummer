@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { BadgeCheck, Flower2, Truck } from "lucide-react";
 
-import { InquiryForm } from "@/components/inquiry-form";
+import { InquiryForm, WholesaleShop } from "@/components/inquiry-form";
 import { inquiryIntros } from "@/lib/inquiry-fields";
 import { site } from "@/lib/site";
 
@@ -73,6 +73,8 @@ export default function WholesalePage() {
           </div>
         </div>
       </section>
+
+      <WholesaleShop />
 
       <section className="value-grid section-wrap" aria-label="Why florists work with us">
         {benefits.map((benefit) => (
