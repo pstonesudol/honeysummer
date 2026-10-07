@@ -100,8 +100,20 @@ def send_order_emails(order):
         lines.append(f"Delivery address: {order.delivery_address}")
     body = "\n".join(lines) + "\n\nIsabella will be in touch with final pickup or delivery details.\n\nWith warmth,\nHoney Summer"
     try:
-        send_mail(f"Honey Summer wholesale order #{order.pk}", body, settings.DEFAULT_FROM_EMAIL, [order.customer.email], reply_to=[settings.INQUIRY_NOTIFICATION_EMAIL])
-        send_mail(f"New Honey Summer wholesale order #{order.pk}", body, settings.DEFAULT_FROM_EMAIL, [settings.INQUIRY_NOTIFICATION_EMAIL], reply_to=[order.customer.email])
+        EmailMessage(
+            f"Honey Summer wholesale order #{order.pk}",
+            body,
+            settings.DEFAULT_FROM_EMAIL,
+            [order.customer.email],
+            reply_to=[settings.INQUIRY_NOTIFICATION_EMAIL],
+        ).send()
+        EmailMessage(
+            f"New Honey Summer wholesale order #{order.pk}",
+            body,
+            settings.DEFAULT_FROM_EMAIL,
+            [settings.INQUIRY_NOTIFICATION_EMAIL],
+            reply_to=[order.customer.email],
+        ).send()
     except Exception:  # pragma: no cover
         logger.exception("Unable to send order emails for order %s", order.pk)
 
