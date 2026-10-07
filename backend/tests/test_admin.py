@@ -165,3 +165,45 @@ async def test_cancel_order_action_releases_stock():
         listing = await session.get(FlowerListing, listing_id)
     assert order.status == "cancelled"
     assert listing.quantity_available == 5
+
+
+@pytest.mark.asyncio
+async def test_florist_list_and_edit_render_relationship_columns():
+    await _make_admin()
+    async with session_scope() as session:
+        profile = FloristProfile(
+            business_name="Fern & Fig",
+            approved=False,
+            user=User(email="florist@example.com", password_hash=hash_password("x")),
+        )
+        session.add(profile)
+        await session.commit()
+        profile_id = profile.id
+    await _login()
+
+    _, listing = await app.asgi_client.get("/admin/florists")
+
+    assert listing.status == 200
+    assert "Fern" in listing.text
+
+    _, edit = await app.asgi_client.get(f"/admin/florists/{profile_id}")
+
+    assert edit.status == 200
+    assert "florist@example.com" in edit.text
+
+
+@pytest.mark.asyncio
+async def test_orders_list_renders_customer_column():
+    await _make_admin()
+    async with session_scope() as session:
+        user = User(email="buyer@example.com", password_hash=hash_password("x"))
+        session.add(user)
+        await session.flush()
+        session.add(Order(customer_id=user.id, status="paid"))
+        await session.commit()
+    await _login()
+
+    _, listing = await app.asgi_client.get("/admin/orders")
+
+    assert listing.status == 200
+    assert "buyer@example.com" in listing.text

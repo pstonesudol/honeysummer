@@ -20,7 +20,8 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import Blueprint
 from sanic.response import html, json, redirect
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, inspect as sa_inspect, or_, select
+from sqlalchemy.orm import selectinload
 
 from .auth import verify_password
 from .db import session_scope
@@ -308,6 +309,23 @@ def _order_columns(model, names: list[str]) -> list:
     return columns
 
 
+def _relationship_options(model, paths) -> list:
+    """Eager-load relationships referenced by display/edit paths.
+
+    Reading an unloaded relationship outside an async session raises
+    MissingGreenlet, so anything the admin renders must be pre-loaded.
+    """
+    mapper = sa_inspect(model)
+    options = []
+    seen: set[str] = set()
+    for path in paths:
+        head = path.split(".")[0]
+        if head in mapper.relationships and head not in seen:
+            seen.add(head)
+            options.append(selectinload(getattr(model, head)))
+    return options
+
+
 def _display_value(obj, path: str) -> str:
     value: Any = obj
     for part in path.split("."):
@@ -439,7 +457,9 @@ async def model_list(request, slug: str):
         return redirect("/admin/login")
     query = request.args.get("q", "").strip()
     async with session_scope() as session:
-        statement = select(admin.model)
+        statement = select(admin.model).options(
+            *_relationship_options(admin.model, [path for _, path in admin.list_columns])
+        )
         if query and admin.search:
             statement = statement.where(
                 or_(*[getattr(admin.model, name).ilike(f"%{query}%") for name in admin.search])
@@ -496,7 +516,11 @@ async def model_edit(request, slug: str, pk: int):
     if not request.ctx.admin:
         return redirect("/admin/login")
     async with session_scope() as session:
-        obj = await session.get(admin.model, pk)
+        obj = await session.scalar(
+            select(admin.model)
+            .options(*_relationship_options(admin.model, [f.name for f in admin.fields]))
+            .where(admin.model.id == pk)
+        )
     if obj is None:
         return redirect(f"/admin/{slug}")
     rows = [_field_row(obj, f) for f in admin.fields]
