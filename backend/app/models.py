@@ -37,12 +37,16 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     profile: Mapped[Optional["FloristProfile"]] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
     orders: Mapped[list["Order"]] = relationship(back_populates="customer")
+
+    def __str__(self) -> str:
+        return self.email
 
 
 class FloristProfile(Base):
@@ -59,6 +63,9 @@ class FloristProfile(Base):
 
     user: Mapped[User] = relationship(back_populates="profile")
 
+    def __str__(self) -> str:
+        return self.business_name
+
 
 class Announcement(Base):
     __tablename__ = "announcements"
@@ -73,6 +80,9 @@ class Announcement(Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
 
+    def __str__(self) -> str:
+        return self.text
+
 
 class GalleryImage(Base):
     __tablename__ = "gallery_images"
@@ -84,6 +94,9 @@ class GalleryImage(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    def __str__(self) -> str:
+        return self.caption or self.alt_text or f"Gallery image {self.id}"
 
 
 class Inquiry(Base):
@@ -99,6 +112,9 @@ class Inquiry(Base):
     photo: Mapped[str] = mapped_column(String(255), default="")
     handled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    def __str__(self) -> str:
+        return f"{self.kind} — {self.name}"
 
 
 class FlowerListing(Base):
@@ -121,6 +137,9 @@ class FlowerListing(Base):
     @property
     def available(self) -> bool:
         return self.active and not self.sold_out and self.quantity_available > 0
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class Order(Base):
@@ -145,6 +164,9 @@ class Order(Base):
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan"
     )
+
+    def __str__(self) -> str:
+        return f"Order #{self.id}"
 
 
 class OrderItem(Base):

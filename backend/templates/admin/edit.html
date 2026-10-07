@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>{% if obj %}{{ admin.label }} #{{ obj.id }}{% else %}New {{ admin.label|lower }}{% endif %}</h1>
+<form method="post"
+      action="{% if obj %}/admin/{{ admin.slug }}/{{ obj.id }}{% else %}/admin/{{ admin.slug }}/new{% endif %}"
+      enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid">
+    {% for row in rows %}
+    <div class="{% if row.field.kind in ['textarea', 'readonly'] %}full{% endif %}">
+      <label for="f-{{ row.field.name }}">{{ row.field.label }}</label>
+      {% if row.field.kind == 'readonly' %}
+        {% if row.field.name in ['photo', 'image'] and row.value %}
+          <img class="preview" src="{{ media_url }}/{{ row.value }}" alt="">
+        {% else %}
+          <div class="muted">{% if row.field.name == 'details' %}<pre>{{ row.value }}</pre>{% else %}{{ row.value }}{% endif %}</div>
+        {% endif %}
+      {% elif row.field.kind == 'bool' %}
+        <input id="f-{{ row.field.name }}" name="{{ row.field.name }}" type="checkbox" {% if row.value %}checked{% endif %}>
+      {% elif row.field.kind == 'textarea' %}
+        <textarea id="f-{{ row.field.name }}" name="{{ row.field.name }}" rows="4">{{ row.value or '' }}</textarea>
+      {% elif row.field.kind == 'select' %}
+        <select id="f-{{ row.field.name }}" name="{{ row.field.name }}">
+          {% for value, label in row.field.choices %}
+          <option value="{{ value }}" {% if row.value == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      {% elif row.field.kind == 'file' %}
+        <input id="f-{{ row.field.name }}" name="{{ row.field.name }}" type="file" accept="image/*">
+        {% if row.value %}<img class="preview" src="{{ media_url }}/{{ row.value }}" alt="">{% endif %}
+      {% else %}
+        <input id="f-{{ row.field.name }}" name="{{ row.field.name }}" type="{{ row.input_type }}"
+               {% if row.step %}step="{{ row.step }}"{% endif %}
+               value="{{ row.value if row.value is not none else '' }}">
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <p><button type="submit">Save</button> <a class="button--ghost" href="/admin/{{ admin.slug }}">Cancel</a></p>
+</form>
+{% endblock %}

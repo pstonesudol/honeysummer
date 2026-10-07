@@ -7,6 +7,7 @@ from sanic import Sanic
 from sanic.response import json
 from sanic_ext import Extend
 
+from .admin import bp as admin_bp
 from .routes.auth import bp as auth_bp
 from .routes.catalog import bp as catalog_bp
 from .routes.checkout import bp as checkout_bp
@@ -18,6 +19,7 @@ app = Sanic("honey-summer")
 app.config.SECRET = get_settings().secret_key
 Extend(app)
 
+app.blueprint(admin_bp)
 app.blueprint(auth_bp)
 app.blueprint(catalog_bp)
 app.blueprint(checkout_bp)

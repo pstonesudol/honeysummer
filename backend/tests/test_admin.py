@@ -1,0 +1,167 @@
+from decimal import Decimal
+
+import pytest
+from sqlalchemy import select
+
+from app.admin import CSRF_COOKIE
+from app.auth import hash_password
+from app.db import session_scope
+from app.models import Announcement, FlowerListing, FloristProfile, Order, OrderItem, User
+from app.server import app
+
+ADMIN_EMAIL = "boss@example.com"
+ADMIN_PASSWORD = "honey-summer-admin"
+
+
+async def _make_admin(email: str = ADMIN_EMAIL, is_admin: bool = True) -> None:
+    async with session_scope() as session:
+        session.add(
+            User(
+                email=email,
+                password_hash=hash_password(ADMIN_PASSWORD),
+                is_admin=is_admin,
+            )
+        )
+        await session.commit()
+
+
+async def _login(email: str = ADMIN_EMAIL, password: str = ADMIN_PASSWORD):
+    await app.asgi_client.get("/admin/login")
+    token = app.asgi_client.cookies.get(CSRF_COOKIE)
+    return await app.asgi_client.post(
+        "/admin/login", data={"email": email, "password": password, "csrf_token": token}
+    )
+
+
+async def _csrf(path: str) -> str:
+    await app.asgi_client.get(path)
+    return app.asgi_client.cookies.get(CSRF_COOKIE)
+
+
+@pytest.mark.asyncio
+async def test_dashboard_requires_login():
+    _, response = await app.asgi_client.get("/admin/")
+
+    assert response.status == 302
+    assert "/admin/login" in response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_log_in():
+    await _make_admin(is_admin=False)
+
+    _, response = await _login()
+
+    assert response.status == 400
+
+
+@pytest.mark.asyncio
+async def test_admin_can_log_in_and_see_the_dashboard():
+    await _make_admin()
+
+    _, login = await _login()
+    assert login.status == 302
+
+    _, dashboard = await app.asgi_client.get("/admin/")
+    assert dashboard.status == 200
+    assert "Dashboard" in dashboard.text
+
+
+@pytest.mark.asyncio
+async def test_create_announcement_through_the_form():
+    await _make_admin()
+    await _login()
+    token = await _csrf("/admin/announcements/new")
+
+    _, response = await app.asgi_client.post(
+        "/admin/announcements/new",
+        data={
+            "text": "Spring flowers are here",
+            "link_url": "https://example.com/shop",
+            "link_label": "Shop now",
+            "active": "on",
+            "csrf_token": token,
+        },
+    )
+
+    assert response.status == 302
+    async with session_scope() as session:
+        announcement = (await session.execute(select(Announcement))).scalar_one()
+    assert announcement.text == "Spring flowers are here"
+    assert announcement.active is True
+
+
+@pytest.mark.asyncio
+async def test_form_post_without_csrf_is_rejected():
+    await _make_admin()
+    await _login()
+
+    _, response = await app.asgi_client.post(
+        "/admin/announcements/new", data={"text": "Nope"}
+    )
+
+    assert response.status == 403
+    async with session_scope() as session:
+        assert (await session.execute(select(Announcement))).scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_approve_florist_action():
+    await _make_admin()
+    async with session_scope() as session:
+        profile = FloristProfile(
+            business_name="Fern & Fig",
+            approved=False,
+            user=User(email="florist@example.com", password_hash=hash_password("x")),
+        )
+        session.add(profile)
+        await session.commit()
+        profile_id = profile.id
+    await _login()
+    token = await _csrf("/admin/florists")
+
+    _, response = await app.asgi_client.post(
+        f"/admin/florists/{profile_id}/action/approve", data={"csrf_token": token}
+    )
+
+    assert response.status == 302
+    async with session_scope() as session:
+        profile = await session.get(FloristProfile, profile_id)
+    assert profile.approved is True
+
+
+@pytest.mark.asyncio
+async def test_cancel_order_action_releases_stock():
+    await _make_admin()
+    async with session_scope() as session:
+        user = User(email="florist@example.com", password_hash=hash_password("x"))
+        listing = FlowerListing(name="Dahlia", price=Decimal("2.50"), quantity_available=3)
+        session.add_all([user, listing])
+        await session.flush()
+        order = Order(customer_id=user.id, status="paid")
+        session.add(order)
+        await session.flush()
+        session.add(
+            OrderItem(
+                order_id=order.id,
+                listing_id=listing.id,
+                name_snapshot="Dahlia",
+                price_snapshot=Decimal("2.50"),
+                quantity=2,
+            )
+        )
+        await session.commit()
+        order_id, listing_id = order.id, listing.id
+    await _login()
+    token = await _csrf("/admin/orders")
+
+    _, response = await app.asgi_client.post(
+        f"/admin/orders/{order_id}/action/cancel", data={"csrf_token": token}
+    )
+
+    assert response.status == 302
+    async with session_scope() as session:
+        order = await session.get(Order, order_id)
+        listing = await session.get(FlowerListing, listing_id)
+    assert order.status == "cancelled"
+    assert listing.quantity_available == 5

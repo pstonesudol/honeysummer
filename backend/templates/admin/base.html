@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Honey Summer admin{% endblock %}</title>
+  <style>
+    :root { --bg:#F6F2EA; --ink:#6A4E42; --accent:#D7B3B6; --surface:#fff; --taupe:#C8B6A6; --gold:#E6CFAE; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+    header { background:var(--surface); border-bottom:1px solid var(--taupe); padding:0.75rem 1rem; display:flex; flex-wrap:wrap; gap:0.4rem 1rem; align-items:center; }
+    header a { color:var(--ink); text-decoration:none; font-size:0.9rem; }
+    header a:hover { text-decoration:underline; }
+    .brand { font-weight:700; margin-right:0.5rem; }
+    main { max-width:1000px; margin:0 auto; padding:1rem; }
+    h1 { font-size:1.4rem; margin:0.5rem 0 1rem; }
+    table { width:100%; border-collapse:collapse; background:var(--surface); border-radius:12px; overflow:hidden; }
+    th, td { text-align:left; padding:0.6rem 0.75rem; border-bottom:1px solid #eee; font-size:0.9rem; vertical-align:top; }
+    th { background:var(--gold); }
+    .button, button { background:var(--ink); color:#fff; border:0; border-radius:999px; padding:0.5rem 0.9rem; font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
+    .button:hover, button:hover { opacity:0.9; }
+    .button--ghost { background:transparent; color:var(--ink); border:1px solid var(--taupe); }
+    .button--sm { padding:0.3rem 0.6rem; font-size:0.8rem; }
+    form.inline { display:inline; }
+    .card { background:var(--surface); border-radius:12px; padding:1rem; margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem; color:var(--ink); text-decoration:none; }
+    .grid { display:grid; grid-template-columns:1fr; gap:0.5rem 1rem; }
+    label { display:block; font-size:0.8rem; margin:0.6rem 0 0.2rem; }
+    input[type=text], input[type=email], input[type=password], input[type=number], textarea, select { width:100%; padding:0.5rem; border:1px solid var(--taupe); border-radius:8px; font:inherit; background:#fff; color:var(--ink); }
+    input[type=checkbox] { width:1.1rem; height:1.1rem; margin-top:0.4rem; }
+    .row { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
+    .muted { color:#8a7368; font-size:0.85rem; }
+    pre { white-space:pre-wrap; word-break:break-word; margin:0; font-size:0.8rem; }
+    .error { background:#f8dede; border:1px solid var(--accent); padding:0.6rem 0.75rem; border-radius:8px; margin-bottom:0.75rem; }
+    img.preview { max-width:160px; border-radius:8px; display:block; margin-top:0.4rem; }
+    @media (min-width:640px){ .grid { grid-template-columns:1fr 1fr; } .grid .full { grid-column:1 / -1; } }
+  </style>
+</head>
+<body>
+  {% if admin %}
+  <header>
+    <span class="brand">Honey Summer admin</span>
+    <a href="/admin/">Dashboard</a>
+    {% for item in models %}<a href="/admin/{{ item.slug }}">{{ item.label }}</a>{% endfor %}
+    <form class="inline" method="post" action="/admin/logout" style="margin-left:auto">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="button--ghost button--sm" type="submit">Sign out</button>
+    </form>
+  </header>
+  {% endif %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

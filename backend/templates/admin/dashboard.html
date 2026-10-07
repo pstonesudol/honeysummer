@@ -1,0 +1,10 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+{% for item in models %}
+<a class="card" href="/admin/{{ item.slug }}">
+  <span>{{ item.label }}</span>
+  <strong>{{ counts.get(item.slug, 0) }}</strong>
+</a>
+{% endfor %}
+{% endblock %}

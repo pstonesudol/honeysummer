@@ -1,0 +1,36 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<div class="row" style="justify-content:space-between">
+  <h1>{{ admin.label }}</h1>
+  {% if admin.can_create %}<a class="button" href="/admin/{{ admin.slug }}/new">New</a>{% endif %}
+</div>
+{% if admin.search %}
+<form method="get" action="/admin/{{ admin.slug }}" class="row" style="margin:0 0 0.75rem">
+  <input type="text" name="q" value="{{ query }}" placeholder="Search…" style="max-width:280px">
+  <button class="button--ghost" type="submit">Search</button>
+</form>
+{% endif %}
+<table>
+  <thead>
+    <tr>{% for label, _ in admin.list_columns %}<th>{{ label }}</th>{% endfor %}<th></th></tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      {% for value, _ in display[loop.index0] %}<td>{{ value }}</td>{% endfor %}
+      <td>
+        <a class="button--ghost button--sm" href="/admin/{{ admin.slug }}/{{ row.id }}">Edit</a>
+        {% for action in admin.actions %}
+        <form class="inline" method="post" action="/admin/{{ admin.slug }}/{{ row.id }}/action/{{ action }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="button--sm" type="submit">{{ action|capitalize }}</button>
+        </form>
+        {% endfor %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="{{ admin.list_columns|length + 1 }}" class="muted">Nothing here yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
