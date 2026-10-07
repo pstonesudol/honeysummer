@@ -108,3 +108,18 @@ def send_inquiry_emails(inquiry: Inquiry) -> None:
         )
     except Exception:  # pragma: no cover - defensive
         logger.exception("Unable to send inquiry emails for inquiry %s", inquiry.id)
+
+
+def send_signup_notification(*, business_name: str, email: str) -> None:
+    """Tell the farm that a florist requested wholesale access."""
+    try:
+        send_email(
+            subject="New Honey Summer wholesale account request",
+            body=(
+                f"{business_name} ({email}) requested wholesale access. "
+                "Review and approve them in the admin."
+            ),
+            to=get_settings().inquiry_notification_email,
+        )
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("Unable to send wholesale signup notification")

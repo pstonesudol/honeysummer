@@ -17,10 +17,12 @@ import pytest_asyncio  # noqa: E402
 
 from app import models  # noqa: E402,F401
 from app.db import Base, get_engine  # noqa: E402
+from app.server import app as sanic_app  # noqa: E402
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def _schema():
+    sanic_app.asgi_client.cookies.clear()
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -28,3 +30,4 @@ async def _schema():
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    sanic_app.asgi_client.cookies.clear()
