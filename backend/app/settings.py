@@ -39,6 +39,17 @@ class Settings(BaseSettings):
         validation_alias="INQUIRY_NOTIFICATION_EMAIL",
     )
 
+    stripe_secret_key: str = Field(default="", validation_alias="STRIPE_SECRET_KEY")
+    stripe_webhook_secret: str = Field(default="", validation_alias="STRIPE_WEBHOOK_SECRET")
+    checkout_success_url: str = Field(
+        default="http://localhost:3000/wholesale?checkout=success",
+        validation_alias="CHECKOUT_SUCCESS_URL",
+    )
+    checkout_cancel_url: str = Field(
+        default="http://localhost:3000/wholesale?checkout=cancelled",
+        validation_alias="CHECKOUT_CANCEL_URL",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

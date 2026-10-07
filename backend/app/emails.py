@@ -16,6 +16,8 @@ KIND_LABELS = {
     "wholesale": "Wholesale access request",
 }
 
+FULFILLMENT_LABELS = {"pickup": "Pickup", "delivery": "Delivery"}
+
 
 def send_email(*, subject: str, body: str, to: str, reply_to: str | None = None) -> None:
     """Send one email through Resend, or log it when no key is configured."""
@@ -123,3 +125,45 @@ def send_signup_notification(*, business_name: str, email: str) -> None:
         )
     except Exception:  # pragma: no cover - defensive
         logger.exception("Unable to send wholesale signup notification")
+
+
+def send_order_emails(
+    *,
+    order_id: int,
+    fulfillment: str,
+    pickup_window: str,
+    delivery_address: str,
+    customer_email: str,
+    items: list[dict],
+) -> None:
+    """Confirm a wholesale order to the florist and notify the farm."""
+    settings = get_settings()
+    lines = [f"Thank you for your Honey Summer wholesale order #{order_id}.", ""]
+    lines.extend(
+        f"{item['quantity']} × {item['name']} (${item['price']} each)" for item in items
+    )
+    lines.extend(["", f"Fulfillment: {FULFILLMENT_LABELS.get(fulfillment, fulfillment)}"])
+    if pickup_window:
+        lines.append(f"Pickup window: {pickup_window}")
+    if delivery_address:
+        lines.append(f"Delivery address: {delivery_address}")
+    body = (
+        "\n".join(lines)
+        + "\n\nIsabella will be in touch with final pickup or delivery details."
+        "\n\nWith warmth,\nHoney Summer"
+    )
+    try:
+        send_email(
+            subject=f"Honey Summer wholesale order #{order_id}",
+            body=body,
+            to=customer_email,
+            reply_to=settings.inquiry_notification_email,
+        )
+        send_email(
+            subject=f"New Honey Summer wholesale order #{order_id}",
+            body=body,
+            to=settings.inquiry_notification_email,
+            reply_to=customer_email,
+        )
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("Unable to send order emails for order %s", order_id)
