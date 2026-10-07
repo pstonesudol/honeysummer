@@ -46,10 +46,10 @@ export default function AboutPage() {
         </div>
         <div className="page-hero__art">
           <Image
-            src="/images/studio-placeholder.svg"
-            alt="Illustrated placeholder for a floral design studio worktable"
+            src="/images/photography/founder-in-garden.jpg"
+            alt="Isabella standing in the garden with a basket of flowers"
             width={800}
-            height={1000}
+            height={1200}
             priority
             sizes="(max-width: 850px) 92vw, 42vw"
           />
@@ -75,10 +75,10 @@ export default function AboutPage() {
         </div>
         <div className="story__art">
           <Image
-            src="/images/harvest-placeholder.svg"
-            alt="Illustrated placeholder for a field of cut flowers at harvest"
+            src="/images/photography/cutting-dahlias-monochrome.jpg"
+            alt="Hands cutting a dahlia stem in the garden"
             width={800}
-            height={1000}
+            height={1200}
             sizes="(max-width: 850px) 92vw, 42vw"
           />
         </div>

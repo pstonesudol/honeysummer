@@ -57,10 +57,10 @@ export default function OrderFlowersPage() {
         <div className="page-hero__art">
           <div className="page-hero__image page-hero__image--round">
             <Image
-              src="/images/bouquet-placeholder.svg"
-              alt="Illustrated placeholder for a seasonal bouquet"
+              src="/images/photography/flower-bucket-portrait.jpg"
+              alt="A bucket overflowing with orange dahlias and white hydrangeas"
               width={800}
-              height={1000}
+              height={1200}
               priority
               sizes="(max-width: 850px) 92vw, 42vw"
             />

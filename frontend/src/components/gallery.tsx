@@ -2,26 +2,36 @@ import Image from "next/image";
 
 import { getGallery } from "@/lib/api";
 
-const placeholders = [
+const featuredPhotos = [
   {
-    src: "/images/wedding-placeholder.svg",
-    alt: "Illustrated placeholder for garden-inspired ceremony flowers",
-    caption: "Ceremony flowers, grown nearby",
+    src: "/images/photography/garden-arrangement.jpg",
+    alt: "Colorful garden flowers arranged in a low bowl outdoors",
+    caption: "Garden-inspired arrangements",
   },
   {
-    src: "/images/bouquet-placeholder.svg",
-    alt: "Illustrated placeholder for a seasonal bridal bouquet",
-    caption: "Bouquets gathered by hand",
+    src: "/images/photography/gathered-basket-bouquet.jpg",
+    alt: "A basket overflowing with pink and white seasonal flowers",
+    caption: "Gathered by hand",
   },
   {
-    src: "/images/studio-placeholder.svg",
-    alt: "Illustrated placeholder for a floral design studio worktable",
-    caption: "Designed in the studio",
+    src: "/images/photography/flower-bucket-detail.jpg",
+    alt: "A flower bucket filled with orange dahlias and white hydrangeas",
+    caption: "The season's best blooms",
   },
   {
-    src: "/images/harvest-placeholder.svg",
-    alt: "Illustrated placeholder for a field of cut flowers at harvest",
-    caption: "Harvested the morning of your event",
+    src: "/images/photography/flowers-in-the-meadow.jpg",
+    alt: "Flower arrangements displayed on wooden chairs in the meadow",
+    caption: "Flowers in the meadow",
+  },
+  {
+    src: "/images/photography/hand-tied-stems.jpg",
+    alt: "A hand-tied posy held up against the sky",
+    caption: "A little something to carry",
+  },
+  {
+    src: "/images/photography/floral-arrangement-monochrome.jpg",
+    alt: "Black-and-white photograph of a woman holding a bowl of flowers",
+    caption: "Designed with intention",
   },
 ];
 
@@ -50,16 +60,16 @@ export async function Gallery() {
 
   return (
     <div className="gallery-grid">
-      {placeholders.map((placeholder) => (
-        <figure className="gallery-item" key={placeholder.src}>
+      {featuredPhotos.map((photo) => (
+        <figure className="gallery-item" key={photo.src}>
           <Image
-            src={placeholder.src}
-            alt={placeholder.alt}
+            src={photo.src}
+            alt={photo.alt}
             width={800}
             height={1000}
             sizes="(max-width: 850px) 100vw, 33vw"
           />
-          <figcaption>{placeholder.caption}</figcaption>
+          <figcaption>{photo.caption}</figcaption>
         </figure>
       ))}
     </div>

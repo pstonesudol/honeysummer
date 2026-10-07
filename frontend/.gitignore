@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# Full-resolution client photography (optimized copies live in public/images/photography)
+/source-photos/
+
 # next.js
 /.next/
 /out/

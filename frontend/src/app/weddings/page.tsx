@@ -61,10 +61,10 @@ export default function WeddingsPage() {
         <div className="page-hero__art">
           <div className="page-hero__image page-hero__image--round">
             <Image
-              src="/images/wedding-placeholder.svg"
-              alt="Illustrated placeholder for garden-inspired wedding flowers"
+              src="/images/photography/floral-arrangement-portrait.jpg"
+              alt="Garden-style arrangement with white dahlias and bright seasonal blooms"
               width={800}
-              height={1000}
+              height={1200}
               priority
               sizes="(max-width: 850px) 92vw, 42vw"
             />
@@ -91,8 +91,8 @@ export default function WeddingsPage() {
           <p className="eyebrow">Recent work</p>
           <h2 id="gallery-title">A little inspiration from the garden.</h2>
           <p>
-            A growing portfolio of seasonal weddings and events. Client
-            photography is on its way — these placeholders stand in for now.
+            A few glimpses of the flowers we grow and the garden-inspired
+            arrangements we create. Wedding portfolio photography is on its way.
           </p>
         </div>
         <Gallery />

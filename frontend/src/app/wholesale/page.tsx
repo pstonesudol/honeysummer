@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { BadgeCheck, Flower2, Truck } from "lucide-react";
 
 import { InquiryForm } from "@/components/inquiry-form";
@@ -47,7 +48,7 @@ const steps = [
 export default function WholesalePage() {
   return (
     <>
-      <section className="page-hero page-hero--compact section-wrap" aria-labelledby="wholesale-title">
+      <section className="page-hero section-wrap" aria-labelledby="wholesale-title">
         <div className="page-hero__copy">
           <p className="eyebrow">Florist wholesale</p>
           <h1 id="wholesale-title">
@@ -58,6 +59,18 @@ export default function WholesalePage() {
             {site.serviceArea} Grown nearby, harvested at their peak, and
             available to approved wholesale accounts.
           </p>
+        </div>
+        <div className="page-hero__art">
+          <div className="page-hero__image page-hero__image--round">
+            <Image
+              src="/images/photography/hand-tied-stems.jpg"
+              alt="Freshly gathered flower stems held up in the garden"
+              width={800}
+              height={1200}
+              priority
+              sizes="(max-width: 850px) 92vw, 42vw"
+            />
+          </div>
         </div>
       </section>
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { Camera, Mail, MapPin } from "lucide-react";
 
@@ -99,7 +100,7 @@ const faqs = [
 export default function ContactPage() {
   return (
     <>
-      <section className="page-hero page-hero--compact section-wrap" aria-labelledby="contact-title">
+      <section className="page-hero section-wrap" aria-labelledby="contact-title">
         <div className="page-hero__copy">
           <p className="eyebrow">Say hello</p>
           <h1 id="contact-title">
@@ -109,6 +110,18 @@ export default function ContactPage() {
             Questions about flowers, weddings, or wholesale? Send a note and
             Isabella will reply within a few days.
           </p>
+        </div>
+        <div className="page-hero__art">
+          <div className="page-hero__image page-hero__image--round">
+            <Image
+              src="/images/photography/walking-through-garden.jpg"
+              alt="Isabella walking through the garden with flowers in hand"
+              width={800}
+              height={1200}
+              priority
+              sizes="(max-width: 850px) 92vw, 42vw"
+            />
+          </div>
         </div>
       </section>
 
