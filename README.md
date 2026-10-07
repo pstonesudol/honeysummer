@@ -76,6 +76,8 @@ From the repository root, use `npm run preview` to test the Workers build locall
 
 ## Brand assets
 
-Fraunces and Geist are loaded through `next/font`. The wordmark currently uses a scripted system fallback. Replace it with the commercially licensed Blastine font files in `frontend/src/fonts/` before launch. Placeholder flower artwork should likewise be replaced with client photography.
+Fraunces and Geist are loaded through `next/font`. The client-supplied logo lockup lives in `frontend/public/brand/`: `honey-summer-logo.png` (full color, for light backgrounds) and `honey-summer-logo-light.png` (cream wordmark, for the dark footer). Both are transparent PNGs derived from the client artwork.
+
+The Blastine script font is still worth licensing for handwritten accents and section flourishes; the header and footer wordmark now come from the logo image rather than a font. Placeholder flower artwork should be replaced with client photography.
 
 The implemented color, typography, icon, layout, and accessibility conventions are documented in `frontend/DESIGN_SYSTEM.md`.

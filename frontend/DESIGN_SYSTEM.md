@@ -23,7 +23,7 @@ The CSS custom properties live in `src/app/globals.css` and are exposed to Tailw
 
 - **Fraunces:** display headings and editorial body copy.
 - **Geist:** navigation, labels, forms, buttons, and utility copy.
-- **Blastine:** wordmark and rare handwritten accents only. Until licensed files are supplied, the stack intentionally falls back to system script fonts.
+- **Blastine:** rare handwritten accents and section flourishes. The Honey Summer wordmark now uses the client logo lockup (`public/brand/`) rather than a font, so the site no longer depends on Blastine for its name; it remains a nice-to-have accent font.
 
 ## Icons
 

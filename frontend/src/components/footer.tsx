@@ -3,10 +3,10 @@ import { BrandMark } from "./brand-mark";
 
 export function Footer() {
   return (
-    <footer className="site-footer">
+    <footer className="site-footer" id="site-footer">
       <div className="site-footer__inner section-wrap">
         <div className="site-footer__brand">
-          <BrandMark />
+          <BrandMark variant="light" />
           <p>Seasonal flowers, grown and gathered in Mountain Top, PA.</p>
         </div>
         <div className="site-footer__links">

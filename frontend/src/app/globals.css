@@ -102,7 +102,7 @@ textarea {
 }
 
 .site-header {
-  min-height: 8rem;
+  min-height: 9rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -118,12 +118,9 @@ textarea {
   line-height: 1;
 }
 
-.brand-mark__name {
-  font-family: "Blastine", "Snell Roundhand", "Segoe Script", cursive;
-  font-size: clamp(2rem, 3.5vw, 3rem);
-  font-weight: 500;
-  letter-spacing: -0.08em;
-  transform: rotate(-2deg);
+.brand-mark__logo {
+  width: auto;
+  height: clamp(4.5rem, 8vw, 6.25rem);
 }
 
 .brand-mark__tagline {
@@ -466,7 +463,7 @@ textarea {
   }
 
   .site-header {
-    min-height: 6.5rem;
+    min-height: 7rem;
   }
 
   .desktop-nav {
@@ -561,8 +558,8 @@ textarea {
 }
 
 @media (max-width: 520px) {
-  .brand-mark__name {
-    font-size: 1.8rem;
+  .brand-mark__logo {
+    height: 4rem;
   }
 
   .brand-mark__tagline {
