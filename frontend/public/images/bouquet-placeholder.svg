@@ -1,0 +1,16 @@
+<svg width="800" height="1000" viewBox="0 0 800 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="1000" fill="#EDDFC9"/>
+  <rect x="40" y="40" width="720" height="920" rx="360" stroke="#F6F2EA" stroke-opacity=".5" stroke-width="3"/>
+  <path d="M400 900C400 700 386 560 350 420" stroke="#7D594B" stroke-width="10" stroke-linecap="round"/>
+  <path d="M370 640C320 620 292 578 296 534C344 538 372 574 370 640Z" fill="#A8A68A"/>
+  <path d="M420 700C474 686 506 648 506 604C458 604 428 640 420 700Z" fill="#A8A68A"/>
+  <g fill="#D7B3B6">
+    <circle cx="350" cy="400" r="92"/><circle cx="290" cy="452" r="74"/><circle cx="410" cy="456" r="76"/>
+    <circle cx="350" cy="330" r="66"/>
+  </g>
+  <g fill="#E6CFAE">
+    <circle cx="470" cy="470" r="58"/><circle cx="512" cy="510" r="46"/><circle cx="432" cy="516" r="48"/>
+  </g>
+  <circle cx="350" cy="452" r="36" fill="#6A4E42"/>
+  <text x="400" y="900" fill="#6A4E42" fill-opacity=".7" font-family="Georgia, serif" font-size="24" text-anchor="middle" letter-spacing="5">PLACEHOLDER ARTWORK</text>
+</svg>

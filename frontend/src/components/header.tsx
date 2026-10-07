@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Menu } from "lucide-react";
+import { AnnouncementBanner } from "./announcement-banner";
 import { BrandMark } from "./brand-mark";
 
 const navigation = [
@@ -13,9 +14,7 @@ const navigation = [
 export function Header() {
   return (
     <>
-      <div className="announcement">
-        <p>Our growing season is waking up — spring flowers coming soon</p>
-      </div>
+      <AnnouncementBanner />
       <header className="site-header section-wrap">
         <BrandMark />
         <nav className="desktop-nav" aria-label="Main navigation">

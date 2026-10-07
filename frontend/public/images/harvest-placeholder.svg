@@ -1,0 +1,21 @@
+<svg width="800" height="1000" viewBox="0 0 800 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="1000" fill="#C8B6A6"/>
+  <rect x="40" y="40" width="720" height="920" rx="360" stroke="#F6F2EA" stroke-opacity=".5" stroke-width="3"/>
+  <path d="M0 700C140 620 260 648 400 720C540 792 660 660 800 700V1000H0V700Z" fill="#A8A68A"/>
+  <path d="M0 820C150 750 280 782 420 850C560 918 680 820 800 850V1000H0V820Z" fill="#82836B"/>
+  <g stroke="#50543F" stroke-width="7" stroke-linecap="round">
+    <path d="M170 900C176 780 200 670 230 570"/>
+    <path d="M400 940C402 800 396 690 380 600"/>
+    <path d="M620 900C626 780 606 680 574 590"/>
+  </g>
+  <g fill="#D7B3B6">
+    <circle cx="230" cy="556" r="56"/><circle cx="188" cy="590" r="44"/><circle cx="272" cy="592" r="46"/>
+  </g>
+  <g fill="#E6CFAE">
+    <circle cx="380" cy="586" r="56"/><circle cx="338" cy="620" r="44"/><circle cx="422" cy="622" r="46"/>
+  </g>
+  <g fill="#F6F2EA">
+    <circle cx="574" cy="576" r="56"/><circle cx="532" cy="610" r="44"/><circle cx="616" cy="612" r="46"/>
+  </g>
+  <text x="400" y="900" fill="#F6F2EA" fill-opacity=".8" font-family="Georgia, serif" font-size="24" text-anchor="middle" letter-spacing="5">PLACEHOLDER ARTWORK</text>
+</svg>

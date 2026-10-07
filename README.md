@@ -48,6 +48,17 @@ uv run python manage.py runserver
 
 The API runs at [http://localhost:8000](http://localhost:8000), with a health check at `/api/health/` and admin at `/admin/`.
 
+### Content and inquiries
+
+The marketing pages read live content from the API and post inquiries back to it:
+
+- `GET /api/announcement/` — the current active banner announcement (or `null`)
+- `GET /api/gallery/` — active wedding portfolio images, in sort order
+- `POST /api/inquiries/` — creates an inquiry and emails both the farm and the sender
+
+Announcements, gallery images, and inquiries are all managed from the Django admin. Set `RESEND_API_KEY` (see `backend/.env.example`) to send mail through Resend; without it, messages print to the console for local development. Uploaded photos are stored under `backend/media/` in development and served at `/media/`. Move to Cloudflare R2 before launch so uploads survive deploys.
+
+
 ## Deployment
 
 - Frontend: Cloudflare Workers through the OpenNext adapter, preserving the same-origin API proxy and server-side auth support.
