@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     media_root: Path = Field(default=BASE_DIR / "media", validation_alias="MEDIA_ROOT")
     media_url: str = Field(default="/media", validation_alias="MEDIA_URL")
 
+    resend_api_key: str = Field(default="", validation_alias="RESEND_API_KEY")
+    default_from_email: str = Field(
+        default="Honey Summer <hello@hellohoneysummer.com>",
+        validation_alias="DEFAULT_FROM_EMAIL",
+    )
+    inquiry_notification_email: str = Field(
+        default="hello@hellohoneysummer.com",
+        validation_alias="INQUIRY_NOTIFICATION_EMAIL",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
