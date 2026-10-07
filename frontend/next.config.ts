@@ -11,11 +11,11 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: `${process.env.DJANGO_API_URL ?? "http://localhost:8000"}/api/:path*`,
+        destination: `${process.env.API_URL ?? "http://localhost:8000"}/api/:path*`,
       },
       {
         source: "/media/:path*",
-        destination: `${process.env.DJANGO_API_URL ?? "http://localhost:8000"}/media/:path*`,
+        destination: `${process.env.API_URL ?? "http://localhost:8000"}/media/:path*`,
       },
     ];
   },

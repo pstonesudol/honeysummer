@@ -21,10 +21,8 @@ services:
     build:
       context: ./backend
     environment:
-      DJANGO_SECRET_KEY: local-docker-development-key
-      DJANGO_DEBUG: "true"
-      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend
-      CSRF_TRUSTED_ORIGINS: http://localhost:3000
+      SECRET_KEY: local-docker-development-key
+      DEBUG: "true"
       DATABASE_URL: postgresql://postgres:postgres@db:5432/honeysummer
     command: ["./docker-entrypoint.dev.sh"]
     ports:
@@ -55,7 +53,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile.dev
     environment:
-      DJANGO_API_URL: http://backend:8000
+      API_URL: http://backend:8000
       NEXT_TELEMETRY_DISABLED: "1"
       SKIP_CLOUDFLARE_DEV_INIT: "true"
     ports:

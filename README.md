@@ -5,19 +5,19 @@ Website and commerce platform for Honey Summer, a seasonal flower farm and flora
 ## Applications
 
 - `frontend/` — Next.js 16, React 19, TypeScript 6, and Tailwind CSS 4
-- `backend/` — Python 3.14, Django 6.1, and Django REST Framework
+- `backend/` — Python 3.14, Sanic, SQLAlchemy (async), Alembic, and Pydantic
 
 ## Local development
 
 ### One-command Docker setup
 
-With OrbStack or Docker Desktop running, start PostgreSQL, Django, and Next.js together from the repository root:
+With OrbStack or Docker Desktop running, start PostgreSQL, the API, and Next.js together from the repository root:
 
 ```bash
 docker compose up --build
 ```
 
-The first startup builds both application images, waits for PostgreSQL, and runs Django migrations automatically. Open [http://localhost:3000](http://localhost:3000); the Dockerized API is available at [http://localhost:8001](http://localhost:8001). Source changes are mounted into both application containers. Set `BACKEND_PORT` before starting Compose if you prefer another host port; container-to-container traffic always uses port 8000.
+The first startup builds both application images, waits for PostgreSQL, and runs Alembic migrations automatically. Open [http://localhost:3000](http://localhost:3000); the Dockerized API is available at [http://localhost:8001](http://localhost:8001). Source changes are mounted into both application containers. Set `BACKEND_PORT` before starting Compose if you prefer another host port; container-to-container traffic always uses port 8000.
 
 Stop the stack with `Ctrl+C`, followed by `docker compose down`. Database data remains in the `honeysummer_postgres_data` Docker volume. Use `docker compose down --volumes` only when you intentionally want to erase local data.
 
@@ -32,7 +32,7 @@ npm install
 npm run dev
 ```
 
-The site runs at [http://localhost:3000](http://localhost:3000). Requests under `/api/` are proxied to Django in development.
+The site runs at [http://localhost:3000](http://localhost:3000). Requests under `/api/` and `/media/` are proxied to the API in development.
 
 ### Backend
 
@@ -42,11 +42,12 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/); it will p
 cd backend
 cp .env.example .env
 uv sync --locked
-uv run python manage.py migrate
-uv run python manage.py runserver
+uv run alembic upgrade head
+uv run python -m app.seed --email you@example.com --password 'change-me-in-production'
+uv run sanic app.server:app --dev
 ```
 
-The API runs at [http://localhost:8000](http://localhost:8000), with a health check at `/api/health/` and admin at `/admin/`.
+The API runs at [http://localhost:8000](http://localhost:8000), with a health check at `/api/health/` and the admin at `/admin/`. Run the test suite with `uv run pytest`.
 
 ### Content and inquiries
 
@@ -56,23 +57,22 @@ The marketing pages read live content from the API and post inquiries back to it
 - `GET /api/gallery/` — active wedding portfolio images, in sort order
 - `POST /api/inquiries/` — creates an inquiry and emails both the farm and the sender
 
-Announcements, gallery images, and inquiries are all managed from the Django admin. Set `RESEND_API_KEY` (see `backend/.env.example`) to send mail through Resend; without it, messages print to the console for local development. Uploaded photos are stored under `backend/media/` in development and served at `/media/`. Move to Cloudflare R2 before launch so uploads survive deploys.
-
+Announcements, gallery images, flower listings, florist accounts, inquiries, and orders are all managed from the admin at `/admin` — create the first operator account with `uv run python -m app.seed`. Set `RESEND_API_KEY` (see `backend/.env.example`) to send mail through Resend; without it, messages print to the console for local development. Uploaded photos are stored under `backend/media/` in development and served at `/media/`. Move to Cloudflare R2 before launch so uploads survive deploys.
 
 ## Deployment
 
 - Frontend: Cloudflare Workers through the OpenNext adapter, preserving the same-origin API proxy and server-side auth support.
-- Backend and Postgres: Railway. Set the Railway service root directory to `/backend`; `backend/railway.json` supplies build, start, and health-check commands.
+- Backend and Postgres: Railway. Set the Railway service root directory to `/backend`; `backend/railway.json` supplies build, start (Alembic then Sanic), and health-check commands.
 
 Environment variables are documented in each app's `.env.example` file. Production secrets must not be committed.
 
-Backend dependencies are declared in `backend/pyproject.toml` and reproducibly locked in `backend/uv.lock`. Use `uv add <package>` and `uv remove <package>` rather than editing a requirements file.
+Backend dependencies are declared in `backend/pyproject.toml` and reproducibly locked in `backend/uv.lock`. Use `uv add <package>` and `uv remove <package>` rather than editing a requirements file. Schema changes are managed with Alembic (`uv run alembic revision --autogenerate -m "…"`).
 
 ### Cloudflare deployment
 
 Cloudflare Pages only supports a static Next.js export, while this application's session-auth architecture needs server-side rewrites and wholesale route checks. The frontend therefore uses Cloudflare Workers with OpenNext.
 
-From the repository root, use `npm run preview` to test the Workers build locally and `npm run deploy` after authenticating Wrangler. Set `DJANGO_API_URL` in the Cloudflare build environment to the public Railway backend URL.
+From the repository root, use `npm run preview` to test the Workers build locally and `npm run deploy` after authenticating Wrangler. Set `API_URL` in the Cloudflare build environment to the public Railway backend URL.
 
 ## Brand assets
 

@@ -1,11 +1,11 @@
 const DEFAULT_API_URL = "http://localhost:8000";
 
 export function getApiBaseUrl(): string {
-  return (process.env.DJANGO_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+  return (process.env.API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
 }
 
 /**
- * Fetch JSON from the Django API for server components.
+ * Fetch JSON from the API for server components.
  *
  * Marketing content changes rarely, so reads are cached and revalidated every
  * five minutes. Failures fall back to the supplied value so a temporarily

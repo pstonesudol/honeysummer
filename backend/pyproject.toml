@@ -4,13 +4,6 @@ version = "0.1.0"
 description = "Sanic API for Honey Summer"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-    "django==6.1.1",
-    "djangorestframework==3.18.1",
-    "dj-database-url==3.1.2",
-    "psycopg[binary]==3.3.6",
-    "gunicorn==26.2.0",
-    "whitenoise==6.12.0",
-    "python-dotenv==1.2.4",
     "stripe==14.3.0",
     "sanic>=25.12.1",
     "sanic-ext>=25.12.0",
@@ -40,6 +33,4 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["."]
-# Only the Sanic suite; the Django suite keeps running under `manage.py test`
-# until the phase 4g cutover removes it.
 testpaths = ["tests"]

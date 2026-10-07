@@ -15,9 +15,16 @@ from .routes.content import bp as content_bp
 from .routes.inquiries import bp as inquiries_bp
 from .settings import get_settings
 
+settings = get_settings()
+
 app = Sanic("honey-summer")
-app.config.SECRET = get_settings().secret_key
+app.config.SECRET = settings.secret_key
 Extend(app)
+# The interactive API docs are a development convenience only.
+app.config.OAS = settings.debug
+
+settings.media_root.mkdir(parents=True, exist_ok=True)
+app.static("/media", str(settings.media_root), index="index.html")
 
 app.blueprint(admin_bp)
 app.blueprint(auth_bp)

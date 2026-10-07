@@ -1,8 +1,6 @@
-"""SQLAlchemy models for the fresh Honey Summer schema.
+"""SQLAlchemy models for the Honey Summer schema.
 
-Typed SQLAlchemy 2.0 models. Table names are clean (no Django ``core_`` /
-``auth_`` prefixes); Alembic owns the schema. Until the phase 4g cutover these
-collections live alongside the Django tables in the same database.
+Typed SQLAlchemy 2.0 models with clean table names; Alembic owns the schema.
 """
 
 from __future__ import annotations

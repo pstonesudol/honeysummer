@@ -1,5 +1,5 @@
 #!/bin/sh
 set -eu
 
-uv run --no-sync python manage.py migrate
-exec uv run --no-sync python manage.py runserver 0.0.0.0:8000
+uv run --no-sync alembic upgrade head
+exec uv run --no-sync sanic app.server:app --dev --host 0.0.0.0 --port 8000

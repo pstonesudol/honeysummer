@@ -14,4 +14,6 @@ RUN uv sync --locked --no-dev
 
 COPY . .
 
-CMD ["uv", "run", "--no-sync", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+EXPOSE 8000
+
+CMD ["uv", "run", "--no-sync", "sanic", "app.server:app", "--host", "0.0.0.0", "--port", "8000"]

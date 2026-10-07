@@ -4,7 +4,7 @@
 
 The Phase 1 UI foundation is complete. Tokens and component conventions below are the implementation baseline. Client photography, final copy, social links, and the licensed Blastine font remain launch assets rather than engineering blockers.
 
-Phase 2 adds the marketing pages (Home, About, Order Flowers, Weddings & Events, Contact/FAQ, and a wholesale access request), live announcements and gallery content from Django admin, and the inquiry forms.
+Phase 2 adds the marketing pages (Home, About, Order Flowers, Weddings & Events, Contact/FAQ, and a wholesale access request), live announcements and gallery content from the admin, and the inquiry forms.
 
 ## Color
 
