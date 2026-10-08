@@ -7,6 +7,8 @@ Environment variables are unprefixed (``SECRET_KEY``, ``DEBUG``,
 from functools import lru_cache
 from pathlib import Path
 
+from decimal import Decimal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -29,6 +31,11 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     checkout_success_url: str = "http://localhost:3000/wholesale?checkout=success"
     checkout_cancel_url: str = "http://localhost:3000/wholesale?checkout=cancelled"
+
+    retail_checkout_success_url: str = "http://localhost:3000/order-flowers?checkout=success"
+    retail_checkout_cancel_url: str = "http://localhost:3000/order-flowers?checkout=cancelled"
+    # Flat fee applied to retail delivery orders; pickup is always free.
+    retail_delivery_fee: Decimal = Decimal("0")
 
 
 @lru_cache

@@ -170,6 +170,26 @@ async def test_configured_checkout_returns_a_stripe_session_url(sent, stripe_on)
     assert create.called
 
 
+@pytest.mark.asyncio
+async def test_wholesale_checkout_rejects_a_retail_only_listing(sent, stripe_off):
+    await _make_user()
+    async with session_scope() as session:
+        listing = FlowerListing(
+            name="Retail only",
+            price=Decimal("1.00"),
+            channel="retail",
+            quantity_available=5,
+        )
+        session.add(listing)
+        await session.commit()
+        listing_id = listing.id
+    await _login()
+
+    _, response = await _checkout([{"id": listing_id, "quantity": 1}])
+
+    assert response.status == 409
+
+
 async def _seed_pending_order() -> tuple[int, int]:
     async with session_scope() as session:
         user = User(

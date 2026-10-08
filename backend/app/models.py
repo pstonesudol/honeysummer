@@ -144,11 +144,21 @@ class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    customer_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    # Wholesale orders reference the approved florist account. Retail orders
+    # are guest checkouts, so the customer FK is optional and the contact
+    # details below carry the buyer instead.
+    customer_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    customer_name: Mapped[str] = mapped_column(String(200), default="")
+    customer_email: Mapped[str] = mapped_column(String(254), default="")
+    customer_phone: Mapped[str] = mapped_column(String(40), default="")
+    channel: Mapped[str] = mapped_column(String(10), default="wholesale")
     delivery_fee: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=0)
     fulfillment: Mapped[str] = mapped_column(String(10), default="pickup")
     pickup_window: Mapped[str] = mapped_column(String(200), default="")
     delivery_address: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
     stripe_session_id: Mapped[Optional[str]] = mapped_column(
         String(255), unique=True, nullable=True
     )
@@ -158,10 +168,20 @@ class Order(Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
 
-    customer: Mapped[User] = relationship(back_populates="orders")
+    customer: Mapped[Optional[User]] = relationship(back_populates="orders")
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan"
     )
+
+    @property
+    def customer_label(self) -> str:
+        """A human name for the buyer, wholesale account or retail guest."""
+        if self.customer is not None:
+            profile = self.customer.profile
+            if profile is not None:
+                return f"{profile.business_name} ({self.customer.email})"
+            return self.customer.email
+        return self.customer_name or self.customer_email or "Guest"
 
     def __str__(self) -> str:
         return f"Order #{self.id}"

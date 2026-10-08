@@ -1,13 +1,31 @@
 import type { Metadata } from "next";
-import { Fraunces, Geist } from "next/font/google";
+import { Geist } from "next/font/google";
+import localFont from "next/font/local";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
 import "./globals.css";
 
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
-  subsets: ["latin"],
+const gaian = localFont({
+  src: "./fonts/Gaian-Regular.woff2",
+  weight: "400",
+  style: "normal",
+  variable: "--font-gaian",
   display: "swap",
+  fallback: ["Georgia", "serif"],
+});
+
+const southCoast = localFont({
+  src: "./fonts/SouthCoast-Regular.woff2",
+  weight: "400",
+  style: "normal",
+  variable: "--font-south-coast",
+  display: "swap",
+  preload: false,
+  adjustFontFallback: false,
+  // The script's glyphs sit small on the em; scale them up optically so headings
+  // read at their intended size without inflating every font-size declaration.
+  declarations: [{ prop: "size-adjust", value: "145%" }],
+  fallback: ["cursive"],
 });
 
 const geist = Geist({
@@ -34,7 +52,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${geist.variable}`}
+      className={`${gaian.variable} ${southCoast.variable} ${geist.variable}`}
       data-scroll-behavior="smooth"
     >
       <body>

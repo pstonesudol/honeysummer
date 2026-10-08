@@ -1,24 +1,8 @@
 import { getAnnouncement } from "@/lib/api";
-import { site } from "@/lib/site";
+import { AnnouncementBannerLive } from "./announcement-banner-live";
 
 export async function AnnouncementBanner() {
+  // Server-rendered for the first paint; the live component keeps it fresh.
   const announcement = await getAnnouncement();
-  const text = announcement?.text ?? site.announcementFallback;
-  const link = announcement?.link_url;
-
-  return (
-    <div className="announcement">
-      <p>
-        {text}
-        {link ? (
-          <>
-            {" "}
-            <a href={link} target="_blank" rel="noreferrer">
-              {announcement?.link_label || "Learn more"}
-            </a>
-          </>
-        ) : null}
-      </p>
-    </div>
-  );
+  return <AnnouncementBannerLive initial={announcement} />;
 }

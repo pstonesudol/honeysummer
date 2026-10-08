@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { AlertCircle, Loader2, Lock } from "lucide-react";
 
 import { submitInquiry } from "@/lib/actions";
+import type { FlowerListing } from "@/lib/api";
 import {
   inquiryFields,
   type InquiryField,
@@ -177,11 +178,11 @@ export function InquiryForm({
     </form>
   );
 }
-type Flower = { id: number; name: string; variety: string; color: string; photo_url: string; stem_notes: string; price: string; unit: string; quantity_available: number; sold_out: boolean; available: boolean };
+type Flower = FlowerListing;
 type Cart = Record<number, number>;
 
 async function api(path: string, options?: RequestInit) {
-  const response = await fetch(`/api/${path}`, { ...options, headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) } });
+  const response = await fetch(`/api/${path}`, { cache: "no-store", ...options, headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.detail || "Something went wrong.");
   return data;
@@ -195,7 +196,18 @@ export function WholesaleShop() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { api("auth/me/").then(setAccount).catch(() => setAccount({ authenticated: false, approved: false, business_name: "" })); }, []);
+  useEffect(() => {
+    let active = true;
+    function refresh() {
+      api("auth/me/")
+        .then((next) => { if (active) setAccount(next); })
+        .catch(() => { if (active) setAccount({ authenticated: false, approved: false, business_name: "" }); });
+    }
+    refresh();
+    function onVisibilityChange() { if (document.visibilityState === "visible") refresh(); }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => { active = false; document.removeEventListener("visibilitychange", onVisibilityChange); };
+  }, []);
   useEffect(() => { if (account?.authenticated && account.approved) api("flowers/").then(setFlowers).catch(() => undefined); }, [account]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {

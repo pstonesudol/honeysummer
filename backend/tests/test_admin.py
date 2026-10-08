@@ -207,3 +207,28 @@ async def test_orders_list_renders_customer_column():
 
     assert listing.status == 200
     assert "buyer@example.com" in listing.text
+
+
+@pytest.mark.asyncio
+async def test_orders_list_renders_guest_orders_and_channel():
+    await _make_admin()
+    async with session_scope() as session:
+        order = Order(
+            channel="retail",
+            customer_name="Dana Bloom",
+            customer_email="dana@example.com",
+            status="paid",
+        )
+        session.add(order)
+        await session.commit()
+        order_id = order.id
+    await _login()
+
+    _, listing = await app.asgi_client.get("/admin/orders")
+    _, detail = await app.asgi_client.get(f"/admin/orders/{order_id}")
+
+    assert listing.status == 200
+    assert "Dana Bloom" in listing.text
+    assert "retail" in listing.text
+    assert detail.status == 200
+    assert "Dana Bloom" in detail.text

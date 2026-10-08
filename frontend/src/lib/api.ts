@@ -46,6 +46,20 @@ export type GalleryImage = {
   sort_order: number;
 };
 
+export type FlowerListing = {
+  id: number;
+  name: string;
+  variety: string;
+  color: string;
+  photo_url: string;
+  stem_notes: string;
+  price: string;
+  unit: string;
+  quantity_available: number;
+  sold_out: boolean;
+  available: boolean;
+};
+
 export async function getAnnouncement(): Promise<Announcement | null> {
   const data = await apiGet<{ announcement: Announcement | null }>(
     "/api/announcement/",
@@ -56,4 +70,15 @@ export async function getAnnouncement(): Promise<Announcement | null> {
 
 export async function getGallery(): Promise<GalleryImage[]> {
   return apiGet<GalleryImage[]>("/api/gallery/", []);
+}
+
+/**
+ * Standard offerings available to retail customers.
+ *
+ * Availability changes as flowers sell, so this is revalidated far more
+ * often than the slow-moving marketing content. The checkout endpoint holds
+ * stock server-side, so a slightly stale grid can never oversell.
+ */
+export async function getRetailFlowers(): Promise<FlowerListing[]> {
+  return apiGet<FlowerListing[]>("/api/retail/flowers/", [], 30);
 }

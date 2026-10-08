@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 
 from .models import Inquiry
 from .settings import get_settings
@@ -17,6 +18,7 @@ KIND_LABELS = {
 }
 
 FULFILLMENT_LABELS = {"pickup": "Pickup", "delivery": "Delivery"}
+ORDER_LABELS = {"wholesale": "wholesale order", "retail": "order"}
 
 
 def send_email(*, subject: str, body: str, to: str, reply_to: str | None = None) -> None:
@@ -135,10 +137,18 @@ def send_order_emails(
     delivery_address: str,
     customer_email: str,
     items: list[dict],
+    channel: str = "wholesale",
+    customer_name: str = "",
+    delivery_fee: Decimal | int | float = 0,
 ) -> None:
-    """Confirm a wholesale order to the florist and notify the farm."""
+    """Confirm an order to the buyer and notify the farm.
+
+    Wholesale confirmations go to the approved florist; retail confirmations
+    go to the guest who checked out.
+    """
     settings = get_settings()
-    lines = [f"Thank you for your Honey Summer wholesale order #{order_id}.", ""]
+    label = ORDER_LABELS.get(channel, "order")
+    lines = [f"Thank you for your Honey Summer {label} #{order_id}.", ""]
     lines.extend(
         f"{item['quantity']} × {item['name']} (${item['price']} each)" for item in items
     )
@@ -147,6 +157,11 @@ def send_order_emails(
         lines.append(f"Pickup window: {pickup_window}")
     if delivery_address:
         lines.append(f"Delivery address: {delivery_address}")
+    try:
+        if delivery_fee and float(delivery_fee) > 0:
+            lines.append(f"Delivery fee: ${float(delivery_fee):.2f}")
+    except (TypeError, ValueError):  # pragma: no cover - defensive
+        pass
     body = (
         "\n".join(lines)
         + "\n\nIsabella will be in touch with final pickup or delivery details."
@@ -154,13 +169,13 @@ def send_order_emails(
     )
     try:
         send_email(
-            subject=f"Honey Summer wholesale order #{order_id}",
+            subject=f"Honey Summer {label} #{order_id}",
             body=body,
             to=customer_email,
             reply_to=settings.inquiry_notification_email,
         )
         send_email(
-            subject=f"New Honey Summer wholesale order #{order_id}",
+            subject=f"New Honey Summer {label} #{order_id}",
             body=body,
             to=settings.inquiry_notification_email,
             reply_to=customer_email,

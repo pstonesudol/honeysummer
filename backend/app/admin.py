@@ -72,6 +72,10 @@ class ModelAdmin:
     can_create: bool = True
     actions: tuple = ()
     subdir: str = ""
+    # Extra relationship paths to eager-load (beyond those already referenced
+    # by list columns and editable fields), so computed properties that touch
+    # related objects never trigger a lazy load outside the session.
+    eager: tuple = ()
 
 
 def _str_field(name: str, label: str, **kwargs) -> Field:
@@ -198,7 +202,8 @@ REGISTRY: list[ModelAdmin] = [
         model=Order,
         fields=[
             Field("id", "Order", "readonly"),
-            Field("customer", "Customer", "readonly"),
+            Field("customer_label", "Customer", "readonly"),
+            Field("channel", "Channel", "readonly"),
             Field(
                 "status",
                 "Status",
@@ -214,19 +219,22 @@ REGISTRY: list[ModelAdmin] = [
             Field("delivery_fee", "Delivery fee", "readonly"),
             Field("pickup_window", "Pickup window", "readonly"),
             Field("delivery_address", "Delivery address", "readonly"),
+            Field("notes", "Notes", "readonly"),
             Field("stripe_session_id", "Stripe session", "readonly"),
         ],
         list_columns=[
             ("Order", "id"),
-            ("Customer", "customer.email"),
+            ("Customer", "customer_label"),
+            ("Channel", "channel"),
             ("Status", "status"),
             ("Fulfillment", "fulfillment"),
             ("Placed", "created_at"),
         ],
         order_by=["-created_at"],
-        search=("stripe_session_id",),
+        search=("customer_name", "customer_email", "stripe_session_id"),
         can_create=False,
         actions=("cancel",),
+        eager=("customer", "customer.profile"),
     ),
 ]
 
@@ -313,17 +321,33 @@ def _relationship_options(model, paths) -> list:
     """Eager-load relationships referenced by display/edit paths.
 
     Reading an unloaded relationship outside an async session raises
-    MissingGreenlet, so anything the admin renders must be pre-loaded.
+    MissingGreenlet, so anything the admin renders must be pre-loaded. Paths
+    may nest (``customer.profile``) to load a chain.
     """
-    mapper = sa_inspect(model)
-    options = []
-    seen: set[str] = set()
+    tree: dict = {}
     for path in paths:
-        head = path.split(".")[0]
-        if head in mapper.relationships and head not in seen:
-            seen.add(head)
-            options.append(selectinload(getattr(model, head)))
-    return options
+        parts = path.split(".")
+        current = model
+        node = tree
+        for part in parts:
+            if part not in sa_inspect(current).relationships:
+                break
+            node = node.setdefault(part, {})
+            current = sa_inspect(current).relationships[part].mapper.class_
+
+    def build(mapper_class, subtree):
+        options = []
+        for name, child in subtree.items():
+            loader = selectinload(getattr(mapper_class, name))
+            if child:
+                nested = build(
+                    sa_inspect(mapper_class).relationships[name].mapper.class_, child
+                )
+                loader = loader.options(*nested)
+            options.append(loader)
+        return options
+
+    return build(model, tree)
 
 
 def _display_value(obj, path: str) -> str:
@@ -458,7 +482,10 @@ async def model_list(request, slug: str):
     query = request.args.get("q", "").strip()
     async with session_scope() as session:
         statement = select(admin.model).options(
-            *_relationship_options(admin.model, [path for _, path in admin.list_columns])
+            *_relationship_options(
+                admin.model,
+                [path for _, path in admin.list_columns] + list(admin.eager),
+            )
         )
         if query and admin.search:
             statement = statement.where(
@@ -518,7 +545,12 @@ async def model_edit(request, slug: str, pk: int):
     async with session_scope() as session:
         obj = await session.scalar(
             select(admin.model)
-            .options(*_relationship_options(admin.model, [f.name for f in admin.fields]))
+            .options(
+                *_relationship_options(
+                    admin.model,
+                    [f.name for f in admin.fields] + list(admin.eager),
+                )
+            )
             .where(admin.model.id == pk)
         )
     if obj is None:
@@ -556,12 +588,12 @@ async def model_action(request, slug: str, pk: int, action: str):
         return json({"detail": "Invalid CSRF token."}, status=403)
 
     if slug == "orders" and action == "cancel":
-        from .routes.checkout import _load_order, _release_order
+        from .orders import load_order, release_order
 
         async with session_scope() as session:
-            order = await _load_order(session, pk)
+            order = await load_order(session, pk)
             if order is not None and order.status in ("pending", "paid"):
-                await _release_order(session, order)
+                await release_order(session, order)
                 order.status = "cancelled"
                 await session.commit()
     elif slug == "florists" and action == "approve":

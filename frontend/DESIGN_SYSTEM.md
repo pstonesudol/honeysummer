@@ -2,7 +2,7 @@
 
 ## Status
 
-The Phase 1 UI foundation is complete. Tokens and component conventions below are the implementation baseline. Client photography, final copy, social links, and the licensed Blastine font remain launch assets rather than engineering blockers.
+The Phase 1 UI foundation is complete. Tokens and component conventions below are the implementation baseline. Client photography, final copy, social links, and webfont licenses remain launch assets rather than engineering blockers.
 
 Phase 2 adds the marketing pages (Home, About, Order Flowers, Weddings & Events, Contact/FAQ, and a wholesale access request), live announcements and gallery content from the admin, and the inquiry forms.
 
@@ -21,9 +21,12 @@ The CSS custom properties live in `src/app/globals.css` and are exposed to Tailw
 
 ## Typography
 
-- **Fraunces:** display headings and editorial body copy.
-- **Geist:** navigation, labels, forms, buttons, and utility copy.
-- **Blastine:** rare handwritten accents and section flourishes. The Honey Summer wordmark now uses the client logo lockup (`public/brand/`) rather than a font, so the site no longer depends on Blastine for its name; it remains a nice-to-have accent font.
+- **South Coast:** expressive headings and section titles. A single-weight (400) signature script with `an`/`and`/`ee`/`ll`/`oo`/`rr`/`ss`/`tt` ligatures, so it must keep `font-feature-settings: "liga" 1, "calt" 1`; its tracking is reset to `0` and line-height loosened to `1.12`. Loaded as a self-hosted local font (`src/app/fonts/`).
+- **Georgia:** long-form body copy, chosen for stronger strokes and easier reading at everyday text sizes.
+- **Gaian:** navigation links, product names, checkout headings, and the `<em>` emphasis inside display headings. A single-weight (400) serif loaded as a self-hosted local font (`src/app/fonts/`); use a larger size for functional text to preserve legibility.
+- **Geist:** labels, forms, buttons, and utility copy — including the label-style headings `.contact-card h2` and `.site-footer__links h2`, which are intentionally not set in South Coast. The Honey Summer wordmark uses the client logo lockup (`public/brand/`) rather than a font.
+
+Both Gaian and South Coast were purchased with a desktop commercial license and require a webfont license before the `.woff2` files are committed or deployed; see `src/app/fonts/README.md`.
 
 ## Icons
 
@@ -45,4 +48,3 @@ Use `lucide-react` outline icons with rounded strokes. Default to `1.8` stroke w
 - Submit buttons show a spinner and disable while the server action is pending.
 - A visually hidden honeypot field screens bots without affecting assistive technology.
 - Inquiry forms are defined once in `src/lib/inquiry-fields.ts` and rendered by the shared `InquiryForm` client component, so the bouquet, wedding, contact, and wholesale forms stay consistent.
-

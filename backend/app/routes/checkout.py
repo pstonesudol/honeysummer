@@ -1,52 +1,30 @@
 """Wholesale checkout and the Stripe webhook.
 
 Inventory is held inside a transaction with row locks so concurrent checkouts
-cannot oversell, mirroring the original Django implementation.
+cannot oversell, mirroring the original Django implementation. Retail guest
+checkout shares this machinery through :mod:`app.orders`.
 """
 
 from decimal import Decimal, InvalidOperation
 
 from sanic import Blueprint
 from sanic.response import json
-from sqlalchemy import select, update
-from sqlalchemy.orm import selectinload
+from sqlalchemy import update
 
 from ..auth import get_current_user
 from ..db import session_scope
 from ..emails import send_order_emails
-from ..models import FlowerListing, Order, OrderItem
+from ..models import Order
+from ..orders import (
+    StockError,
+    items_context as _items_context,
+    load_order as _load_order,
+    release_order as _release_order,
+    reserve_order,
+)
 from ..settings import get_settings
 
 bp = Blueprint("checkout", url_prefix="/api")
-
-
-async def _release_order(session, order: Order) -> None:
-    for item in order.items:
-        await session.execute(
-            update(FlowerListing)
-            .where(FlowerListing.id == item.listing_id)
-            .values(quantity_available=FlowerListing.quantity_available + item.quantity)
-        )
-
-
-async def _load_order(session, order_id: int) -> Order | None:
-    result = await session.execute(
-        select(Order)
-        .options(selectinload(Order.items), selectinload(Order.customer))
-        .where(Order.id == order_id)
-    )
-    return result.scalar_one_or_none()
-
-
-def _items_context(order: Order) -> list[dict]:
-    return [
-        {
-            "name": item.name_snapshot,
-            "price": format(item.price_snapshot, ".2f"),
-            "quantity": item.quantity,
-        }
-        for item in order.items
-    ]
 
 
 @bp.post("/checkout/")
@@ -67,61 +45,22 @@ async def checkout(request):
 
     try:
         async with session_scope() as session:
-            order = Order(
+            order, items_context = await reserve_order(
+                session,
+                items=items,
+                channel="wholesale",
                 customer_id=user.id,
+                customer_email=user.email,
                 fulfillment=str(data.get("fulfillment", "pickup")),
-                delivery_fee=Decimal(str(data.get("delivery_fee") or 0)),
+                delivery_fee=data.get("delivery_fee") or 0,
                 pickup_window=str(data.get("pickup_window", "")),
                 delivery_address=str(data.get("delivery_address", "")),
             )
-            session.add(order)
-            await session.flush()
             order_id = order.id
-            items_context: list[dict] = []
-
-            for requested in items:
-                listing = (
-                    await session.execute(
-                        select(FlowerListing)
-                        .where(FlowerListing.id == int(requested["id"]))
-                        .with_for_update()
-                    )
-                ).scalar_one_or_none()
-                quantity = int(requested["quantity"])
-                if (
-                    listing is None
-                    or not listing.available
-                    or quantity < 1
-                    or listing.quantity_available < quantity
-                ):
-                    raise ValueError(
-                        f"Not enough {listing.name} available."
-                        if listing is not None
-                        else "That flower is no longer available."
-                    )
-                listing.quantity_available -= quantity
-                session.add(
-                    OrderItem(
-                        order_id=order_id,
-                        listing_id=listing.id,
-                        name_snapshot=listing.name,
-                        price_snapshot=listing.price,
-                        quantity=quantity,
-                    )
-                )
-                items_context.append(
-                    {
-                        "name": listing.name,
-                        "price": format(listing.price, ".2f"),
-                        "quantity": quantity,
-                    }
-                )
-
-            await session.commit()
             fulfillment = order.fulfillment
             pickup_window = order.pickup_window
             delivery_address = order.delivery_address
-    except (ValueError, InvalidOperation) as error:
+    except (StockError, InvalidOperation) as error:
         return json({"detail": str(error)}, status=409)
 
     settings = get_settings()
@@ -135,6 +74,7 @@ async def checkout(request):
             await session.commit()
         send_order_emails(
             order_id=order_id,
+            channel="wholesale",
             fulfillment=fulfillment,
             pickup_window=pickup_window,
             delivery_address=delivery_address,
@@ -204,10 +144,13 @@ async def stripe_webhook(request):
             await session.commit()
             send_order_emails(
                 order_id=order.id,
+                channel=order.channel,
                 fulfillment=order.fulfillment,
                 pickup_window=order.pickup_window,
                 delivery_address=order.delivery_address,
-                customer_email=order.customer.email,
+                customer_email=(
+                    order.customer.email if order.customer else order.customer_email
+                ),
                 items=_items_context(order),
             )
         elif event["type"] == "checkout.session.expired":
