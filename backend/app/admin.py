@@ -151,6 +151,7 @@ REGISTRY: list[ModelAdmin] = [
             Field("sort_order", "Sort order", "int"),
         ],
         list_columns=[
+            ("Code", "listing_code"),
             ("Name", "name"),
             ("Variety", "variety"),
             ("Channel", "channel"),
@@ -216,6 +217,7 @@ REGISTRY: list[ModelAdmin] = [
         model=Order,
         fields=[
             Field("id", "Order", "readonly"),
+            Field("order_reference", "Order reference", "readonly"),
             Field("customer_label", "Customer", "readonly"),
             Field("channel", "Channel", "readonly"),
             Field(
@@ -231,7 +233,7 @@ REGISTRY: list[ModelAdmin] = [
             Field("stripe_session_id", "Stripe session", "readonly"),
         ],
         list_columns=[
-            ("Order", "id"),
+            ("Order", "order_reference"),
             ("Customer", "customer_label"),
             ("Channel", "channel"),
             ("Status", "status"),

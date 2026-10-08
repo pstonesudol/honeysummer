@@ -120,7 +120,7 @@ export function RetailShop({
       }
       setCart({});
       setNotice(
-        `Order #${data.order_id} received. Isabella will confirm your pickup or delivery details by email.`,
+        `Order ${data.order_reference ?? `#${data.order_id}`} received. Isabella will confirm your pickup or delivery details by email.`,
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Checkout failed. Please try again.");

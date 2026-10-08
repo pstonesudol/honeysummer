@@ -216,6 +216,7 @@ async def test_admin_can_delete_listing_without_order_or_inventory_history():
     await _login()
     _, listing_page = await app.asgi_client.get("/admin/flowers")
     assert "Delete" in listing_page.text
+    assert f"FL-{listing_id:04d}" in listing_page.text
     token = await _csrf("/admin/flowers")
 
     _, response = await app.asgi_client.post(
@@ -418,3 +419,4 @@ async def test_orders_list_renders_guest_orders_and_channel():
     assert "Order items" in detail.text
     assert "Peony bunch" in detail.text
     assert "37.50" in detail.text
+    assert f"HS{order_id:06d}" in detail.text

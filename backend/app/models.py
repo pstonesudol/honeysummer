@@ -148,6 +148,10 @@ class FlowerListing(Base):
     def available(self) -> bool:
         return self.active and not self.sold_out and self.quantity_available > 0
 
+    @property
+    def listing_code(self) -> str:
+        return f"FL-{self.id:04d}"
+
     def __str__(self) -> str:
         return self.name
 
@@ -216,6 +220,10 @@ class Order(Base):
                 return f"{profile.business_name} ({self.customer.email})"
             return self.customer.email
         return self.customer_name or self.customer_email or "Guest"
+
+    @property
+    def order_reference(self) -> str:
+        return f"HS{self.id:06d}"
 
     def __str__(self) -> str:
         return f"Order #{self.id}"

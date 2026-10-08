@@ -241,7 +241,7 @@ export function WholesaleShop() {
         delivery_address: fulfillment === "delivery" ? deliveryAddress.trim() : "",
       }) });
       if (data.checkout_url) window.location.href = data.checkout_url;
-      else setMessage(`Order #${data.order_id} received. Isabella will confirm your pickup details.`);
+      else setMessage(`Order ${data.order_reference ?? `#${data.order_id}`} received. Isabella will confirm your pickup details.`);
       setCart({});
     } catch (error) { setMessage(error instanceof Error ? error.message : "Checkout failed."); }
     setBusy(false);

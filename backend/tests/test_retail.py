@@ -120,6 +120,7 @@ async def test_guest_checkout_holds_stock_and_records_contact(sent, stripe_off):
     assert item.price_snapshot == Decimal("32.00")
     assert len(sent) == 2
     assert response.json["order_id"] == order_id
+    assert response.json["order_reference"] == f"HS{order_id:06d}"
 
 
 @pytest.mark.asyncio

@@ -148,6 +148,7 @@ def send_wholesale_approval_email(*, email: str) -> None:
 def send_order_emails(
     *,
     order_id: int,
+    order_reference: str | None = None,
     fulfillment: str,
     pickup_window: str,
     delivery_address: str,
@@ -166,7 +167,8 @@ def send_order_emails(
     """
     settings = get_settings()
     label = ORDER_LABELS.get(channel, "order")
-    lines = [f"Thank you for your Honey Summer {label} #{order_id}.", ""]
+    reference = order_reference or f"HS{order_id:06d}"
+    lines = [f"Thank you for your Honey Summer {label} {reference}.", ""]
     lines.extend(
         f"{item['quantity']} × {item['name']} (${item['price']} each)" for item in items
     )
@@ -188,12 +190,12 @@ def send_order_emails(
     try:
         if recipient in (None, "customer"):
             send_email(
-                subject=f"Honey Summer {label} #{order_id}", body=body,
+                subject=f"Honey Summer {label} {reference}", body=body,
                 to=customer_email, reply_to=settings.inquiry_notification_email,
             )
         if recipient in (None, "farm"):
             send_email(
-                subject=f"New Honey Summer {label} #{order_id}", body=body,
+                subject=f"New Honey Summer {label} {reference}", body=body,
                 to=settings.inquiry_notification_email, reply_to=customer_email,
             )
     except Exception:  # pragma: no cover - defensive

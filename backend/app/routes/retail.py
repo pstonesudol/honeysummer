@@ -114,13 +114,14 @@ async def retail_checkout(request):
                 notes=notes,
             )
             order_id = order.id
+            order_reference = order.order_reference
             delivery_fee = order.delivery_fee
     except (StockError, InvalidOperation) as error:
         return json({"detail": str(error)}, status=409)
 
     if not settings.stripe_secret_key:
         await complete_without_stripe(order_id)
-        return json({"order_id": order_id, "checkout_url": ""}, status=201)
+        return json({"order_id": order_id, "order_reference": order_reference, "checkout_url": ""}, status=201)
 
     try:
         stripe_session = await create_checkout(
@@ -153,4 +154,4 @@ async def retail_checkout(request):
     except Exception:
         logger.exception("Unable to create retail Stripe Checkout for order %s", order_id)
         return json({"detail": "Unable to start payment. Please try again."}, status=503)
-    return json({"order_id": order_id, "checkout_url": stripe_session.url}, status=201)
+    return json({"order_id": order_id, "order_reference": order_reference, "checkout_url": stripe_session.url}, status=201)

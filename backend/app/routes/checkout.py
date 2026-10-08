@@ -59,6 +59,7 @@ async def checkout(request):
                 delivery_address=delivery_address,
             )
             order_id = order.id
+            order_reference = order.order_reference
             fulfillment = order.fulfillment
             pickup_window = order.pickup_window
             delivery_address = order.delivery_address
@@ -68,7 +69,7 @@ async def checkout(request):
 
     if not settings.stripe_secret_key:
         await complete_without_stripe(order_id)
-        return json({"order_id": order_id, "checkout_url": ""}, status=201)
+        return json({"order_id": order_id, "order_reference": order_reference, "checkout_url": ""}, status=201)
 
     try:
         stripe_session = await create_checkout(
@@ -99,7 +100,7 @@ async def checkout(request):
     except Exception:
         logger.exception("Unable to create wholesale Stripe Checkout for order %s", order_id)
         return json({"detail": "Unable to start payment. Please try again."}, status=503)
-    return json({"order_id": order_id, "checkout_url": stripe_session.url}, status=201)
+    return json({"order_id": order_id, "order_reference": order_reference, "checkout_url": stripe_session.url}, status=201)
 
 
 @bp.post("/stripe/webhook/")

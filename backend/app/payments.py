@@ -100,7 +100,8 @@ async def deliver_notifications(order_id: int) -> None:
             notification.attempts += 1
             try:
                 send_order_emails(
-                    order_id=order.id, channel=order.channel, fulfillment=order.fulfillment,
+                    order_id=order.id, order_reference=order.order_reference,
+                    channel=order.channel, fulfillment=order.fulfillment,
                     pickup_window=order.pickup_window, delivery_address=order.delivery_address,
                     customer_email=order.customer.email if order.customer else order.customer_email,
                     items=items_context(order), delivery_fee=order.delivery_fee,

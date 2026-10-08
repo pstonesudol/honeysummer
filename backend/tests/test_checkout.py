@@ -118,6 +118,7 @@ async def test_successful_order_holds_stock_and_snapshots_price(sent, stripe_off
 
     assert response.status == 201
     assert response.json["checkout_url"] == ""
+    assert response.json["order_reference"] == f"HS{response.json['order_id']:06d}"
     async with session_scope() as session:
         listing = await session.get(FlowerListing, listing_id)
         order = (await session.execute(select(Order))).scalar_one()
