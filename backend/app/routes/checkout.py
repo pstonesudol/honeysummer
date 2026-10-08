@@ -152,6 +152,7 @@ async def stripe_webhook(request):
                     order.customer.email if order.customer else order.customer_email
                 ),
                 items=_items_context(order),
+                delivery_fee=order.delivery_fee,
             )
         elif event["type"] == "checkout.session.expired":
             await _release_order(session, order)

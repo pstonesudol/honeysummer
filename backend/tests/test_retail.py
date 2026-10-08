@@ -202,6 +202,25 @@ async def test_configured_retail_checkout_returns_a_stripe_session(sent, stripe_
     assert order.stripe_session_id == "cs_test_9"
 
 
+@pytest.mark.asyncio
+async def test_stripe_checkout_charges_configured_delivery_fee(sent, stripe_on, monkeypatch):
+    monkeypatch.setattr(get_settings(), "retail_delivery_fee", Decimal("12.00"))
+    listing_id = await _add_listing(quantity=5)
+    session = mock.Mock(id="cs_test_delivery", url="https://checkout.stripe.com/cs_test_delivery")
+
+    with mock.patch("stripe.checkout.Session.create", return_value=session) as create:
+        _, response = await _checkout(
+            [{"id": listing_id, "quantity": 1}],
+            fulfillment="delivery",
+            delivery_address="12 Garden Lane, Mountain Top, PA",
+        )
+
+    assert response.status == 201
+    line_items = create.call_args.kwargs["line_items"]
+    assert line_items[-1]["price_data"]["product_data"]["name"] == "Delivery"
+    assert line_items[-1]["price_data"]["unit_amount"] == 1200
+
+
 async def _seed_pending_retail_order() -> tuple[int, int]:
     async with session_scope() as session:
         listing = FlowerListing(
@@ -252,3 +271,25 @@ async def test_webhook_completes_a_guest_order_and_emails(sent, stripe_on):
     assert order.status == "paid"
     assert len(sent) == 2
     assert sent[0]["to"] == "dana@example.com"
+
+
+@pytest.mark.asyncio
+async def test_webhook_email_includes_delivery_fee(sent, stripe_on):
+    order_id, _ = await _seed_pending_retail_order()
+    async with session_scope() as session:
+        order = await session.get(Order, order_id)
+        order.fulfillment = "delivery"
+        order.delivery_fee = Decimal("12.00")
+        await session.commit()
+
+    event = {
+        "type": "checkout.session.completed",
+        "data": {"object": {"metadata": {"order_id": str(order_id)}}},
+    }
+    with mock.patch("stripe.Webhook.construct_event", return_value=event):
+        _, response = await app.asgi_client.post(
+            "/api/stripe/webhook/", json=event, headers={"stripe-signature": "sig"}
+        )
+
+    assert response.status == 200
+    assert "Delivery fee: $12.00" in sent[0]["body"]

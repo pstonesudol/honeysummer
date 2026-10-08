@@ -128,7 +128,17 @@ async def retail_checkout(request):
                 "quantity": item["quantity"],
             }
             for item in items_context
-        ],
+        ]
+        + ([
+            {
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {"name": "Delivery"},
+                    "unit_amount": int(delivery_fee * 100),
+                },
+                "quantity": 1,
+            }
+        ] if delivery_fee > 0 else []),
         metadata={"order_id": str(order_id)},
     )
     async with session_scope() as session:
