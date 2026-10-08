@@ -125,6 +125,17 @@ REGISTRY: list[ModelAdmin] = [
             Field("photo", "Photo", "file"),
             _str_field("stem_notes", "Stem notes"),
             Field("price", "Price", "decimal"),
+            Field("delivery_fee", "Delivery fee ($; delivery only)", "decimal"),
+            Field(
+                "delivery_fee_mode",
+                "Delivery fee frequency",
+                "select",
+                choices=(
+                    ("per_listing", "Once per listing"),
+                    ("per_unit", "Per unit"),
+                    ("per_order", "Once per order (highest fee wins)"),
+                ),
+            ),
             Field("unit", "Unit", "select", choices=(("stem", "Per stem"), ("bunch", "Per bunch"))),
             Field("quantity_available", "Quantity available", "int"),
             Field("sold_out", "Sold out", "bool"),
@@ -409,6 +420,21 @@ def _apply_form(obj, admin: ModelAdmin, form, files, media_root: Path) -> None:
             setattr(obj, field.name, raw)
 
 
+def _flower_delivery_fee_error(form) -> str | None:
+    raw = form.get("delivery_fee")
+    if raw is not None:
+        try:
+            fee = Decimal(str(raw or 0))
+        except InvalidOperation:
+            return "Enter a valid delivery fee."
+        if not fee.is_finite() or fee < 0 or fee > Decimal("999999.99"):
+            return "Delivery fee must be between $0 and $999999.99."
+    mode = form.get("delivery_fee_mode")
+    if mode is not None and mode not in ("per_listing", "per_unit", "per_order"):
+        return "Choose a valid delivery fee frequency."
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Auth views
 # --------------------------------------------------------------------------- #
@@ -528,6 +554,8 @@ async def model_create(request, slug: str):
         return redirect("/admin/login")
     if not _valid_csrf(request):
         return json({"detail": "Invalid CSRF token."}, status=403)
+    if slug == "flowers" and (error := _flower_delivery_fee_error(request.form)):
+        return json({"detail": error}, status=400)
     async with session_scope() as session:
         obj = admin.model()
         _apply_form(obj, admin, request.form, request.files, get_settings().media_root)
@@ -569,6 +597,8 @@ async def model_update(request, slug: str, pk: int):
         return redirect("/admin/login")
     if not _valid_csrf(request):
         return json({"detail": "Invalid CSRF token."}, status=403)
+    if slug == "flowers" and (error := _flower_delivery_fee_error(request.form)):
+        return json({"detail": error}, status=400)
     async with session_scope() as session:
         obj = await session.get(admin.model, pk)
         if obj is None:
@@ -629,10 +659,18 @@ async def model_action(request, slug: str, pk: int, action: str):
                 order.status = "cancelled"
                 await session.commit()
     elif slug == "florists" and action == "approve":
+        from .emails import send_wholesale_approval_email
+
         async with session_scope() as session:
-            profile = await session.get(FloristProfile, pk)
-            if profile is not None:
+            profile = await session.scalar(
+                select(FloristProfile)
+                .options(selectinload(FloristProfile.user))
+                .where(FloristProfile.id == pk)
+            )
+            if profile is not None and not profile.approved:
                 profile.approved = True
+                email = profile.user.email
                 await session.commit()
+                send_wholesale_approval_email(email=email)
 
     return redirect(f"/admin/{slug}")

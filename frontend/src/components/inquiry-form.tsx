@@ -5,6 +5,7 @@ import { AlertCircle, Loader2, Lock } from "lucide-react";
 
 import { submitInquiry } from "@/lib/actions";
 import type { FlowerListing } from "@/lib/api";
+import { estimateDeliveryFee } from "@/lib/delivery-fee";
 import {
   inquiryFields,
   type InquiryField,
@@ -195,6 +196,9 @@ export function WholesaleShop() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [fulfillment, setFulfillment] = useState<"pickup" | "delivery">("pickup");
+  const [pickupWindow, setPickupWindow] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -224,9 +228,18 @@ export function WholesaleShop() {
   }
 
   async function checkout() {
+    if (fulfillment === "delivery" && !deliveryAddress.trim()) {
+      setMessage("Enter a delivery address before checkout.");
+      return;
+    }
     setBusy(true); setMessage("");
     try {
-      const data = await api("checkout/", { method: "POST", body: JSON.stringify({ items: Object.entries(cart).map(([id, quantity]) => ({ id: Number(id), quantity })) }) });
+      const data = await api("checkout/", { method: "POST", body: JSON.stringify({
+        items: Object.entries(cart).map(([id, quantity]) => ({ id: Number(id), quantity })),
+        fulfillment,
+        pickup_window: fulfillment === "pickup" ? pickupWindow.trim() : "",
+        delivery_address: fulfillment === "delivery" ? deliveryAddress.trim() : "",
+      }) });
       if (data.checkout_url) window.location.href = data.checkout_url;
       else setMessage(`Order #${data.order_id} received. Isabella will confirm your pickup details.`);
       setCart({});
@@ -246,12 +259,36 @@ export function WholesaleShop() {
   </section>;
 
   const cartTotal = Object.entries(cart).reduce((sum, [id, quantity]) => sum + Number(flowers.find((flower) => flower.id === Number(id))?.price ?? 0) * quantity, 0);
+  const deliveryFee = fulfillment === "delivery" ? estimateDeliveryFee(
+    Object.entries(cart).flatMap(([id, quantity]) => {
+      const flower = flowers.find((candidate) => candidate.id === Number(id));
+      return flower && quantity > 0 ? [{ flower, quantity }] : [];
+    }),
+  ) : 0;
   return <section className="wholesale-shop section-wrap" aria-labelledby="shop-title">
     <div className="wholesale-shop__heading"><div><p className="eyebrow">Welcome, {account.business_name}</p><h2 id="shop-title">This week’s stems.</h2></div><button className="text-link" onClick={() => api("auth/logout/", { method: "POST" }).then(() => setAccount({ authenticated: false, approved: false, business_name: "" }))}>Sign out</button></div>
     {flowers.length === 0 ? <p>Nothing is listed today — check back soon.</p> : <div className="flower-grid">{flowers.map((flower) => <article className="flower-card" key={flower.id}>
-      {flower.photo_url ? <img src={flower.photo_url} alt="" /> : <div className="flower-card__placeholder">✿</div>}<div className="flower-card__body"><p className="eyebrow">{flower.color || "Seasonal"}</p><h3>{flower.name}</h3><p>{flower.variety} {flower.stem_notes && `· ${flower.stem_notes}`}</p><strong>${flower.price} / {flower.unit}</strong>{flower.available ? <div className="quantity"><label htmlFor={`flower-${flower.id}`}>Quantity</label><input id={`flower-${flower.id}`} type="number" min="0" max={flower.quantity_available} value={cart[flower.id] ?? 0} onChange={(event) => setCart({ ...cart, [flower.id]: Math.min(flower.quantity_available, Math.max(0, Number(event.target.value))) })} /></div> : <span className="sold-out">Sold out</span>}</div>
+      {flower.photo_url ? <img src={flower.photo_url} alt="" /> : <div className="flower-card__placeholder">✿</div>}<div className="flower-card__body"><p className="eyebrow">{flower.color || "Seasonal"}</p><h3>{flower.name}</h3><p>{flower.variety} {flower.stem_notes && `· ${flower.stem_notes}`}</p><strong>${flower.price} / {flower.unit}</strong>{Number(flower.delivery_fee) > 0 ? <p>Delivery: ${flower.delivery_fee} {flower.delivery_fee_mode === "per_unit" ? "/ unit" : flower.delivery_fee_mode === "per_order" ? "/ order" : "/ listing"}</p> : null}{flower.available ? <div className="quantity"><label htmlFor={`flower-${flower.id}`}>Quantity</label><input id={`flower-${flower.id}`} type="number" min="0" max={flower.quantity_available} value={cart[flower.id] ?? 0} onChange={(event) => setCart({ ...cart, [flower.id]: Math.min(flower.quantity_available, Math.max(0, Number(event.target.value))) })} /></div> : <span className="sold-out">Sold out</span>}</div>
     </article>)}</div>}
-    {Object.keys(cart).length > 0 && <div className="cart-bar"><span>{Object.values(cart).reduce((sum, quantity) => sum + quantity, 0)} stems · ${cartTotal.toFixed(2)}</span><button className="button button--dark" disabled={busy} onClick={checkout}>Continue to checkout</button></div>}
+    {Object.keys(cart).length > 0 && <div className="retail-checkout inquiry-form">
+      <div className="form-grid">
+        <div className="form-field form-field--half">
+          <label htmlFor="wholesale-fulfillment">Pickup or delivery?</label>
+          <select id="wholesale-fulfillment" value={fulfillment} onChange={(event) => setFulfillment(event.target.value as "pickup" | "delivery")}>
+            <option value="pickup">Pickup at the farm</option>
+            <option value="delivery">Delivery</option>
+          </select>
+        </div>
+        {fulfillment === "delivery" ? <div className="form-field">
+          <label htmlFor="wholesale-delivery-address">Delivery address (required)</label>
+          <input id="wholesale-delivery-address" autoComplete="street-address" required value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} />
+        </div> : <div className="form-field">
+          <label htmlFor="wholesale-pickup-window">Preferred pickup window (optional)</label>
+          <input id="wholesale-pickup-window" value={pickupWindow} onChange={(event) => setPickupWindow(event.target.value)} />
+        </div>}
+      </div>
+      <div className="cart-bar"><span>{Object.values(cart).reduce((sum, quantity) => sum + quantity, 0)} stems · ${cartTotal.toFixed(2)}{fulfillment === "delivery" ? ` + $${deliveryFee.toFixed(2)} delivery = $${(cartTotal + deliveryFee).toFixed(2)}` : ""}</span><button className="button button--dark" disabled={busy} onClick={checkout}>Continue to checkout</button></div>
+    </div>}
     {message && <p role="status" className="form-message">{message}</p>}
   </section>;
 }

@@ -42,6 +42,12 @@ async def checkout(request):
     items = data.get("items", [])
     if not items:
         return json({"detail": "Your cart is empty."}, status=400)
+    fulfillment = str(data.get("fulfillment", "pickup")).strip()
+    delivery_address = str(data.get("delivery_address", "")).strip()
+    if fulfillment not in ("pickup", "delivery"):
+        return json({"detail": "Choose pickup or delivery."}, status=400)
+    if fulfillment == "delivery" and not delivery_address:
+        return json({"detail": "A delivery address is required."}, status=400)
 
     try:
         async with session_scope() as session:
@@ -51,15 +57,15 @@ async def checkout(request):
                 channel="wholesale",
                 customer_id=user.id,
                 customer_email=user.email,
-                fulfillment=str(data.get("fulfillment", "pickup")),
-                delivery_fee=data.get("delivery_fee") or 0,
+                fulfillment=fulfillment,
                 pickup_window=str(data.get("pickup_window", "")),
-                delivery_address=str(data.get("delivery_address", "")),
+                delivery_address=delivery_address,
             )
             order_id = order.id
             fulfillment = order.fulfillment
             pickup_window = order.pickup_window
             delivery_address = order.delivery_address
+            delivery_fee = order.delivery_fee
     except (StockError, InvalidOperation) as error:
         return json({"detail": str(error)}, status=409)
 
@@ -80,6 +86,7 @@ async def checkout(request):
             delivery_address=delivery_address,
             customer_email=customer_email,
             items=items_context,
+            delivery_fee=delivery_fee,
         )
         return json({"order_id": order_id, "checkout_url": ""}, status=201)
 
@@ -100,7 +107,16 @@ async def checkout(request):
                 "quantity": item["quantity"],
             }
             for item in items_context
-        ],
+        ] + ([
+            {
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {"name": "Delivery"},
+                    "unit_amount": int(delivery_fee * 100),
+                },
+                "quantity": 1,
+            }
+        ] if delivery_fee > 0 else []),
         metadata={"order_id": str(order_id)},
     )
     async with session_scope() as session:

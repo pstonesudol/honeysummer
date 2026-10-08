@@ -12,6 +12,7 @@ from typing import Optional
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
@@ -117,6 +118,13 @@ class Inquiry(Base):
 
 class FlowerListing(Base):
     __tablename__ = "flower_listings"
+    __table_args__ = (
+        CheckConstraint("delivery_fee >= 0", name="flower_delivery_fee_nonnegative"),
+        CheckConstraint(
+            "delivery_fee_mode IN ('per_listing', 'per_unit', 'per_order')",
+            name="flower_delivery_fee_mode_valid",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(160))
@@ -125,6 +133,8 @@ class FlowerListing(Base):
     photo: Mapped[str] = mapped_column(String(255), default="")
     stem_notes: Mapped[str] = mapped_column(String(250), default="")
     price: Mapped[Decimal] = mapped_column(Numeric(8, 2))
+    delivery_fee: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=0)
+    delivery_fee_mode: Mapped[str] = mapped_column(String(20), default="per_listing")
     unit: Mapped[str] = mapped_column(String(10), default="stem")
     quantity_available: Mapped[int] = mapped_column(Integer, default=0)
     sold_out: Mapped[bool] = mapped_column(Boolean, default=False)

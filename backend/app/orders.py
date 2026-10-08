@@ -35,7 +35,6 @@ async def reserve_order(
     customer_email: str = "",
     customer_phone: str = "",
     fulfillment: str = "pickup",
-    delivery_fee: Decimal | str = Decimal("0"),
     pickup_window: str = "",
     delivery_address: str = "",
     notes: str = "",
@@ -53,7 +52,7 @@ async def reserve_order(
         customer_phone=customer_phone,
         channel=channel,
         fulfillment=fulfillment,
-        delivery_fee=Decimal(str(delivery_fee or 0)),
+        delivery_fee=Decimal("0"),
         pickup_window=pickup_window,
         delivery_address=delivery_address,
         notes=notes,
@@ -62,6 +61,9 @@ async def reserve_order(
     await session.flush()
     order_id = order.id
     items_context: list[dict] = []
+    delivery_total = Decimal("0")
+    per_order_fee = Decimal("0")
+    charged_listings: set[int] = set()
 
     for requested in items:
         listing = (
@@ -85,6 +87,15 @@ async def reserve_order(
                 else "That flower is no longer available."
             )
         listing.quantity_available -= quantity
+        if fulfillment == "delivery":
+            fee = listing.delivery_fee or Decimal("0")
+            if listing.delivery_fee_mode == "per_unit":
+                delivery_total += fee * quantity
+            elif listing.delivery_fee_mode == "per_order":
+                per_order_fee = max(per_order_fee, fee)
+            elif listing.id not in charged_listings:
+                delivery_total += fee
+            charged_listings.add(listing.id)
         session.add(
             OrderItem(
                 order_id=order_id,
@@ -106,6 +117,8 @@ async def reserve_order(
             }
         )
 
+    if fulfillment == "delivery":
+        order.delivery_fee = delivery_total + per_order_fee
     await session.commit()
     return order, items_context
 

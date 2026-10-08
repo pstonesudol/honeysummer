@@ -129,6 +129,22 @@ def send_signup_notification(*, business_name: str, email: str) -> None:
         logger.exception("Unable to send wholesale signup notification")
 
 
+def send_wholesale_approval_email(*, email: str) -> None:
+    """Tell an approved florist they can sign in with their existing account."""
+    try:
+        send_email(
+            subject="Your Honey Summer wholesale account is approved",
+            body=(
+                "Your wholesale account is approved. Sign in with the email and password "
+                "you chose when requesting access: "
+                f"{get_settings().checkout_success_url.split('?')[0]}"
+            ),
+            to=email,
+        )
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("Unable to send wholesale approval email to %s", email)
+
+
 def send_order_emails(
     *,
     order_id: int,

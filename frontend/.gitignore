@@ -16,12 +16,6 @@
 # Full-resolution client photography (optimized copies live in public/images/photography)
 /source-photos/
 
-# Font source files and unlicensed webfont binaries. The desktop licenses for
-# Gaian and South Coast do not permit webfont embedding, so these are kept out
-# of the repository until a webfont license is purchased. See src/app/fonts/README.md.
-/source-fonts/
-/src/app/fonts/*.woff2
-
 # next.js
 /.next/
 /out/

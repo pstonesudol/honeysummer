@@ -50,7 +50,12 @@ async def _login(email: str = "florist@example.com") -> None:
     )
 
 
-async def _add_listing(quantity: int = 10, sold_out: bool = False) -> int:
+async def _add_listing(
+    quantity: int = 10,
+    sold_out: bool = False,
+    delivery_fee: str = "0",
+    delivery_fee_mode: str = "per_listing",
+) -> int:
     async with session_scope() as session:
         listing = FlowerListing(
             name="Dahlia",
@@ -58,6 +63,8 @@ async def _add_listing(quantity: int = 10, sold_out: bool = False) -> int:
             channel="wholesale",
             quantity_available=quantity,
             sold_out=sold_out,
+            delivery_fee=Decimal(delivery_fee),
+            delivery_fee_mode=delivery_fee_mode,
         )
         session.add(listing)
         await session.commit()
@@ -168,6 +175,85 @@ async def test_configured_checkout_returns_a_stripe_session_url(sent, stripe_on)
     assert order.status == "pending"
     assert order.stripe_session_id == "cs_test_1"
     assert create.called
+
+
+@pytest.mark.asyncio
+async def test_wholesale_delivery_uses_listing_fees_in_stripe_not_client_amount(sent, stripe_on):
+    await _make_user()
+    listing_id = await _add_listing(
+        quantity=5, delivery_fee="7.50", delivery_fee_mode="per_unit"
+    )
+    await _login()
+    stripe_session = mock.Mock(id="cs_delivery", url="https://checkout.stripe.com/cs_delivery")
+
+    with mock.patch("stripe.checkout.Session.create", return_value=stripe_session) as create:
+        _, response = await _checkout(
+            [{"id": listing_id, "quantity": 2}],
+            fulfillment="delivery",
+            delivery_address="17 Garden Lane",
+            delivery_fee="0.01",  # Client-supplied fees must have no effect.
+        )
+
+    assert response.status == 201
+    async with session_scope() as db:
+        order = await db.get(Order, response.json["order_id"])
+    assert order.fulfillment == "delivery"
+    assert order.delivery_address == "17 Garden Lane"
+    assert order.delivery_fee == Decimal("15.00")
+    line_items = create.call_args.kwargs["line_items"]
+    assert line_items[-1]["price_data"]["product_data"]["name"] == "Delivery"
+    assert line_items[-1]["price_data"]["unit_amount"] == 1500
+    assert line_items[-1]["quantity"] == 1
+
+
+@pytest.mark.asyncio
+async def test_wholesale_pickup_is_free_and_saves_window(sent, stripe_off):
+    await _make_user()
+    listing_id = await _add_listing(delivery_fee="8.00")
+    await _login()
+
+    _, response = await _checkout(
+        [{"id": listing_id, "quantity": 1}],
+        fulfillment="pickup",
+        pickup_window="Friday morning",
+    )
+
+    assert response.status == 201
+    async with session_scope() as db:
+        order = await db.get(Order, response.json["order_id"])
+    assert order.delivery_fee == Decimal("0")
+    assert order.pickup_window == "Friday morning"
+
+
+@pytest.mark.asyncio
+async def test_wholesale_delivery_fee_is_in_confirmation_email(sent, stripe_off):
+    await _make_user()
+    listing_id = await _add_listing(delivery_fee="8.00")
+    await _login()
+    _, response = await _checkout(
+        [{"id": listing_id, "quantity": 2}],
+        fulfillment="delivery",
+        delivery_address="17 Garden Lane",
+    )
+
+    assert response.status == 201
+    assert "Delivery fee: $8.00" in sent[0]["body"]
+
+
+@pytest.mark.asyncio
+async def test_wholesale_delivery_requires_address_and_valid_fulfillment(sent, stripe_off):
+    await _make_user()
+    listing_id = await _add_listing()
+    await _login()
+    items = [{"id": listing_id, "quantity": 1}]
+
+    _, missing = await _checkout(items, fulfillment="delivery")
+    _, invalid = await _checkout(items, fulfillment="courier")
+
+    assert missing.status == 400
+    assert invalid.status == 400
+    async with session_scope() as db:
+        assert (await db.execute(select(Order))).scalars().all() == []
 
 
 @pytest.mark.asyncio

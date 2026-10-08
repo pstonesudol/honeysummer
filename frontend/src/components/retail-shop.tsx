@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AlertCircle, Check, Loader2, Lock } from "lucide-react";
 
 import type { FlowerListing } from "@/lib/api";
+import { estimateDeliveryFee } from "@/lib/delivery-fee";
 import { pickup } from "@/lib/site";
 
 type Cart = Record<number, number>;
@@ -66,6 +67,7 @@ export function RetailShop({
     (sum, line) => sum + Number(line.flower.price) * line.quantity,
     0,
   );
+  const deliveryFee = fulfillment === "delivery" ? estimateDeliveryFee(cartLines) : 0;
 
   function setQuantity(flower: FlowerListing, value: number) {
     const next = Math.max(0, Math.min(flower.quantity_available, value || 0));
@@ -166,6 +168,9 @@ export function RetailShop({
                   <strong>
                     ${flower.price} / {flower.unit}
                   </strong>
+                  {Number(flower.delivery_fee) > 0 ? (
+                    <p>Delivery: ${flower.delivery_fee} {flower.delivery_fee_mode === "per_unit" ? "/ unit" : flower.delivery_fee_mode === "per_order" ? "/ order" : "/ listing"}</p>
+                  ) : null}
                   <div className="quantity">
                     <label htmlFor={`retail-flower-${flower.id}`}>Quantity</label>
                     <input
@@ -267,7 +272,8 @@ export function RetailShop({
 
             <div className="cart-bar">
               <span>
-                {count} {count === 1 ? "item" : "items"} · ${total.toFixed(2)}
+                 {count} {count === 1 ? "item" : "items"} · ${total.toFixed(2)}
+                 {fulfillment === "delivery" ? ` + $${deliveryFee.toFixed(2)} delivery = $${(total + deliveryFee).toFixed(2)}` : ""}
               </span>
               <button
                 className="button button--dark"

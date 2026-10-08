@@ -46,6 +46,8 @@ async def _add_listing(
     color: str = "",
     stem_notes: str = "",
     photo: str = "",
+    delivery_fee: str = "0",
+    delivery_fee_mode: str = "per_listing",
 ) -> int:
     async with session_scope() as session:
         listing = FlowerListing(
@@ -60,6 +62,8 @@ async def _add_listing(
             color=color,
             stem_notes=stem_notes,
             photo=photo,
+            delivery_fee=Decimal(delivery_fee),
+            delivery_fee_mode=delivery_fee_mode,
         )
         session.add(listing)
         await session.commit()
@@ -88,6 +92,8 @@ async def test_public_catalog_needs_no_auth_and_lists_retail_and_both():
     assert response.status == 200
     assert [item["name"] for item in response.json] == ["Both bunch", "Retail bunch"]
     assert response.json[0]["price"] == "32.00"
+    assert response.json[0]["delivery_fee"] == "0.00"
+    assert response.json[0]["delivery_fee_mode"] == "per_listing"
 
 
 @pytest.mark.asyncio
@@ -160,9 +166,8 @@ async def test_retail_delivery_requires_an_address(sent, stripe_off):
 
 
 @pytest.mark.asyncio
-async def test_retail_delivery_applies_the_configured_fee(sent, stripe_off, monkeypatch):
-    monkeypatch.setattr(get_settings(), "retail_delivery_fee", Decimal("12.00"))
-    listing_id = await _add_listing()
+async def test_retail_delivery_applies_the_listing_fee(sent, stripe_off):
+    listing_id = await _add_listing(delivery_fee="12.00")
 
     _, response = await _checkout(
         [{"id": listing_id, "quantity": 1}],
@@ -176,6 +181,45 @@ async def test_retail_delivery_applies_the_configured_fee(sent, stripe_off, monk
     assert order.fulfillment == "delivery"
     assert order.delivery_fee == Decimal("12.00")
     assert order.delivery_address == "12 Garden Lane, Mountain Top, PA"
+    assert "Delivery fee: $12.00" in sent[0]["body"]
+
+
+@pytest.mark.asyncio
+async def test_delivery_combines_all_three_listing_fee_modes(sent, stripe_off):
+    per_listing = await _add_listing(delivery_fee="3.00", delivery_fee_mode="per_listing")
+    per_unit = await _add_listing(delivery_fee="2.50", delivery_fee_mode="per_unit")
+    lower = await _add_listing(delivery_fee="4.00", delivery_fee_mode="per_order")
+    higher = await _add_listing(delivery_fee="9.00", delivery_fee_mode="per_order")
+
+    _, response = await _checkout(
+        [
+            {"id": per_listing, "quantity": 2},
+            {"id": per_unit, "quantity": 3},
+            {"id": lower, "quantity": 1},
+            {"id": higher, "quantity": 1},
+        ],
+        fulfillment="delivery",
+        delivery_address="17 Garden Lane",
+    )
+
+    assert response.status == 201
+    async with session_scope() as db:
+        order = await db.get(Order, response.json["order_id"])
+    assert order.delivery_fee == Decimal("19.50")  # 3 + 3 * 2.50 + max(4, 9)
+
+
+@pytest.mark.asyncio
+async def test_per_listing_fee_charged_once_for_repeated_cart_entries(sent, stripe_off):
+    listing_id = await _add_listing(delivery_fee="3.00")
+    _, response = await _checkout(
+        [{"id": listing_id, "quantity": 1}, {"id": listing_id, "quantity": 2}],
+        fulfillment="delivery",
+        delivery_address="17 Garden Lane",
+    )
+    assert response.status == 201
+    async with session_scope() as db:
+        order = await db.get(Order, response.json["order_id"])
+    assert order.delivery_fee == Decimal("3.00")
 
 
 @pytest.mark.asyncio
@@ -242,8 +286,7 @@ async def test_stripe_checkout_includes_listing_thumbnail_and_description(
 
 @pytest.mark.asyncio
 async def test_stripe_checkout_charges_configured_delivery_fee(sent, stripe_on, monkeypatch):
-    monkeypatch.setattr(get_settings(), "retail_delivery_fee", Decimal("12.00"))
-    listing_id = await _add_listing(quantity=5)
+    listing_id = await _add_listing(quantity=5, delivery_fee="12.00")
     session = mock.Mock(id="cs_test_delivery", url="https://checkout.stripe.com/cs_test_delivery")
 
     with mock.patch("stripe.checkout.Session.create", return_value=session) as create:

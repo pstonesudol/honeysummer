@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
+from app import emails
 from app.admin import CSRF_COOKIE
 from app.auth import hash_password
 from app.db import session_scope
@@ -92,6 +93,75 @@ async def test_create_announcement_through_the_form():
 
 
 @pytest.mark.asyncio
+async def test_admin_can_configure_listing_delivery_fee():
+    await _make_admin()
+    await _login()
+    token = await _csrf("/admin/flowers/new")
+
+    _, response = await app.asgi_client.post(
+        "/admin/flowers/new",
+        data={
+            "name": "Dahlias",
+            "price": "12.00",
+            "quantity_available": "7",
+            "delivery_fee": "4.50",
+            "delivery_fee_mode": "per_order",
+            "channel": "both",
+            "active": "on",
+            "csrf_token": token,
+        },
+    )
+
+    assert response.status == 302
+    async with session_scope() as session:
+        listing = (await session.execute(select(FlowerListing))).scalar_one()
+    assert listing.price == Decimal("12.00")
+    assert listing.quantity_available == 7
+    assert listing.delivery_fee == Decimal("4.50")
+    assert listing.delivery_fee_mode == "per_order"
+
+    token = await _csrf(f"/admin/flowers/{listing.id}")
+    _, updated = await app.asgi_client.post(
+        f"/admin/flowers/{listing.id}",
+        data={
+            "name": "Dahlias",
+            "price": "12.00",
+            "quantity_available": "7",
+            "delivery_fee": "2.00",
+            "delivery_fee_mode": "per_unit",
+            "channel": "both",
+            "active": "on",
+            "csrf_token": token,
+        },
+    )
+    assert updated.status == 302
+    async with session_scope() as session:
+        listing = await session.get(FlowerListing, listing.id)
+    assert listing.delivery_fee == Decimal("2.00")
+    assert listing.delivery_fee_mode == "per_unit"
+
+
+@pytest.mark.asyncio
+async def test_admin_rejects_negative_listing_delivery_fee():
+    await _make_admin()
+    await _login()
+    token = await _csrf("/admin/flowers/new")
+    _, response = await app.asgi_client.post(
+        "/admin/flowers/new",
+        data={
+            "name": "Dahlias",
+            "price": "12.00",
+            "delivery_fee": "-2.00",
+            "delivery_fee_mode": "per_unit",
+            "csrf_token": token,
+        },
+    )
+    assert response.status == 400
+    async with session_scope() as session:
+        assert (await session.execute(select(FlowerListing))).scalars().all() == []
+
+
+@pytest.mark.asyncio
 async def test_admin_can_delete_an_entry_with_csrf():
     await _make_admin()
     async with session_scope() as session:
@@ -146,7 +216,9 @@ async def test_form_post_without_csrf_is_rejected():
 
 
 @pytest.mark.asyncio
-async def test_approve_florist_action():
+async def test_approve_florist_action(monkeypatch):
+    sent = []
+    monkeypatch.setattr(emails, "send_email", lambda **kwargs: sent.append(kwargs))
     await _make_admin()
     async with session_scope() as session:
         profile = FloristProfile(
@@ -168,6 +240,15 @@ async def test_approve_florist_action():
     async with session_scope() as session:
         profile = await session.get(FloristProfile, profile_id)
     assert profile.approved is True
+    assert len(sent) == 1
+    assert sent[0]["to"] == "florist@example.com"
+    assert "approved" in sent[0]["subject"]
+
+    token = await _csrf("/admin/florists")
+    await app.asgi_client.post(
+        f"/admin/florists/{profile_id}/action/approve", data={"csrf_token": token}
+    )
+    assert len(sent) == 1
 
 
 @pytest.mark.asyncio

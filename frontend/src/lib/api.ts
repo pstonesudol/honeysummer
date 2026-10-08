@@ -55,6 +55,8 @@ export type FlowerListing = {
   stem_notes: string;
   price: string;
   unit: string;
+  delivery_fee: string;
+  delivery_fee_mode: "per_listing" | "per_unit" | "per_order";
   quantity_available: number;
   sold_out: boolean;
   available: boolean;

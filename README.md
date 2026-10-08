@@ -61,6 +61,10 @@ The marketing pages read live content from the API and post inquiries back to it
 
 Announcements, gallery images, flower listings, florist accounts, inquiries, and orders are all managed from the admin at `/admin` — create the first operator account with `uv run python -m app.seed`. Set `RESEND_API_KEY` (see `backend/.env.example`) to send mail through Resend; without it, messages print to the console for local development. Uploaded photos are stored under `backend/media/` in development and served at `/media/`. Move to Cloudflare R2 before launch so uploads survive deploys.
 
+### Delivery fees
+
+Each flower listing has an optional **delivery fee** (default $0) and a frequency set in `/admin/flowers`: **once per listing** (regardless of quantity), **per unit** (multiplied by quantity), or **once per order**. When multiple once-per-order fees appear in one cart, only the highest is charged; fees in the other two modes are added. Pickup has no delivery fee. This applies equally to retail and wholesale orders and replaces the former flat `RETAIL_DELIVERY_FEE` setting. Both storefronts estimate the fee before checkout; the backend recalculates it from the listings during stock reservation and saves the total on the order. Stripe receives one separate Delivery line item for the total, which is also included in confirmation emails. Set `CHECKOUT_SUCCESS_URL` to the public wholesale page URL before launch; its base URL is used in wholesale approval emails.
+
 ## Deployment
 
 - Frontend: Cloudflare Workers through the OpenNext adapter, preserving the same-origin API proxy and server-side auth support.

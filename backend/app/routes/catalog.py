@@ -23,6 +23,8 @@ def _listing_payload(listing: FlowerListing) -> dict:
         "stem_notes": listing.stem_notes,
         "price": format(listing.price, ".2f"),
         "unit": listing.unit,
+        "delivery_fee": format(listing.delivery_fee or 0, ".2f"),
+        "delivery_fee_mode": listing.delivery_fee_mode,
         "quantity_available": listing.quantity_available,
         "sold_out": listing.sold_out,
         "available": listing.available,

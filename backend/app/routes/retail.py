@@ -95,8 +95,6 @@ async def retail_checkout(request):
         return json(errors, status=400)
 
     settings = get_settings()
-    delivery_fee = settings.retail_delivery_fee if fulfillment == "delivery" else Decimal("0")
-
     try:
         async with session_scope() as session:
             order, items_context = await reserve_order(
@@ -107,12 +105,12 @@ async def retail_checkout(request):
                 customer_email=email,
                 customer_phone=phone,
                 fulfillment=fulfillment,
-                delivery_fee=delivery_fee,
                 pickup_window=pickup_window,
                 delivery_address=delivery_address,
                 notes=notes,
             )
             order_id = order.id
+            delivery_fee = order.delivery_fee
     except (StockError, InvalidOperation) as error:
         return json({"detail": str(error)}, status=409)
 
