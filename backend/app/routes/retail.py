@@ -7,6 +7,7 @@ those details directly.
 """
 
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urljoin, urlsplit
 
 from sanic import Blueprint
 from sanic.response import json
@@ -22,6 +23,30 @@ from ..settings import get_settings
 bp = Blueprint("retail", url_prefix="/api")
 
 FULFILLMENTS = {"pickup", "delivery"}
+
+
+def _stripe_product_data(item: dict, settings) -> dict:
+    """Build Stripe's richer hosted-checkout product summary."""
+    description = " · ".join(
+        value
+        for value in (item.get("variety"), item.get("color"), item.get("stem_notes"))
+        if value
+    )
+    product_data = {"name": item["name"]}
+    if description:
+        product_data["description"] = description[:500]
+
+    if item.get("photo"):
+        media_base = settings.media_url.rstrip("/")
+        image_url = (
+            f"{media_base}/{item['photo']}"
+            if urlsplit(media_base).scheme in {"http", "https"}
+            else urljoin(settings.retail_checkout_success_url, f"{media_base}/{item['photo']}")
+        )
+        parsed_image = urlsplit(image_url)
+        if parsed_image.scheme == "https" and parsed_image.netloc:
+            product_data["images"] = [image_url]
+    return product_data
 
 
 @bp.get("/retail/flowers/")
@@ -122,7 +147,7 @@ async def retail_checkout(request):
             {
                 "price_data": {
                     "currency": "usd",
-                    "product_data": {"name": item["name"]},
+                    "product_data": _stripe_product_data(item, settings),
                     "unit_amount": int(Decimal(item["price"]) * 100),
                 },
                 "quantity": item["quantity"],

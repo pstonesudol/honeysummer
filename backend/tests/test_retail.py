@@ -42,6 +42,10 @@ async def _add_listing(
     active: bool = True,
     sold_out: bool = False,
     sort_order: int = 0,
+    variety: str = "",
+    color: str = "",
+    stem_notes: str = "",
+    photo: str = "",
 ) -> int:
     async with session_scope() as session:
         listing = FlowerListing(
@@ -52,6 +56,10 @@ async def _add_listing(
             active=active,
             sold_out=sold_out,
             sort_order=sort_order,
+            variety=variety,
+            color=color,
+            stem_notes=stem_notes,
+            photo=photo,
         )
         session.add(listing)
         await session.commit()
@@ -200,6 +208,36 @@ async def test_configured_retail_checkout_returns_a_stripe_session(sent, stripe_
         order = await session.get(Order, response.json["order_id"])
     assert order.status == "pending"
     assert order.stripe_session_id == "cs_test_9"
+
+
+@pytest.mark.asyncio
+async def test_stripe_checkout_includes_listing_thumbnail_and_description(
+    sent, stripe_on, monkeypatch
+):
+    settings = get_settings()
+    monkeypatch.setattr(
+        settings,
+        "retail_checkout_success_url",
+        "https://hellohoneysummer.com/order-flowers?checkout=success",
+    )
+    listing_id = await _add_listing(
+        name="Market Bouquet",
+        variety="Dahlia",
+        color="Apricot",
+        stem_notes="Seasonal mix",
+        photo="flowers/bouquet.jpg",
+    )
+    session = mock.Mock(id="cs_test_image", url="https://checkout.stripe.com/cs_test_image")
+
+    with mock.patch("stripe.checkout.Session.create", return_value=session) as create:
+        _, response = await _checkout([{"id": listing_id, "quantity": 1}])
+
+    assert response.status == 201
+    product_data = create.call_args.kwargs["line_items"][0]["price_data"]["product_data"]
+    assert product_data["description"] == "Dahlia · Apricot · Seasonal mix"
+    assert product_data["images"] == [
+        "https://hellohoneysummer.com/media/flowers/bouquet.jpg"
+    ]
 
 
 @pytest.mark.asyncio

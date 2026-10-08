@@ -99,6 +99,10 @@ async def reserve_order(
                 "name": listing.name,
                 "price": format(listing.price, ".2f"),
                 "quantity": quantity,
+                "variety": listing.variety,
+                "color": listing.color,
+                "stem_notes": listing.stem_notes,
+                "photo": listing.photo,
             }
         )
 
