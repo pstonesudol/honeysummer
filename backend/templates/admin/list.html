@@ -10,6 +10,7 @@
   <button class="button--ghost" type="submit">Search</button>
 </form>
 {% endif %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
 <table>
   <thead>
     <tr>{% for label, _ in admin.list_columns %}<th>{{ label }}</th>{% endfor %}<th></th></tr>
@@ -20,6 +21,11 @@
       {% for value, _ in display[loop.index0] %}<td>{{ value }}</td>{% endfor %}
       <td>
         <a class="button--ghost button--sm" href="/admin/{{ admin.slug }}/{{ row.id }}">Edit</a>
+        <form class="inline" method="post" action="/admin/{{ admin.slug }}/{{ row.id }}/delete"
+              onsubmit="return confirm('Delete this entry? This cannot be undone.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="button--sm" type="submit">Delete</button>
+        </form>
         {% for action in admin.actions %}
         <form class="inline" method="post" action="/admin/{{ admin.slug }}/{{ row.id }}/action/{{ action }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

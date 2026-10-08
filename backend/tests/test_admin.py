@@ -92,6 +92,46 @@ async def test_create_announcement_through_the_form():
 
 
 @pytest.mark.asyncio
+async def test_admin_can_delete_an_entry_with_csrf():
+    await _make_admin()
+    async with session_scope() as session:
+        announcement = Announcement(text="Remove me")
+        session.add(announcement)
+        await session.commit()
+        announcement_id = announcement.id
+    await _login()
+    _, listing = await app.asgi_client.get("/admin/announcements")
+    assert "Delete" in listing.text
+    token = await _csrf("/admin/announcements")
+    _, response = await app.asgi_client.post(
+        f"/admin/announcements/{announcement_id}/delete", data={"csrf_token": token}
+    )
+
+    assert response.status == 302
+    async with session_scope() as session:
+        assert await session.get(Announcement, announcement_id) is None
+
+
+@pytest.mark.asyncio
+async def test_delete_without_csrf_is_rejected():
+    await _make_admin()
+    async with session_scope() as session:
+        announcement = Announcement(text="Keep me")
+        session.add(announcement)
+        await session.commit()
+        announcement_id = announcement.id
+    await _login()
+
+    _, response = await app.asgi_client.post(
+        f"/admin/announcements/{announcement_id}/delete", data={}
+    )
+
+    assert response.status == 403
+    async with session_scope() as session:
+        assert await session.get(Announcement, announcement_id) is not None
+
+
+@pytest.mark.asyncio
 async def test_form_post_without_csrf_is_rejected():
     await _make_admin()
     await _login()

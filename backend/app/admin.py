@@ -21,6 +21,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import Blueprint
 from sanic.response import html, json, redirect
 from sqlalchemy import func, inspect as sa_inspect, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from .auth import verify_password
@@ -574,6 +575,37 @@ async def model_update(request, slug: str, pk: int):
             return redirect(f"/admin/{slug}")
         _apply_form(obj, admin, request.form, request.files, get_settings().media_root)
         await session.commit()
+    return redirect(f"/admin/{slug}")
+
+
+@bp.post("/<slug:str>/<pk:int>/delete")
+async def model_delete(request, slug: str, pk: int):
+    admin = REGISTRY_BY_SLUG.get(slug)
+    if admin is None:
+        return redirect("/admin/")
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    async with session_scope() as session:
+        obj = await session.get(admin.model, pk)
+        if obj is None:
+            return redirect(f"/admin/{slug}")
+        await session.delete(obj)
+        try:
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            return _page(
+                request,
+                "admin/list.html",
+                status=409,
+                admin=admin,
+                rows=[],
+                display=[],
+                query="",
+                error="This entry cannot be deleted because other records depend on it.",
+            )
     return redirect(f"/admin/{slug}")
 
 
