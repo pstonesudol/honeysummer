@@ -15,7 +15,9 @@ Create listings with an initial quantity. To change it later, open **View
 inventory history and adjust stock**; enter a positive restock, waste, or
 market-sale quantity, or a signed correction, and supply a reason (include the
 Tap to Pay receipt/reference for market sales). Do not edit inventory via SQL.
-Orders and listings with history cannot be deleted through admin.
+Orders cannot be deleted through admin. A flower listing can be deleted only
+when it has no order items and no inventory movements; otherwise deactivate it
+to preserve invoicing and the append-only stock audit trail.
 
 ## Payment lifecycle
 

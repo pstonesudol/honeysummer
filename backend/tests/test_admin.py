@@ -7,7 +7,10 @@ from app import emails
 from app.admin import CSRF_COOKIE
 from app.auth import hash_password
 from app.db import session_scope
-from app.models import Announcement, FlowerListing, FloristProfile, Order, OrderItem, User
+from app.models import (
+    Announcement, FlowerListing, FloristProfile, InventoryMovement, Order,
+    OrderItem, User,
+)
 from app.server import app
 from app.settings import get_settings
 
@@ -200,6 +203,55 @@ async def test_delete_without_csrf_is_rejected():
     assert response.status == 403
     async with session_scope() as session:
         assert await session.get(Announcement, announcement_id) is not None
+
+
+@pytest.mark.asyncio
+async def test_admin_can_delete_listing_without_order_or_inventory_history():
+    await _make_admin()
+    async with session_scope() as session:
+        listing = FlowerListing(name="Unused", price=Decimal("5.00"))
+        session.add(listing)
+        await session.commit()
+        listing_id = listing.id
+    await _login()
+    _, listing_page = await app.asgi_client.get("/admin/flowers")
+    assert "Delete" in listing_page.text
+    token = await _csrf("/admin/flowers")
+
+    _, response = await app.asgi_client.post(
+        f"/admin/flowers/{listing_id}/delete", data={"csrf_token": token}
+    )
+
+    assert response.status == 302
+    async with session_scope() as session:
+        assert await session.get(FlowerListing, listing_id) is None
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_delete_listing_with_inventory_history():
+    await _make_admin()
+    async with session_scope() as session:
+        listing = FlowerListing(name="Tracked", price=Decimal("5.00"))
+        session.add(listing)
+        await session.flush()
+        session.add(
+            InventoryMovement(
+                listing_id=listing.id, kind="opening", delta=0, units=0,
+                reason="Initial stock", source="admin",
+            )
+        )
+        await session.commit()
+        listing_id = listing.id
+    await _login()
+    token = await _csrf("/admin/flowers")
+
+    _, response = await app.asgi_client.post(
+        f"/admin/flowers/{listing_id}/delete", data={"csrf_token": token}
+    )
+
+    assert response.status == 409
+    async with session_scope() as session:
+        assert await session.get(FlowerListing, listing_id) is not None
 
 
 @pytest.mark.asyncio

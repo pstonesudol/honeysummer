@@ -32,7 +32,9 @@ from .models import (
     FloristProfile,
     GalleryImage,
     Inquiry,
+    InventoryMovement,
     Order,
+    OrderItem,
     User,
 )
 from .settings import BASE_DIR, get_settings
@@ -630,12 +632,26 @@ async def model_delete(request, slug: str, pk: int):
         return redirect("/admin/login")
     if not _valid_csrf(request):
         return json({"detail": "Invalid CSRF token."}, status=403)
-    if slug in ("flowers", "orders"):
-        return json({"detail": "Inventory and order history cannot be deleted."}, status=409)
+    if slug == "orders":
+        return json({"detail": "Order history cannot be deleted."}, status=409)
     async with session_scope() as session:
         obj = await session.get(admin.model, pk)
         if obj is None:
             return redirect(f"/admin/{slug}")
+        if slug == "flowers":
+            has_orders = await session.scalar(
+                select(OrderItem.id).where(OrderItem.listing_id == pk).limit(1)
+            )
+            has_inventory_history = await session.scalar(
+                select(InventoryMovement.id)
+                .where(InventoryMovement.listing_id == pk)
+                .limit(1)
+            )
+            if has_orders or has_inventory_history:
+                return json(
+                    {"detail": "Listings with order or inventory history cannot be deleted."},
+                    status=409,
+                )
         await session.delete(obj)
         try:
             await session.commit()

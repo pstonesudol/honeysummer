@@ -21,7 +21,7 @@
       {% for value, _ in display[loop.index0] %}<td>{{ value }}</td>{% endfor %}
       <td>
         <a class="button--ghost button--sm" href="/admin/{{ admin.slug }}/{{ row.id }}">Edit</a>
-        {% if admin.slug not in ['flowers', 'orders'] %}
+        {% if admin.slug != 'orders' %}
         <form class="inline" method="post" action="/admin/{{ admin.slug }}/{{ row.id }}/delete"
               onsubmit="return confirm('Delete this entry? This cannot be undone.');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
