@@ -250,10 +250,7 @@ textarea {
 
 .hero h1 em {
   color: #f2d2d2;
-  font-family: var(--font-gaian), Georgia, serif;
   font-style: normal;
-  font-weight: 400;
-  letter-spacing: -0.02em;
 }
 
 .hero__lede {
@@ -464,10 +461,7 @@ textarea {
 
 .home-feature h2 em {
   color: #f2d2d2;
-  font-family: var(--font-gaian), Georgia, serif;
   font-style: normal;
-  font-weight: 400;
-  letter-spacing: -0.02em;
 }
 
 .home-feature__copy > p:not(.eyebrow) {
@@ -728,11 +722,15 @@ textarea {
 }
 
 .page-hero h1 em {
-  color: var(--pink);
-  font-family: var(--font-gaian), Georgia, serif;
+  /* The brand pink is too light against cream for fine script strokes. */
+  color: #8b4f59;
   font-style: normal;
-  font-weight: 400;
-  letter-spacing: -0.02em;
+}
+
+.hero h1 em,
+.page-hero h1 em,
+.home-feature h2 em {
+  font-size: 1.12em;
 }
 
 .script-accent {

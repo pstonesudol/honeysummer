@@ -9,6 +9,7 @@ from app.auth import hash_password
 from app.db import session_scope
 from app.models import Announcement, FlowerListing, FloristProfile, Order, OrderItem, User
 from app.server import app
+from app.settings import get_settings
 
 ADMIN_EMAIL = "boss@example.com"
 ADMIN_PASSWORD = "honey-summer-admin"
@@ -252,14 +253,15 @@ async def test_approve_florist_action(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cancel_order_action_releases_stock():
+async def test_cancel_order_action_releases_stock(monkeypatch):
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", "")
     await _make_admin()
     async with session_scope() as session:
         user = User(email="florist@example.com", password_hash=hash_password("x"))
         listing = FlowerListing(name="Dahlia", price=Decimal("2.50"), quantity_available=3)
         session.add_all([user, listing])
         await session.flush()
-        order = Order(customer_id=user.id, status="paid")
+        order = Order(customer_id=user.id, status="pending")
         session.add(order)
         await session.flush()
         session.add(

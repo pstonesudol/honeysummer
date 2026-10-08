@@ -65,6 +65,14 @@ Announcements, gallery images, flower listings, florist accounts, inquiries, and
 
 Each flower listing has an optional **delivery fee** (default $0) and a frequency set in `/admin/flowers`: **once per listing** (regardless of quantity), **per unit** (multiplied by quantity), or **once per order**. When multiple once-per-order fees appear in one cart, only the highest is charged; fees in the other two modes are added. Pickup has no delivery fee. This applies equally to retail and wholesale orders and replaces the former flat `RETAIL_DELIVERY_FEE` setting. Both storefronts estimate the fee before checkout; the backend recalculates it from the listings during stock reservation and saves the total on the order. Stripe receives one separate Delivery line item for the total, which is also included in confirmation emails. Set `CHECKOUT_SUCCESS_URL` to the public wholesale page URL before launch; its base URL is used in wholesale approval emails.
 
+### Inventory operations
+
+Use the inventory history and adjustment form on each listing in `/admin/flowers`
+instead of overwriting available quantity. Set up the independent scheduled
+reconciliation job before accepting live orders. See
+[`backend/INVENTORY_RUNBOOK.md`](backend/INVENTORY_RUNBOOK.md) for reservation,
+payment/refund, manual market sales, job commands, and incident procedures.
+
 ## Deployment
 
 - Frontend: Cloudflare Workers through the OpenNext adapter, preserving the same-origin API proxy and server-side auth support.

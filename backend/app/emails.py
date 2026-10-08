@@ -156,6 +156,8 @@ def send_order_emails(
     channel: str = "wholesale",
     customer_name: str = "",
     delivery_fee: Decimal | int | float = 0,
+    recipient: str | None = None,
+    raise_errors: bool = False,
 ) -> None:
     """Confirm an order to the buyer and notify the farm.
 
@@ -184,17 +186,17 @@ def send_order_emails(
         "\n\nWith warmth,\nHoney Summer"
     )
     try:
-        send_email(
-            subject=f"Honey Summer {label} #{order_id}",
-            body=body,
-            to=customer_email,
-            reply_to=settings.inquiry_notification_email,
-        )
-        send_email(
-            subject=f"New Honey Summer {label} #{order_id}",
-            body=body,
-            to=settings.inquiry_notification_email,
-            reply_to=customer_email,
-        )
+        if recipient in (None, "customer"):
+            send_email(
+                subject=f"Honey Summer {label} #{order_id}", body=body,
+                to=customer_email, reply_to=settings.inquiry_notification_email,
+            )
+        if recipient in (None, "farm"):
+            send_email(
+                subject=f"New Honey Summer {label} #{order_id}", body=body,
+                to=settings.inquiry_notification_email, reply_to=customer_email,
+            )
     except Exception:  # pragma: no cover - defensive
         logger.exception("Unable to send order emails for order %s", order_id)
+        if raise_errors:
+            raise

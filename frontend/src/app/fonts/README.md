@@ -5,7 +5,7 @@ This directory holds the webfont binaries loaded through `next/font/local` in
 
 | File | Role | CSS variable |
 |---|---|---|
-| `Gaian-Regular.woff2` | Body copy and `<em>` emphasis inside headings | `--font-gaian` (maps to `--font-serif`) |
+| `Gaian-Regular.woff2` | Body copy | `--font-gaian` (maps to `--font-serif`) |
 | `SouthCoast-Regular.woff2` | Headings and section titles | `--font-south-coast` (maps to `--font-script`) |
 
 These WOFF2 files were supplied in the seller's `web-fonts` download and are included in the

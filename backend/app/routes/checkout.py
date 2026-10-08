@@ -5,26 +5,20 @@ cannot oversell, mirroring the original Django implementation. Retail guest
 checkout shares this machinery through :mod:`app.orders`.
 """
 
+import logging
 from decimal import Decimal, InvalidOperation
 
 from sanic import Blueprint
 from sanic.response import json
-from sqlalchemy import update
 
 from ..auth import get_current_user
 from ..db import session_scope
-from ..emails import send_order_emails
-from ..models import Order
-from ..orders import (
-    StockError,
-    items_context as _items_context,
-    load_order as _load_order,
-    release_order as _release_order,
-    reserve_order,
-)
+from ..orders import StockError, reserve_order
+from ..payments import apply_checkout_event, complete_without_stripe, create_checkout
 from ..settings import get_settings
 
 bp = Blueprint("checkout", url_prefix="/api")
+logger = logging.getLogger(__name__)
 
 
 @bp.post("/checkout/")
@@ -37,6 +31,9 @@ async def checkout(request):
     profile = user.profile
     if profile is None or not profile.approved:
         return json({"detail": "Wholesale approval is required."}, status=403)
+    settings = get_settings()
+    if not settings.stripe_secret_key and not settings.debug:
+        return json({"detail": "Online payments are not configured."}, status=503)
 
     data = request.json or {}
     items = data.get("items", [])
@@ -69,35 +66,16 @@ async def checkout(request):
     except (StockError, InvalidOperation) as error:
         return json({"detail": str(error)}, status=409)
 
-    settings = get_settings()
-    customer_email = user.email
-
     if not settings.stripe_secret_key:
-        async with session_scope() as session:
-            await session.execute(
-                update(Order).where(Order.id == order_id).values(status="paid")
-            )
-            await session.commit()
-        send_order_emails(
-            order_id=order_id,
-            channel="wholesale",
-            fulfillment=fulfillment,
-            pickup_window=pickup_window,
-            delivery_address=delivery_address,
-            customer_email=customer_email,
-            items=items_context,
-            delivery_fee=delivery_fee,
-        )
+        await complete_without_stripe(order_id)
         return json({"order_id": order_id, "checkout_url": ""}, status=201)
 
-    import stripe
-
-    stripe.api_key = settings.stripe_secret_key
-    stripe_session = stripe.checkout.Session.create(
-        mode="payment",
-        success_url=settings.checkout_success_url,
-        cancel_url=settings.checkout_cancel_url,
-        line_items=[
+    try:
+        stripe_session = await create_checkout(
+            order_id,
+            success_url=settings.checkout_success_url,
+            cancel_url=settings.checkout_cancel_url,
+            line_items=[
             {
                 "price_data": {
                     "currency": "usd",
@@ -117,15 +95,10 @@ async def checkout(request):
                 "quantity": 1,
             }
         ] if delivery_fee > 0 else []),
-        metadata={"order_id": str(order_id)},
-    )
-    async with session_scope() as session:
-        await session.execute(
-            update(Order)
-            .where(Order.id == order_id)
-            .values(stripe_session_id=stripe_session.id)
         )
-        await session.commit()
+    except Exception:
+        logger.exception("Unable to create wholesale Stripe Checkout for order %s", order_id)
+        return json({"detail": "Unable to start payment. Please try again."}, status=503)
     return json({"order_id": order_id, "checkout_url": stripe_session.url}, status=201)
 
 
@@ -146,33 +119,10 @@ async def stripe_webhook(request):
     except Exception:
         return json({"detail": "Invalid webhook."}, status=400)
 
-    order_id = event["data"]["object"].get("metadata", {}).get("order_id")
-    if not order_id:
-        return json({"received": True})
-
-    async with session_scope() as session:
-        order = await _load_order(session, int(order_id))
-        if order is None:
-            return json({"received": True})
-
-        if event["type"] == "checkout.session.completed":
-            order.status = "paid"
-            await session.commit()
-            send_order_emails(
-                order_id=order.id,
-                channel=order.channel,
-                fulfillment=order.fulfillment,
-                pickup_window=order.pickup_window,
-                delivery_address=order.delivery_address,
-                customer_email=(
-                    order.customer.email if order.customer else order.customer_email
-                ),
-                items=_items_context(order),
-                delivery_fee=order.delivery_fee,
-            )
-        elif event["type"] == "checkout.session.expired":
-            await _release_order(session, order)
-            order.status = "expired"
-            await session.commit()
-
+    if not event.get("id"):
+        return json({"detail": "Missing Stripe event ID."}, status=400)
+    outcome = await apply_checkout_event(event)
+    if outcome == "review":
+        logger.error("Stripe event %s (%s) requires manual reconciliation", event.get("id"), event.get("type"))
+        return json({"detail": "Stripe event requires reconciliation."}, status=409)
     return json({"received": True})

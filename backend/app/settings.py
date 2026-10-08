@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+    checkout_hold_minutes: int = 45
     checkout_success_url: str = "http://localhost:3000/wholesale?checkout=success"
     checkout_cancel_url: str = "http://localhost:3000/wholesale?checkout=cancelled"
 

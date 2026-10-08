@@ -22,6 +22,7 @@ def sent(monkeypatch):
 @pytest.fixture
 def stripe_off(monkeypatch):
     settings = get_settings()
+    monkeypatch.setattr(settings, "debug", True)
     monkeypatch.setattr(settings, "stripe_secret_key", "")
     monkeypatch.setattr(settings, "stripe_webhook_secret", "")
 
@@ -317,6 +318,7 @@ async def _seed_pending_retail_order() -> tuple[int, int]:
             customer_name="Dana Bloom",
             customer_email="dana@example.com",
             status="pending",
+            stripe_session_id="cs_seed_retail",
         )
         session.add(order)
         await session.flush()
@@ -338,7 +340,8 @@ async def test_webhook_completes_a_guest_order_and_emails(sent, stripe_on):
     order_id, _ = await _seed_pending_retail_order()
     event = {
         "type": "checkout.session.completed",
-        "data": {"object": {"metadata": {"order_id": str(order_id)}}},
+        "id": "evt_paid_retail",
+        "data": {"object": {"id": "cs_seed_retail", "metadata": {"order_id": str(order_id)}, "currency": "usd", "amount_total": 6400, "payment_status": "paid"}},
     }
 
     with mock.patch("stripe.Webhook.construct_event", return_value=event):
@@ -365,7 +368,8 @@ async def test_webhook_email_includes_delivery_fee(sent, stripe_on):
 
     event = {
         "type": "checkout.session.completed",
-        "data": {"object": {"metadata": {"order_id": str(order_id)}}},
+        "id": "evt_paid_retail_delivery",
+        "data": {"object": {"id": "cs_seed_retail", "metadata": {"order_id": str(order_id)}, "currency": "usd", "amount_total": 7600, "payment_status": "paid"}},
     }
     with mock.patch("stripe.Webhook.construct_event", return_value=event):
         _, response = await app.asgi_client.post(

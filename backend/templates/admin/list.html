@@ -21,16 +21,23 @@
       {% for value, _ in display[loop.index0] %}<td>{{ value }}</td>{% endfor %}
       <td>
         <a class="button--ghost button--sm" href="/admin/{{ admin.slug }}/{{ row.id }}">Edit</a>
+        {% if admin.slug not in ['flowers', 'orders'] %}
         <form class="inline" method="post" action="/admin/{{ admin.slug }}/{{ row.id }}/delete"
               onsubmit="return confirm('Delete this entry? This cannot be undone.');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="button--sm" type="submit">Delete</button>
         </form>
+        {% endif %}
         {% for action in admin.actions %}
+        {% if (action == 'cancel' and row.status == 'pending') or
+              (action == 'fulfill' and row.status == 'paid' and not row.fulfilled_at) or
+              (action == 'restock' and row.status == 'refunded' and not row.restocked_at) or
+              (action == 'approve' and not row.approved) %}
         <form class="inline" method="post" action="/admin/{{ admin.slug }}/{{ row.id }}/action/{{ action }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="button--sm" type="submit">{{ action|capitalize }}</button>
         </form>
+        {% endif %}
         {% endfor %}
       </td>
     </tr>

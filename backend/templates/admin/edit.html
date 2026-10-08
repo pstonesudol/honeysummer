@@ -38,4 +38,7 @@
   </div>
   <p><button type="submit">Save</button> <a class="button--ghost" href="/admin/{{ admin.slug }}">Cancel</a></p>
 </form>
+{% if obj and admin.slug == 'flowers' %}
+<p><a href="/admin/flowers/{{ obj.id }}/inventory">View inventory history and adjust stock</a></p>
+{% endif %}
 {% endblock %}

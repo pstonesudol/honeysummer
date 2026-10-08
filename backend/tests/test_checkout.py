@@ -22,6 +22,7 @@ def sent(monkeypatch):
 @pytest.fixture
 def stripe_off(monkeypatch):
     settings = get_settings()
+    monkeypatch.setattr(settings, "debug", True)
     monkeypatch.setattr(settings, "stripe_secret_key", "")
     monkeypatch.setattr(settings, "stripe_webhook_secret", "")
 
@@ -291,7 +292,7 @@ async def _seed_pending_order() -> tuple[int, int]:
         )
         session.add_all([user, listing])
         await session.flush()
-        order = Order(customer_id=user.id, status="pending")
+        order = Order(customer_id=user.id, status="pending", stripe_session_id="cs_seed")
         session.add(order)
         await session.flush()
         session.add(
@@ -323,7 +324,8 @@ async def test_webhook_completed_marks_paid_and_emails_both(sent, stripe_on):
     _, response = await _post_webhook(
         {
             "type": "checkout.session.completed",
-            "data": {"object": {"metadata": {"order_id": str(order_id)}}},
+            "id": "evt_paid_wholesale",
+            "data": {"object": {"id": "cs_seed", "metadata": {"order_id": str(order_id)}, "currency": "usd", "amount_total": 500, "payment_status": "paid"}},
         }
     )
 
@@ -341,7 +343,8 @@ async def test_webhook_expired_releases_held_stock(sent, stripe_on):
     _, response = await _post_webhook(
         {
             "type": "checkout.session.expired",
-            "data": {"object": {"metadata": {"order_id": str(order_id)}}},
+            "id": "evt_expired_wholesale",
+            "data": {"object": {"id": "cs_seed", "metadata": {"order_id": str(order_id)}}},
         }
     )
 

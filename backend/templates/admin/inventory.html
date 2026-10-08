@@ -1,0 +1,30 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Inventory — {{ listing.name }}</h1>
+<p>On hand: {{ on_hand }} · Reserved: {{ reserved }} · Available: {{ listing.quantity_available }}</p>
+<p><a href="/admin/flowers/{{ listing.id }}">Back to listing</a></p>
+<form method="post" action="/admin/flowers/{{ listing.id }}/adjust">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid">
+    <div><label for="kind">Action</label><select id="kind" name="kind">
+      <option value="restock">Restock (+)</option>
+      <option value="waste">Waste / damage (-)</option>
+      <option value="market_sale">In-person sale (-)</option>
+      <option value="adjustment">Correction (signed)</option>
+    </select></div>
+    <div><label for="quantity">Quantity (positive except signed correction)</label>
+      <input id="quantity" name="quantity" type="number" step="1" required></div>
+    <div><label for="reason">Reason / sale reference</label>
+      <input id="reason" name="reason" maxlength="255" required></div>
+  </div>
+  <p><button type="submit">Record movement</button></p>
+</form>
+<h2>Movement history</h2>
+<div style="overflow-x:auto">
+<table><thead><tr><th>When</th><th>Type</th><th>Available change</th><th>Units</th><th>Order</th><th>Actor</th><th>Source</th><th>Reason</th></tr></thead>
+<tbody>{% for movement in movements %}<tr>
+  <td>{{ movement.created_at }}</td><td>{{ movement.kind }}</td><td>{{ movement.delta }}</td>
+  <td>{{ movement.units }}</td><td>{{ movement.order_id or '—' }}</td><td>{{ movement.actor_id or '—' }}</td><td>{{ movement.source }}</td><td>{{ movement.reason }}</td>
+</tr>{% endfor %}</tbody></table>
+</div>
+{% endblock %}

@@ -19,6 +19,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -120,6 +121,7 @@ class FlowerListing(Base):
     __tablename__ = "flower_listings"
     __table_args__ = (
         CheckConstraint("delivery_fee >= 0", name="flower_delivery_fee_nonnegative"),
+        CheckConstraint("quantity_available >= 0", name="flower_available_nonnegative"),
         CheckConstraint(
             "delivery_fee_mode IN ('per_listing', 'per_unit', 'per_order')",
             name="flower_delivery_fee_mode_valid",
@@ -150,6 +152,24 @@ class FlowerListing(Base):
         return self.name
 
 
+class InventoryMovement(Base):
+    """Append-only available-stock journal. Zero-delta sale entries close holds."""
+
+    __tablename__ = "inventory_movements"
+    __table_args__ = (CheckConstraint("units > 0 OR kind = 'opening'", name="movement_units_positive"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("flower_listings.id"), index=True)
+    order_id: Mapped[Optional[int]] = mapped_column(ForeignKey("orders.id"), nullable=True, index=True)
+    actor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    delta: Mapped[int] = mapped_column(Integer)
+    units: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(255), default="")
+    source: Mapped[str] = mapped_column(String(100), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Order(Base):
     __tablename__ = "orders"
 
@@ -173,6 +193,10 @@ class Order(Base):
         String(255), unique=True, nullable=True
     )
     status: Mapped[str] = mapped_column(String(12), default="pending")
+    hold_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    fulfilled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    restocked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    stripe_payment_intent_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -209,3 +233,26 @@ class OrderItem(Base):
 
     order: Mapped[Order] = relationship(back_populates="items")
     listing: Mapped[FlowerListing] = relationship()
+
+
+class StripeEvent(Base):
+    __tablename__ = "stripe_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(255), unique=True)
+    order_id: Mapped[Optional[int]] = mapped_column(ForeignKey("orders.id"), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(100))
+    outcome: Mapped[str] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OrderNotification(Base):
+    __tablename__ = "order_notifications"
+    __table_args__ = (UniqueConstraint("order_id", "recipient", name="uq_order_notification_recipient"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    recipient: Mapped[str] = mapped_column(String(10))
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -217,16 +217,10 @@ REGISTRY: list[ModelAdmin] = [
             Field("customer_label", "Customer", "readonly"),
             Field("channel", "Channel", "readonly"),
             Field(
-                "status",
-                "Status",
-                "select",
-                choices=(
-                    ("pending", "Pending"),
-                    ("paid", "Paid"),
-                    ("expired", "Expired"),
-                    ("cancelled", "Cancelled"),
-                ),
+                "status", "Status", "readonly",
             ),
+            Field("fulfilled_at", "Fulfilled at", "readonly"),
+            Field("restocked_at", "Restocked at", "readonly"),
             Field("fulfillment", "Fulfillment", "readonly"),
             Field("delivery_fee", "Delivery fee", "readonly"),
             Field("pickup_window", "Pickup window", "readonly"),
@@ -245,7 +239,7 @@ REGISTRY: list[ModelAdmin] = [
         order_by=["-created_at"],
         search=("customer_name", "customer_email", "stripe_session_id"),
         can_create=False,
-        actions=("cancel",),
+        actions=("cancel", "fulfill", "restock"),
         eager=("customer", "customer.profile"),
     ),
 ]
@@ -395,6 +389,8 @@ def _save_upload(upload, media_root: Path, subdir: str) -> str:
 def _apply_form(obj, admin: ModelAdmin, form, files, media_root: Path) -> None:
     for field in admin.fields:
         if field.readonly:
+            continue
+        if admin.slug == "flowers" and field.name == "quantity_available" and obj.id is not None:
             continue
         if field.kind == "file":
             upload = files.get(field.name)
@@ -559,6 +555,20 @@ async def model_create(request, slug: str):
     async with session_scope() as session:
         obj = admin.model()
         _apply_form(obj, admin, request.form, request.files, get_settings().media_root)
+        if slug == "flowers":
+            from .orders import change_stock
+
+            initial = obj.quantity_available or 0
+            if initial < 0:
+                return json({"detail": "Starting quantity cannot be negative."}, status=400)
+            obj.quantity_available = 0
+            session.add(obj)
+            await session.flush()
+            await change_stock(
+                session, obj, initial, kind="restock" if initial else "opening",
+                units=initial, actor_id=request.ctx.admin.id,
+                reason="Initial stock", source="admin",
+            )
         session.add(obj)
         await session.commit()
     return redirect(f"/admin/{slug}")
@@ -584,7 +594,10 @@ async def model_edit(request, slug: str, pk: int):
         )
     if obj is None:
         return redirect(f"/admin/{slug}")
-    rows = [_field_row(obj, f) for f in admin.fields]
+    rows = [
+        _field_row(obj, Field(f.name, f.label, "readonly") if slug == "flowers" and f.name == "quantity_available" else f)
+        for f in admin.fields
+    ]
     return _page(request, "admin/edit.html", admin=admin, obj=obj, rows=rows)
 
 
@@ -617,6 +630,8 @@ async def model_delete(request, slug: str, pk: int):
         return redirect("/admin/login")
     if not _valid_csrf(request):
         return json({"detail": "Invalid CSRF token."}, status=403)
+    if slug in ("flowers", "orders"):
+        return json({"detail": "Inventory and order history cannot be deleted."}, status=409)
     async with session_scope() as session:
         obj = await session.get(admin.model, pk)
         if obj is None:
@@ -639,6 +654,67 @@ async def model_delete(request, slug: str, pk: int):
     return redirect(f"/admin/{slug}")
 
 
+@bp.get("/flowers/<pk:int>/inventory")
+async def flower_inventory(request, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    from .models import InventoryMovement, OrderItem
+
+    async with session_scope() as db:
+        listing = await db.get(FlowerListing, pk)
+        if not listing:
+            return redirect("/admin/flowers")
+        reserved = await db.scalar(
+            select(func.coalesce(func.sum(OrderItem.quantity), 0))
+            .join(Order, Order.id == OrderItem.order_id)
+            .where(OrderItem.listing_id == pk, Order.status == "pending")
+        )
+        movements = (await db.scalars(
+            select(InventoryMovement).where(InventoryMovement.listing_id == pk)
+            .order_by(InventoryMovement.id.desc()).limit(100)
+        )).all()
+    return _page(
+        request, "admin/inventory.html", listing=listing, movements=movements,
+        reserved=reserved, on_hand=listing.quantity_available + reserved,
+    )
+
+
+@bp.post("/flowers/<pk:int>/adjust")
+async def flower_adjust(request, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .orders import StockError, change_stock
+
+    kind = request.form.get("kind")
+    reason = str(request.form.get("reason", "")).strip()
+    try:
+        quantity = int(request.form.get("quantity", ""))
+    except (ValueError, TypeError):
+        return json({"detail": "Enter a whole-number quantity."}, status=400)
+    if kind not in ("restock", "waste", "market_sale", "adjustment") or not reason or abs(quantity) > 999999 or quantity == 0:
+        return json({"detail": "Choose an action, nonzero quantity and reason."}, status=400)
+    if kind != "adjustment" and quantity < 0:
+        return json({"detail": "Use a positive quantity for this action."}, status=400)
+    delta = quantity if kind in ("restock", "adjustment") else -quantity
+    try:
+        async with session_scope() as db:
+            listing = await db.scalar(
+                select(FlowerListing).where(FlowerListing.id == pk).with_for_update()
+            )
+            if not listing:
+                return json({"detail": "Listing not found."}, status=404)
+            await change_stock(
+                db, listing, delta, kind=kind, units=abs(quantity),
+                actor_id=request.ctx.admin.id, reason=reason, source="admin",
+            )
+            await db.commit()
+    except StockError as exc:
+        return json({"detail": str(exc)}, status=409)
+    return redirect(f"/admin/flowers/{pk}/inventory")
+
+
 @bp.post("/<slug:str>/<pk:int>/action/<action:str>")
 async def model_action(request, slug: str, pk: int, action: str):
     admin = REGISTRY_BY_SLUG.get(slug)
@@ -649,15 +725,46 @@ async def model_action(request, slug: str, pk: int, action: str):
     if not _valid_csrf(request):
         return json({"detail": "Invalid CSRF token."}, status=403)
 
-    if slug == "orders" and action == "cancel":
-        from .orders import load_order, release_order
+    if slug == "orders":
+        from .orders import change_stock, load_order, release_order
+        from .models import InventoryMovement
+        from .payments import expire_checkout
 
+        if action == "cancel":
+            result = await expire_checkout(pk)
+            if result == "review":
+                return json({"detail": "Stripe payment needs review; stock was not released."}, status=409)
         async with session_scope() as session:
-            order = await load_order(session, pk)
-            if order is not None and order.status in ("pending", "paid"):
+            order = await load_order(session, pk, for_update=True)
+            if order is None:
+                return json({"detail": "Order not found."}, status=404)
+            if action == "cancel" and order.status == "pending":
                 await release_order(session, order)
                 order.status = "cancelled"
-                await session.commit()
+            elif action == "fulfill" and order.status == "paid" and not order.fulfilled_at:
+                order.fulfilled_at = datetime.now(timezone.utc)
+            elif action == "restock" and order.status == "refunded" and not order.restocked_at:
+                already = await session.scalar(
+                    select(InventoryMovement.id).where(
+                        InventoryMovement.order_id == pk, InventoryMovement.kind == "return"
+                    ).limit(1)
+                )
+                if already:
+                    return json({"detail": "Order has already been restocked."}, status=409)
+                from .models import FlowerListing
+                for item in sorted(order.items, key=lambda item: item.listing_id):
+                    listing = await session.scalar(
+                        select(FlowerListing).where(FlowerListing.id == item.listing_id).with_for_update()
+                    )
+                    await change_stock(
+                        session, listing, item.quantity, kind="return", units=item.quantity,
+                        order_id=pk, actor_id=request.ctx.admin.id,
+                        reason="Operator confirmed refunded goods returned to stock", source="admin",
+                    )
+                order.restocked_at = datetime.now(timezone.utc)
+            else:
+                return json({"detail": "This action is not valid for the order's state."}, status=409)
+            await session.commit()
     elif slug == "florists" and action == "approve":
         from .emails import send_wholesale_approval_email
 

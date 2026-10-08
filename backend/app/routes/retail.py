@@ -6,21 +6,23 @@ requires contact details instead of a session, and the resulting order stores
 those details directly.
 """
 
+import logging
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urljoin, urlsplit
 
 from sanic import Blueprint
 from sanic.response import json
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from ..db import session_scope
-from ..emails import send_order_emails
-from ..models import FlowerListing, Order
+from ..models import FlowerListing
 from ..orders import StockError, reserve_order
+from ..payments import complete_without_stripe, create_checkout
 from .catalog import _listing_payload
 from ..settings import get_settings
 
 bp = Blueprint("retail", url_prefix="/api")
+logger = logging.getLogger(__name__)
 
 FULFILLMENTS = {"pickup", "delivery"}
 
@@ -95,6 +97,8 @@ async def retail_checkout(request):
         return json(errors, status=400)
 
     settings = get_settings()
+    if not settings.stripe_secret_key and not settings.debug:
+        return json({"detail": "Online payments are not configured."}, status=503)
     try:
         async with session_scope() as session:
             order, items_context = await reserve_order(
@@ -115,33 +119,16 @@ async def retail_checkout(request):
         return json({"detail": str(error)}, status=409)
 
     if not settings.stripe_secret_key:
-        async with session_scope() as session:
-            await session.execute(
-                update(Order).where(Order.id == order_id).values(status="paid")
-            )
-            await session.commit()
-        send_order_emails(
-            order_id=order_id,
-            channel="retail",
-            customer_name=name,
-            fulfillment=fulfillment,
-            pickup_window=pickup_window,
-            delivery_address=delivery_address,
-            delivery_fee=delivery_fee,
-            customer_email=email,
-            items=items_context,
-        )
+        await complete_without_stripe(order_id)
         return json({"order_id": order_id, "checkout_url": ""}, status=201)
 
-    import stripe
-
-    stripe.api_key = settings.stripe_secret_key
-    stripe_session = stripe.checkout.Session.create(
-        mode="payment",
-        customer_email=email,
-        success_url=settings.retail_checkout_success_url,
-        cancel_url=settings.retail_checkout_cancel_url,
-        line_items=[
+    try:
+        stripe_session = await create_checkout(
+            order_id,
+            customer_email=email,
+            success_url=settings.retail_checkout_success_url,
+            cancel_url=settings.retail_checkout_cancel_url,
+            line_items=[
             {
                 "price_data": {
                     "currency": "usd",
@@ -162,13 +149,8 @@ async def retail_checkout(request):
                 "quantity": 1,
             }
         ] if delivery_fee > 0 else []),
-        metadata={"order_id": str(order_id)},
-    )
-    async with session_scope() as session:
-        await session.execute(
-            update(Order)
-            .where(Order.id == order_id)
-            .values(stripe_session_id=stripe_session.id)
         )
-        await session.commit()
+    except Exception:
+        logger.exception("Unable to create retail Stripe Checkout for order %s", order_id)
+        return json({"detail": "Unable to start payment. Please try again."}, status=503)
     return json({"order_id": order_id, "checkout_url": stripe_session.url}, status=201)

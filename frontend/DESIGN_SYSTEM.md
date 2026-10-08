@@ -23,10 +23,10 @@ The CSS custom properties live in `src/app/globals.css` and are exposed to Tailw
 
 - **South Coast:** expressive headings and section titles. A single-weight (400) signature script with `an`/`and`/`ee`/`ll`/`oo`/`rr`/`ss`/`tt` ligatures, so it must keep `font-feature-settings: "liga" 1, "calt" 1`; its tracking is reset to `0` and line-height loosened to `1.12`. Loaded as a self-hosted local font (`src/app/fonts/`).
 - **Georgia:** long-form body copy, chosen for stronger strokes and easier reading at everyday text sizes.
-- **Gaian:** navigation links, card titles (including steps, values, pathways, and offerings), product names, checkout headings, and the `<em>` emphasis inside display headings. A single-weight (400) serif loaded as a self-hosted local font (`src/app/fonts/`); use a larger size for functional text to preserve legibility.
+- **Gaian:** navigation links, card titles (including steps, values, pathways, and offerings), product names, and checkout headings. A single-weight (400) serif loaded as a self-hosted local font (`src/app/fonts/`); use a larger size for functional text to preserve legibility. Emphasized words within headings remain in South Coast and use color for emphasis.
 - **Geist:** labels, forms, buttons, and utility copy — including the label-style headings `.contact-card h2` and `.site-footer__links h2`, which are intentionally not set in South Coast. The Honey Summer wordmark uses the client logo lockup (`public/brand/`) rather than a font.
 
-Both Gaian and South Coast were purchased with a desktop commercial license and require a webfont license before the `.woff2` files are committed or deployed; see `src/app/fonts/README.md`.
+Both Gaian and South Coast are covered by the seller's written web license confirmation for self-hosting/live text up to 10,000 monthly pageviews; see `src/app/fonts/README.md`.
 
 ## Icons
 
