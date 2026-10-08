@@ -1,7 +1,17 @@
 {% extends "admin/base.html" %}
 {% block content %}
 <h1>{% if obj %}{{ admin.label }} #{{ obj.id }}{% else %}New {{ admin.label|lower }}{% endif %}</h1>
-<form method="post"
+{% if obj and admin.slug == 'orders' %}
+<div class="grid">
+  {% for row in rows %}
+  <div class="{% if row.field.kind in ['textarea', 'readonly'] %}full{% endif %}">
+    <label>{{ row.field.label }}</label>
+    <div class="muted">{% if row.field.name == 'details' %}<pre>{{ row.value }}</pre>{% else %}{{ row.value }}{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if admin.slug != 'orders' %}<form method="post"
       action="{% if obj %}/admin/{{ admin.slug }}/{{ obj.id }}{% else %}/admin/{{ admin.slug }}/new{% endif %}"
       enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -37,7 +47,30 @@
     {% endfor %}
   </div>
   <p><button type="submit">Save</button> <a class="button--ghost" href="/admin/{{ admin.slug }}">Cancel</a></p>
-</form>
+</form>{% endif %}
+{% if obj and admin.slug == 'orders' %}
+<h2>Order items</h2>
+{% if obj.items %}
+<table>
+  <thead><tr><th>Item</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead>
+  <tbody>
+  {% for item in obj.items %}
+    <tr>
+      <td>{{ item.name_snapshot }}</td>
+      <td>{{ item.quantity }}</td>
+      <td>${{ '%.2f'|format(item.price_snapshot) }}</td>
+      <td>${{ '%.2f'|format(item.price_snapshot * item.quantity) }}</td>
+    </tr>
+  {% endfor %}
+  <tr><th colspan="3">Items subtotal</th><td>${{ '%.2f'|format(order_total - obj.delivery_fee) }}</td></tr>
+  {% if obj.delivery_fee %}<tr><th colspan="3">Delivery fee</th><td>${{ '%.2f'|format(obj.delivery_fee) }}</td></tr>{% endif %}
+  <tr><th colspan="3">Order total</th><th>${{ '%.2f'|format(order_total) }}</th></tr>
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No items recorded for this order.</p>
+{% endif %}
+{% endif %}
 {% if obj and admin.slug == 'flowers' %}
 <p><a href="/admin/flowers/{{ obj.id }}/inventory">View inventory history and adjust stock</a></p>
 {% endif %}

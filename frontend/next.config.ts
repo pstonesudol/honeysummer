@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
       // Wedding inquiry inspiration photos can be up to 10 MB.
       bodySizeLimit: "12mb",
     },
+    // Admin uploads are proxied through Next.js to the backend. Leave room for
+    // multipart overhead above the 10 MB flower-image limit.
+    proxyClientMaxBodySize: "12mb",
   },
   async rewrites() {
     return [

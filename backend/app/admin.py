@@ -584,15 +584,14 @@ async def model_edit(request, slug: str, pk: int):
     if not request.ctx.admin:
         return redirect("/admin/login")
     async with session_scope() as session:
+        options = _relationship_options(
+            admin.model,
+            [f.name for f in admin.fields] + list(admin.eager),
+        )
+        if slug == "orders":
+            options.append(selectinload(Order.items))
         obj = await session.scalar(
-            select(admin.model)
-            .options(
-                *_relationship_options(
-                    admin.model,
-                    [f.name for f in admin.fields] + list(admin.eager),
-                )
-            )
-            .where(admin.model.id == pk)
+            select(admin.model).options(*options).where(admin.model.id == pk)
         )
     if obj is None:
         return redirect(f"/admin/{slug}")
@@ -600,7 +599,15 @@ async def model_edit(request, slug: str, pk: int):
         _field_row(obj, Field(f.name, f.label, "readonly") if slug == "flowers" and f.name == "quantity_available" else f)
         for f in admin.fields
     ]
-    return _page(request, "admin/edit.html", admin=admin, obj=obj, rows=rows)
+    order_total = None
+    if slug == "orders":
+        order_total = sum(
+            (item.price_snapshot * item.quantity for item in obj.items), Decimal("0")
+        ) + obj.delivery_fee
+    return _page(
+        request, "admin/edit.html", admin=admin, obj=obj, rows=rows,
+        order_total=order_total,
+    )
 
 
 @bp.post("/<slug:str>/<pk:int>")

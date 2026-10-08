@@ -19,8 +19,13 @@
   {% for row in rows %}
     <tr>
       {% for value, _ in display[loop.index0] %}<td>{{ value }}</td>{% endfor %}
-      <td>
+      <td class="actions-cell">
+        <div class="actions">
+        {% if admin.slug == 'orders' %}
+        <a class="button--ghost button--sm" href="/admin/{{ admin.slug }}/{{ row.id }}">View</a>
+        {% else %}
         <a class="button--ghost button--sm" href="/admin/{{ admin.slug }}/{{ row.id }}">Edit</a>
+        {% endif %}
         {% if admin.slug != 'orders' %}
         <form class="inline" method="post" action="/admin/{{ admin.slug }}/{{ row.id }}/delete"
               onsubmit="return confirm('Delete this entry? This cannot be undone.');">
@@ -39,6 +44,7 @@
         </form>
         {% endif %}
         {% endfor %}
+        </div>
       </td>
     </tr>
   {% else %}

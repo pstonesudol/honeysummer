@@ -395,6 +395,14 @@ async def test_orders_list_renders_guest_orders_and_channel():
             status="paid",
         )
         session.add(order)
+        await session.flush()
+        session.add(OrderItem(
+            order_id=order.id,
+            listing_id=1,
+            name_snapshot="Peony bunch",
+            price_snapshot=Decimal("12.50"),
+            quantity=3,
+        ))
         await session.commit()
         order_id = order.id
     await _login()
@@ -407,3 +415,6 @@ async def test_orders_list_renders_guest_orders_and_channel():
     assert "retail" in listing.text
     assert detail.status == 200
     assert "Dana Bloom" in detail.text
+    assert "Order items" in detail.text
+    assert "Peony bunch" in detail.text
+    assert "37.50" in detail.text
