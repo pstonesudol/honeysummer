@@ -20,14 +20,14 @@
 <div id="quote-lines">
 {% for index in range(1, (draft.lines|length if draft.lines is defined and draft.lines else 1) + 1) %}{% set line = draft.lines[index - 1] if draft.lines is defined and draft.lines|length >= index else {} %}
 <fieldset data-line-id="{{ index }}"><legend>Line item {{ index }}</legend><div class="grid">
-<div class="full"><label for="name_{{ index }}">Flower arrangement or service</label><input id="name_{{ index }}" name="name_{{ index }}" maxlength="160" value="{{ line.name or '' }}"></div>
+<div class="full"><label for="name_{{ index }}">Flower arrangement or service</label><input id="name_{{ index }}" type="text" name="name_{{ index }}" maxlength="160" value="{{ line.name or '' }}"></div>
 <div><label for="quantity_{{ index }}">Quantity</label><input id="quantity_{{ index }}" type="number" name="quantity_{{ index }}" min="1" max="9999" value="{{ line.quantity or '' }}"></div>
 <div><label for="price_{{ index }}">Unit price ($)</label><input id="price_{{ index }}" type="number" step="0.01" min="0" name="price_{{ index }}" value="{{ '%.2f'|format(line.unit_cents / 100) if line.unit_cents is defined else '' }}"></div>
 </div><button class="button--ghost button--sm" type="button" data-remove-line>Remove line item</button></fieldset>{% endfor %}
 </div>
 <button id="add-quote-line" class="button--ghost" type="button">Add line item</button>
 <template id="quote-line-template"><fieldset data-line-id="__INDEX__"><legend>Line item __INDEX__</legend><div class="grid">
-<div class="full"><label for="name___INDEX__">Flower arrangement or service</label><input id="name___INDEX__" name="name___INDEX__" maxlength="160"></div>
+<div class="full"><label for="name___INDEX__">Flower arrangement or service</label><input id="name___INDEX__" type="text" name="name___INDEX__" maxlength="160"></div>
 <div><label for="quantity___INDEX__">Quantity</label><input id="quantity___INDEX__" type="number" name="quantity___INDEX__" min="1" max="9999"></div>
 <div><label for="price___INDEX__">Unit price ($)</label><input id="price___INDEX__" type="number" step="0.01" min="0" name="price___INDEX__"></div>
 </div><button class="button--ghost button--sm" type="button" data-remove-line>Remove line item</button></fieldset></template>
@@ -50,7 +50,7 @@
 </section>
 <section data-payment-modes="installments" {% if quote.payment_mode != 'installments' %}hidden{% endif %}>
 <h2>Installments</h2>
-<p class="muted">Add 2–200 payments. Enter dollars or a percentage of the quote total for each; the resulting dollar amounts must add up exactly. For an all-percentage plan totaling 100%, the last payment absorbs rounding pennies. Due dates must increase. Each invoice waits for the previous payment; past-due dates require review.</p>
+<p class="muted">Add 2–200 payments. Dollar payments stay fixed when quote items change; percentages recalculate from the new total. Use “Set final payment to remaining balance” to explicitly update the final payment when possible. The dollar amounts must add up exactly. For an all-percentage plan totaling 100%, the last payment absorbs rounding pennies. Due dates must increase. Each invoice waits for the previous payment; past-due dates require review.</p>
 <input type="hidden" id="installment_ids" name="installment_ids" value="{{ range(1, (quote.installments|length if quote.installments else 2) + 1)|join(',') }}">
 <div id="installment-rows">
 {% for index in range(1, (quote.installments|length if quote.installments else 2) + 1) %}{% set part = quote.installments[index - 1] if quote.installments and quote.installments|length >= index else {} %}
@@ -61,10 +61,12 @@
 <div><label for="installment_send_mode_{{ index }}">Sending</label><select id="installment_send_mode_{{ index }}" name="installment_send_mode_{{ index }}"><option value="manual" {% if part.send_mode != 'automatic' %}selected{% endif %}>Send when I confirm (after previous payment)</option><option value="automatic" {% if part.send_mode == 'automatic' %}selected{% endif %}>Send automatically on date (after previous payment)</option></select></div>
 <div data-auto-date-for="installment_send_mode_{{ index }}" {% if part.send_mode != 'automatic' %}hidden{% endif %}><label for="installment_send_date_{{ index }}">Send date</label><input id="installment_send_date_{{ index }}" name="installment_send_date_{{ index }}" type="date" value="{{ part.send_date or '' }}"></div>
 <div><label for="installment_due_date_{{ index }}">Due date</label><input id="installment_due_date_{{ index }}" name="installment_due_date_{{ index }}" type="date" value="{{ part.due_date or '' }}"></div>
+<p class="full muted" data-payment-calculated></p>
 </div><button class="button--ghost button--sm" type="button" data-remove-installment>Remove payment</button></fieldset>{% endfor %}
 </div>
 <button id="add-installment" class="button--ghost" type="button">Add payment</button>
 <p id="installment-total" role="status" aria-live="polite"></p>
+<button id="rebalance-installment" class="button--ghost" type="button" disabled>Set final payment to remaining balance</button>
 <template id="installment-template"><fieldset data-installment-id="__INDEX__"><legend>Payment</legend><div class="grid">
 <div><label for="installment_type___INDEX__">Set payment by</label><select id="installment_type___INDEX__" name="installment_type___INDEX__" data-installment-type><option value="amount">Dollar amount</option><option value="percent">Percentage of quote total</option></select></div>
 <div data-amount-field><label for="installment_amount___INDEX__">Amount ($)</label><input id="installment_amount___INDEX__" name="installment_amount___INDEX__" type="number" min="0.50" max="999999.99" step="0.01"></div>
@@ -72,6 +74,7 @@
 <div><label for="installment_send_mode___INDEX__">Sending</label><select id="installment_send_mode___INDEX__" name="installment_send_mode___INDEX__"><option value="manual">Send when I confirm (after previous payment)</option><option value="automatic">Send automatically on date (after previous payment)</option></select></div>
 <div data-auto-date-for="installment_send_mode___INDEX__" hidden><label for="installment_send_date___INDEX__">Send date</label><input id="installment_send_date___INDEX__" name="installment_send_date___INDEX__" type="date"></div>
 <div><label for="installment_due_date___INDEX__">Due date</label><input id="installment_due_date___INDEX__" name="installment_due_date___INDEX__" type="date"></div>
+<p class="full muted" data-payment-calculated></p>
 </div><button class="button--ghost button--sm" type="button" data-remove-installment>Remove payment</button></fieldset></template>
 </section>
 <p><button type="submit">Save and preview quote</button></p></form>
@@ -135,13 +138,24 @@
   });
   function showInstallmentTotal() {
     const target = document.getElementById('installment-total');
-    if (plan.value !== 'installments') { target.textContent = ''; return; }
-    const quoteCents = [...lines.querySelectorAll('[data-line-id]')].reduce((sum, row) => {
+    const rebalance = document.getElementById('rebalance-installment');
+    if (plan.value !== 'installments') { target.textContent = ''; rebalance.disabled = true; return; }
+    const quoteLines = [...lines.querySelectorAll('[data-line-id]')];
+    const quoteComplete = quoteLines.some(row => row.querySelector('[name^="name_"]').value.trim()) && quoteLines.every(row => {
+      const name = row.querySelector('[name^="name_"]').value.trim();
+      const quantity = row.querySelector('[name^="quantity_"]').value;
+      const price = row.querySelector('[name^="price_"]').value;
+      return (!name && !quantity && !price) || (name && quantity && price);
+    });
+    const quoteCents = quoteLines.reduce((sum, row) => {
       const quantity = Number(row.querySelector('[name^="quantity_"]').value);
       const price = Number(row.querySelector('[name^="price_"]').value);
       return sum + (Number.isFinite(quantity * price) ? quantity * Math.round(price * 100) : 0);
     }, 0);
     const rows = [...payments.querySelectorAll('[data-installment-id]')];
+    const paymentsComplete = rows.every(row => row.querySelector(
+      row.querySelector('[data-installment-type]').value === 'percent' ? '[name^="installment_percent_"]' : '[name^="installment_amount_"]'
+    ).value.trim());
     const amounts = rows.map(row => {
       const percent = row.querySelector('[data-installment-type]').value === 'percent';
       const value = Number(row.querySelector(percent ? '[name^="installment_percent_"]' : '[name^="installment_amount_"]').value);
@@ -149,11 +163,40 @@
     });
     const allPercent = rows.every(row => row.querySelector('[data-installment-type]').value === 'percent');
     const percentSum = rows.reduce((sum, row) => sum + Number(row.querySelector('[name^="installment_percent_"]').value || 0), 0);
-    if (allPercent && Math.abs(percentSum - 100) < 0.000001) amounts[amounts.length - 1] = quoteCents - amounts.slice(0, -1).reduce((a, b) => a + b, 0);
+    if (allPercent && paymentsComplete && Math.abs(percentSum - 100) < 0.000001) amounts[amounts.length - 1] = quoteCents - amounts.slice(0, -1).reduce((a, b) => a + b, 0);
     const assigned = amounts.reduce((a, b) => a + b, 0);
     const money = cents => `$${(cents / 100).toFixed(2)}`;
-    target.textContent = `Quote total: ${money(quoteCents)} · Payments: ${money(assigned)} · ${assigned === quoteCents ? 'Matches exactly' : `Remaining: ${money(quoteCents - assigned)}`}. Final amounts are validated when saved.`;
+    rows.forEach((row, index) => {
+      const percent = row.querySelector('[data-installment-type]').value === 'percent';
+      row.querySelector('[data-payment-calculated]').textContent = quoteComplete && paymentsComplete
+        ? `Payment ${index + 1}: ${money(amounts[index])}${percent ? ' of the quote total' : ' fixed'}` : '';
+    });
+    const difference = quoteCents - assigned;
+    const complete = quoteComplete && paymentsComplete && quoteCents >= 50;
+    const validMinimums = amounts.every(amount => amount >= 50);
+    target.classList.toggle('error', complete && (difference !== 0 || !validMinimums));
+    target.textContent = !complete ? 'Enter all quote items and payment amounts to check the payment plan.'
+      : `Quote total: ${money(quoteCents)} · Payments: ${money(assigned)} · ${!validMinimums ? 'Each payment must be at least $0.50.'
+        : difference === 0 ? 'Matches exactly.'
+        : difference > 0 ? `Unallocated: ${money(difference)}. Add this to a payment or use percentages.`
+        : `Overallocated by ${money(-difference)}. Reduce payments or use percentages that follow the quote total.`} Final amounts are validated when saved.`;
+    rebalance.disabled = !complete || quoteCents - amounts.slice(0, -1).reduce((a, b) => a + b, 0) < 50 || difference === 0;
+    rebalance.title = rebalance.disabled && difference !== 0 && complete ? 'Reduce earlier payments first so the final payment can be at least $0.50.' : '';
   }
+  document.getElementById('rebalance-installment').addEventListener('click', () => {
+    const rows = [...payments.querySelectorAll('[data-installment-id]')];
+    const last = rows.at(-1);
+    const total = [...lines.querySelectorAll('[data-line-id]')].reduce((sum, row) =>
+      sum + Number(row.querySelector('[name^="quantity_"]').value) * Math.round(Number(row.querySelector('[name^="price_"]').value) * 100), 0);
+    const previous = rows.slice(0, -1).reduce((sum, row) => {
+      const percent = row.querySelector('[data-installment-type]').value === 'percent';
+      const value = Number(row.querySelector(percent ? '[name^="installment_percent_"]' : '[name^="installment_amount_"]').value);
+      return sum + Math.round(percent ? total * value / 100 : value * 100);
+    }, 0);
+    last.querySelector('[data-installment-type]').value = 'amount';
+    last.querySelector('[name^="installment_amount_"]').value = ((total - previous) / 100).toFixed(2);
+    refresh();
+  });
   function refresh() {
     form.querySelectorAll('[data-payment-modes]').forEach(section => {
       const visible = section.dataset.paymentModes.split(' ').includes(plan.value);

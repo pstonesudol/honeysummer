@@ -347,6 +347,9 @@ async def test_admin_hides_irrelevant_payment_fields_and_builds_installments():
     assert page.status == 200
     assert 'data-payment-modes="deposit" hidden' in page.text
     assert 'id="add-quote-line"' in page.text
+    assert 'id="rebalance-installment"' in page.text
+    assert 'data-payment-calculated' in page.text
+    assert 'id="name_1" type="text"' in page.text
     assert page.text.count('data-line-id="1"') == 1
     assert page.text.index('id="quote-lines"') < page.text.index('id="wpayment"')
     csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
