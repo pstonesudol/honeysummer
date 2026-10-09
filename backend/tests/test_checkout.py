@@ -79,6 +79,25 @@ async def _checkout(items: list[dict], **extra):
 
 
 @pytest.mark.asyncio
+async def test_live_checkout_requires_webhook_signing_secret(monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_live_test")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "")
+    await _make_user()
+    await _login()
+    listing_id = await _add_listing()
+    monkeypatch.setattr(settings, "debug", False)
+    _, wholesale = await _checkout([{"id": listing_id, "quantity": 1}])
+    _, retail = await app.asgi_client.post("/api/retail/checkout/", json={
+        "items": [{"id": listing_id, "quantity": 1}],
+        "name": "Customer", "email": "customer@example.com",
+    })
+    assert wholesale.status == retail.status == 503
+    async with session_scope() as session:
+        assert (await session.scalars(select(Order))).all() == []
+
+
+@pytest.mark.asyncio
 async def test_requires_approval(sent, stripe_off):
     await _make_user(approved=False)
     await _login()

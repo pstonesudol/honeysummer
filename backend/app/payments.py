@@ -253,8 +253,14 @@ async def reconcile(*, apply: bool = False, full: bool = False) -> list[str]:
         if not due:
             continue
         if not session_id:
-            findings.append(f"Order #{order_id}: orphaned pending hold")
-            if apply:
+            if get_settings().stripe_secret_key or not get_settings().debug:
+                # Session creation may have succeeded before persisting its ID
+                # failed, and expiration may have failed too. Without the ID we
+                # cannot prove that the Checkout session is unpayable.
+                findings.append(f"Order #{order_id}: orphaned pending hold; Stripe session unknown, manual review")
+            else:
+                findings.append(f"Order #{order_id}: orphaned pending hold")
+            if apply and get_settings().debug and not get_settings().stripe_secret_key:
                 async with session_scope() as db:
                     current = await load_order(db, order_id, for_update=True)
                     if current and current.status == "pending" and not current.stripe_session_id:

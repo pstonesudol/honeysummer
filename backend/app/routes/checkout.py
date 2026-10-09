@@ -32,7 +32,7 @@ async def checkout(request):
     if profile is None or not profile.approved:
         return json({"detail": "Wholesale approval is required."}, status=403)
     settings = get_settings()
-    if not settings.stripe_secret_key and not settings.debug:
+    if not settings.debug and (not settings.stripe_secret_key or not settings.stripe_webhook_secret):
         return json({"detail": "Online payments are not configured."}, status=503)
 
     data = request.json or {}

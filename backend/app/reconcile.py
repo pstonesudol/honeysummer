@@ -6,6 +6,7 @@
 
 import argparse
 import asyncio
+import sys
 
 from .payments import reconcile
 
@@ -20,6 +21,10 @@ def main() -> None:
         print(finding)
     if not findings:
         print("Inventory and overdue holds reconciled.")
+    else:
+        # A nonzero exit lets cron/job monitoring alert on discrepancies, even
+        # when --apply fixed one: the operator should inspect what happened.
+        sys.exit(1)
 
 
 if __name__ == "__main__":

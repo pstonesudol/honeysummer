@@ -153,6 +153,7 @@ async def test_failed_stripe_creation_releases_hold(monkeypatch):
 @pytest.mark.asyncio
 async def test_reconciler_releases_orphaned_due_hold_and_reports_balance(monkeypatch):
     monkeypatch.setattr(get_settings(), "stripe_secret_key", "")
+    monkeypatch.setattr(get_settings(), "debug", True)
     listing_id, order_id = await listing_and_order(key=False)
     async with session_scope() as db:
         order = await db.get(Order, order_id)
@@ -163,6 +164,35 @@ async def test_reconciler_releases_orphaned_due_hold_and_reports_balance(monkeyp
     assert await reconcile() == []
     async with session_scope() as db:
         assert (await db.get(FlowerListing, listing_id)).quantity_available == 4
+
+
+@pytest.mark.asyncio
+async def test_reconciler_does_not_release_unknown_stripe_session(monkeypatch):
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", "sk_test")
+    listing_id, order_id = await listing_and_order(key=False)
+    async with session_scope() as db:
+        order = await db.get(Order, order_id)
+        order.hold_expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        await db.commit()
+    assert "manual review" in " ".join(await reconcile(apply=True))
+    async with session_scope() as db:
+        assert (await db.get(Order, order_id)).status == "pending"
+        assert (await db.get(FlowerListing, listing_id)).quantity_available == 2
+
+
+@pytest.mark.asyncio
+async def test_reconciler_fails_closed_when_production_job_lacks_stripe_key(monkeypatch):
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", "")
+    monkeypatch.setattr(get_settings(), "debug", False)
+    listing_id, order_id = await listing_and_order(key=False)
+    async with session_scope() as db:
+        order = await db.get(Order, order_id)
+        order.hold_expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        await db.commit()
+    assert "manual review" in " ".join(await reconcile(apply=True))
+    async with session_scope() as db:
+        assert (await db.get(Order, order_id)).status == "pending"
+        assert (await db.get(FlowerListing, listing_id)).quantity_available == 2
 
 
 @pytest.mark.asyncio

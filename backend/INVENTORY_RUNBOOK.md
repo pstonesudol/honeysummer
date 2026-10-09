@@ -44,6 +44,43 @@ to preserve invoicing and the append-only stock audit trail.
   Local `DEBUG=true` permits payment-free checkouts; never use that for live
   orders.
 
+## Production activation gate
+
+This section is an operator checklist, **not** an indication that production is
+configured. Complete it on the production services before enabling live checkout:
+
+1. Set `DEBUG=false`, a unique `SECRET_KEY`, the production Postgres
+   `DATABASE_URL`, `STRIPE_SECRET_KEY` (`sk_live_…`), and `STRIPE_WEBHOOK_SECRET`
+   (`whsec_…`) on the API. Never put live secrets in this repository. Set all
+    wholesale and retail success/cancel URLs to the public
+   HTTPS site. Configure Resend's verified sender and farm notification address.
+   Check for mismatched test/live Stripe keys and webhook endpoints before
+   proceeding. The frontend must proxy `/api/stripe/webhook/` without altering
+   the raw request body or `Stripe-Signature` header.
+2. In Stripe, point the live webhook at the public
+   `https://<site>/api/stripe/webhook/` endpoint and subscribe to
+   `checkout.session.completed`, `checkout.session.expired`,
+   `checkout.session.async_payment_succeeded`,
+   `checkout.session.async_payment_failed`, and `charge.refunded`. Verify a
+   signed event reaches the API successfully; a redirect is **not** proof of
+   payment. Check the Stripe webhook deliveries for retries, 400s, or 409s.
+3. Take a Postgres backup, apply Alembic migrations, and run
+   `uv run --no-sync python -m app.reconcile --full` using the production
+   database and Stripe key. Review every finding, especially legacy pending
+   holds; do **not** turn on `--apply` until the findings have been understood.
+4. Provision a separate Railway cron service as described below. Give it the
+   same database, Stripe, and Resend configuration as the API. Observe at least
+   one successful run and a clean follow-up. Set up alerts for **both** nonzero
+   exits and missed runs; deliberately verify that a failing test run triggers
+   an operator notification. Do not mistake a healthy API healthcheck for a
+   healthy job.
+5. Perform controlled live retail and wholesale purchases, one cancelled or
+   expired session, a delayed payment if enabled, and a full refund. Confirm
+   stock movement, order status, webhook delivery, customer/farm mail, and
+   Stripe totals agree; never use a real customer's order for the exercise.
+   Run a report-only `--full` sweep afterward and resolve all discrepancies.
+   Record who verified the job, alert and flows and when in the release log.
+
 ## Run the reconciler
 
 Run an independent scheduled job (for example a Railway cron service every
@@ -55,14 +92,22 @@ with root directory `/backend`, start command `uv run --no-sync python -m
 app.reconcile --apply`, shared Postgres/Stripe/Resend environment variables,
 no healthcheck or public domain, and Cron Schedule `*/5 * * * *` (UTC). Do not
 replace the API service's web start command. Confirm each run exits so Railway
-does not skip the next schedule. Set up the scheduler before accepting live orders and alert
-an operator on nonempty output or job failures. The job compares the available
+does not skip the next schedule. Set up the scheduler before accepting live
+orders and alert an operator on failed runs, including nonzero exits when
+findings are printed, and on missed runs (a stopped scheduler produces no
+failures). A clean run exits 0; even findings repaired by `--apply` exit 1 so
+an operator reviews the incident. The job compares the available
 balance to journal deltas and pending quantities to reserve/release/sale units;
 it checks stale pending sessions with Stripe, expires open sessions before
 releasing stock, settles confirmed paid sessions, compares the most recent 48
 hours of paid order totals and full refunds to Stripe (`--full` audits all historical paid
 orders), and retries unsent confirmation emails. It **reports**, but never
-silently fixes, unknown Stripe states or ledger discrepancies.
+silently fixes, unknown Stripe states or ledger discrepancies. A pending hold
+with no recorded Stripe session ID is **not** released automatically outside
+local payment-free development: session creation could have succeeded while
+saving the ID and expiring the session both failed. Investigate the order ID in
+Stripe's Checkout sessions/events before deciding whether stock is safe to
+release.
 
 When investigating a finding, compare the order in admin with the Stripe
 Checkout session and payment intent in the Stripe dashboard. A `409` from the

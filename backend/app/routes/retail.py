@@ -97,7 +97,7 @@ async def retail_checkout(request):
         return json(errors, status=400)
 
     settings = get_settings()
-    if not settings.stripe_secret_key and not settings.debug:
+    if not settings.debug and (not settings.stripe_secret_key or not settings.stripe_webhook_secret):
         return json({"detail": "Online payments are not configured."}, status=503)
     try:
         async with session_scope() as session:
