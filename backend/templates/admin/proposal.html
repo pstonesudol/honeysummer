@@ -17,19 +17,63 @@
 <div><label>Fulfillment<select name="fulfillment"><option value="pickup" {% if draft.fulfillment != 'delivery' %}selected{% endif %}>Pickup</option><option value="delivery" {% if draft.fulfillment == 'delivery' %}selected{% endif %}>Delivery</option></select></label></div>
 <div><label>Pickup window/location or delivery address/window<input name="location" required value="{{ draft.location or '' }}"></label></div>
 </div>
-<h2>Itemized offer</h2><p class="muted">Custom services need no listing ID. A catalogue line references a FL listing but does not reserve its stock until payment.</p>
-{% for i in range(5) %}{% set line = draft.lines[i] if draft.lines and draft.lines|length > i else {} %}
-<fieldset><legend>Line {{ i+1 }}</legend><div class="grid">
-<label>Name<input name="name_{{ i+1 }}" value="{{ line.name or '' }}"></label>
-<label>Description<input name="description_{{ i+1 }}" value="{{ line.description or '' }}"></label>
-<label>Quantity<input type="number" min="1" name="quantity_{{ i+1 }}" value="{{ line.quantity or 1 }}"></label>
-<label>Unit price ($)<input type="number" min="0" step="0.01" name="price_{{ i+1 }}" value="{{ ('%.2f'|format(line.unit_cents / 100)) if line.unit_cents is defined else '' }}"></label>
-<label>Listing ID (optional)<input type="number" min="1" name="listing_{{ i+1 }}" value="{{ line.listing_id or '' }}"></label>
-</div></fieldset>
+<h2>Itemized offer</h2><p class="muted">Start with one item and add or remove rows as needed (up to 200). Custom services need no listing ID. A catalogue line references a FL listing but does not reserve its stock until payment.</p>
+<input type="hidden" id="proposal-line-ids" name="line_ids" value="{{ range(1, (draft.lines|length if draft.lines else 1) + 1)|join(',') }}">
+<div id="proposal-lines">
+{% for index in range(1, (draft.lines|length if draft.lines else 1) + 1) %}{% set line = draft.lines[index - 1] if draft.lines and draft.lines|length >= index else {} %}
+<fieldset data-proposal-line="{{ index }}"><legend>Line {{ index }}</legend><div class="grid">
+<div><label for="name_{{ index }}">Name</label><input id="name_{{ index }}" name="name_{{ index }}" maxlength="160" value="{{ line.name or '' }}"></div>
+<div><label for="description_{{ index }}">Description</label><input id="description_{{ index }}" name="description_{{ index }}" maxlength="500" value="{{ line.description or '' }}"></div>
+<div><label for="quantity_{{ index }}">Quantity</label><input id="quantity_{{ index }}" type="number" min="1" max="9999" name="quantity_{{ index }}" value="{{ line.quantity or 1 }}"></div>
+<div><label for="price_{{ index }}">Unit price ($)</label><input id="price_{{ index }}" type="number" min="0" step="0.01" name="price_{{ index }}" value="{{ ('%.2f'|format(line.unit_cents / 100)) if line.unit_cents is defined else '' }}"></div>
+<div><label for="listing_{{ index }}">Listing ID (optional)</label><input id="listing_{{ index }}" type="number" min="1" name="listing_{{ index }}" value="{{ line.listing_id or '' }}"></div>
+</div><button type="button" class="button--ghost button--sm" data-remove-proposal-line>Remove line item</button></fieldset>
 {% endfor %}
+</div>
+<button id="add-proposal-line" type="button" class="button--ghost">Add line item</button>
+<template id="proposal-line-template"><fieldset data-proposal-line="__INDEX__"><legend>Line item</legend><div class="grid">
+<div><label for="name___INDEX__">Name</label><input id="name___INDEX__" name="name___INDEX__" maxlength="160"></div>
+<div><label for="description___INDEX__">Description</label><input id="description___INDEX__" name="description___INDEX__" maxlength="500"></div>
+<div><label for="quantity___INDEX__">Quantity</label><input id="quantity___INDEX__" type="number" min="1" max="9999" name="quantity___INDEX__" value="1"></div>
+<div><label for="price___INDEX__">Unit price ($)</label><input id="price___INDEX__" type="number" min="0" step="0.01" name="price___INDEX__"></div>
+<div><label for="listing___INDEX__">Listing ID (optional)</label><input id="listing___INDEX__" type="number" min="1" name="listing___INDEX__"></div>
+</div><button type="button" class="button--ghost button--sm" data-remove-proposal-line>Remove line item</button></fieldset></template>
 <div class="grid"><label>Delivery / setup ($)<input type="number" step="0.01" min="0" name="delivery" value="{{ ('%.2f'|format(draft.delivery_cents / 100)) if draft.delivery_cents is defined else '0' }}"></label>
 <label>Internal notes (not sent to customer)<textarea name="internal_notes">{{ proposal.internal_notes }}</textarea></label></div>
 <p><button>Save draft</button></p></form>
+<script>
+(() => {
+  const rows = document.getElementById('proposal-lines');
+  const ids = document.getElementById('proposal-line-ids');
+  const add = document.getElementById('add-proposal-line');
+  let nextId = Math.max(0, ...[...rows.querySelectorAll('[data-proposal-line]')].map(row => Number(row.dataset.proposalLine))) + 1;
+  function refresh() {
+    const items = [...rows.querySelectorAll('[data-proposal-line]')];
+    ids.value = items.map(row => row.dataset.proposalLine).join(',');
+    items.forEach((row, index) => {
+      row.querySelector('legend').textContent = `Line ${index + 1}`;
+      row.querySelector('[data-remove-proposal-line]').disabled = items.length === 1;
+    });
+    add.disabled = items.length >= 200;
+  }
+  add.addEventListener('click', () => {
+    const container = document.createElement('div');
+    container.innerHTML = document.getElementById('proposal-line-template').innerHTML.replaceAll('__INDEX__', String(nextId++));
+    const row = container.firstElementChild;
+    rows.appendChild(row);
+    refresh();
+    row.querySelector('input').focus();
+  });
+  rows.addEventListener('click', event => {
+    const button = event.target.closest('[data-remove-proposal-line]');
+    if (button && rows.querySelectorAll('[data-proposal-line]').length > 1) {
+      button.closest('[data-proposal-line]').remove();
+      refresh();
+    }
+  });
+  refresh();
+})();
+</script>
 {% endif %}
 {% if draft.total_cents is defined %}
 <section class="card" style="display:block"><h2>Customer-facing preview</h2><h3>{{ draft.title }}</h3><p>{{ draft.description }}</p>

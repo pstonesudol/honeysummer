@@ -1071,12 +1071,31 @@ async def proposal_start(request, inquiry_id: int):
 
 
 def _proposal_form(form) -> dict:
+    import re
+    raw_ids = str(form.get("line_ids", "")).strip()
+    if raw_ids:
+        tokens = raw_ids.split(",")
+        if not all(token.isdigit() and 1 <= int(token) <= 100000 for token in tokens):
+            raise ValueError("Proposal line identifiers are invalid.")
+        indexes = [int(token) for token in tokens]
+    else:
+        # Older clients submitted numbered line fields without a row list.
+        indexes = sorted(int(match.group(1)) for key in form.keys()
+                         if (match := re.fullmatch(r"name_(\d+)", str(key))))
+    if len(indexes) != len(set(indexes)) or len(indexes) > 200:
+        raise ValueError("Add no more than 200 distinct proposal lines.")
     lines = []
-    for index in range(1, 6):
-        if str(form.get(f"name_{index}", "")).strip():
-            lines.append(dict(name=form.get(f"name_{index}"), description=form.get(f"description_{index}", ""),
-                              quantity=form.get(f"quantity_{index}"), price=form.get(f"price_{index}"),
-                              listing_id=form.get(f"listing_{index}")))
+    for index in indexes:
+        name = str(form.get(f"name_{index}", "")).strip()
+        if not name:
+            if any(str(form.get(f"{field}_{index}", "")).strip() for field in ("description", "price", "listing")) or (
+                str(form.get(f"quantity_{index}", "")).strip() not in ("", "1")
+            ):
+                raise ValueError("Name each proposal line that has details, a price, or a listing.")
+            continue
+        lines.append(dict(name=name, description=form.get(f"description_{index}", ""),
+                          quantity=form.get(f"quantity_{index}"), price=form.get(f"price_{index}"),
+                          listing_id=form.get(f"listing_{index}")))
     return dict(title=form.get("title", ""), description=form.get("description", ""),
                 terms=form.get("terms", ""), fulfillment=form.get("fulfillment", "pickup"),
                 location=form.get("location", ""), delivery=form.get("delivery", "0"), lines=lines)

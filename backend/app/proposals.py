@@ -32,8 +32,8 @@ def validate_draft(data: dict) -> dict:
     if not title or not description or not terms or fulfillment not in ("pickup", "delivery") or not location:
         raise ValueError("Title, description, substitution terms, and pickup/delivery details are required.")
     lines = data.get("lines")
-    if not isinstance(lines, list) or not 1 <= len(lines) <= 20:
-        raise ValueError("Add 1–20 itemized lines.")
+    if not isinstance(lines, list) or not 1 <= len(lines) <= 200:
+        raise ValueError("Add 1–200 itemized lines.")
     normalized = []
     total = 0
     for line in lines:
@@ -46,6 +46,8 @@ def validate_draft(data: dict) -> dict:
             raise ValueError("Enter valid quantities and listing IDs.") from None
         if not name or quantity < 1 or quantity > 9999 or (listing_id is not None and listing_id < 1):
             raise ValueError("Each line needs a name and a positive quantity.")
+        if len(name) + (3 + len(detail) if detail else 0) > 500:
+            raise ValueError("An item name and description must fit within 500 characters on the invoice.")
         price = cents(str(line.get("price", "")))
         total += price * quantity
         normalized.append(dict(name=name, description=detail, quantity=quantity, unit_cents=price, listing_id=listing_id))
@@ -83,11 +85,12 @@ async def send_invoice(proposal_id: int) -> str:
     key = f"bouquet-{proposal_id}-v{version}"
     try:
         customer = await asyncio.to_thread(stripe.Customer.create, email=email, name=name, idempotency_key=f"{key}-customer")
+        memo = f"{draft['title']} — total ${draft['total_cents'] / 100:.2f}"
         invoice = await asyncio.to_thread(
             stripe.Invoice.create, customer=customer.id, collection_method="send_invoice",
             days_until_due=7, auto_advance=False, pending_invoice_items_behavior="exclude",
             metadata={"proposal_id": str(proposal_id), "version": str(version)},
-            description=f"{draft['title']} — {draft['description']}\n{draft['terms']}\n{draft['fulfillment']}: {draft['location']}",
+            description=memo,
             idempotency_key=f"{key}-invoice",
         )
         for index, line in enumerate(draft["lines"]):
@@ -97,6 +100,12 @@ async def send_invoice(proposal_id: int) -> str:
                 quantity=line["quantity"], description=f"{line['name']} — {line['description']}" if line["description"] else line["name"],
                 idempotency_key=f"{key}-line-{index}",
             )
+        for label, value in (("Design notes", draft["description"]), ("Terms", draft["terms"]),
+                             (draft["fulfillment"].capitalize(), draft["location"])):
+            for index in range(0, len(value), 300):
+                await asyncio.to_thread(stripe.InvoiceItem.create, customer=customer.id, invoice=invoice.id,
+                    amount=0, currency="usd", description=f"{label}: {value[index:index + 300]}",
+                    idempotency_key=f"{key}-{label.lower()}-{index // 300}")
         if draft["delivery_cents"]:
             await asyncio.to_thread(
                 stripe.InvoiceItem.create, customer=customer.id, invoice=invoice.id,

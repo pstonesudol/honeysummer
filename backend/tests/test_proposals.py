@@ -5,7 +5,7 @@ import pytest
 import stripe
 from sqlalchemy import select
 
-from app.admin import CSRF_COOKIE
+from app.admin import CSRF_COOKIE, _proposal_form
 from app.auth import hash_password
 from app.db import session_scope
 from app.models import BouquetProposal, FlowerListing, Inquiry, InventoryMovement, Order, OrderItem, User
@@ -44,6 +44,8 @@ async def test_only_bouquet_inquiries_offer_proposals_and_csrf():
     _, page = await app.asgi_client.get("/admin/proposals/1")
     assert page.status == 200
     assert "Customer-facing preview" not in page.text
+    assert page.text.count('data-proposal-line="1"') == 1
+    assert 'id="add-proposal-line"' in page.text
     token = app.asgi_client.cookies.get(CSRF_COOKIE)
     _, saved = await app.asgi_client.post("/admin/proposals/1/save", data={
         "csrf_token": token, "title": "Garden bouquet", "description": "Seasonal flowers",
@@ -58,6 +60,43 @@ async def test_only_bouquet_inquiries_offer_proposals_and_csrf():
     assert "Customer-facing preview" in preview.text
     assert "$38.25" in preview.text
     assert "Not shown to customer" in preview.text  # draft-only notes, outside the customer preview
+    assert preview.text.count('data-proposal-line="2"') == 1
+    token = app.asgi_client.cookies.get(CSRF_COOKIE)
+    fields = dict(csrf_token=token, title="Garden bouquet", description="Seasonal flowers",
+                  terms="Substitutions allowed", fulfillment="pickup", location="Farm",
+                  line_ids="1,3,4,5,6,7,8")
+    for index in (1, 3, 4, 5, 6, 7, 8):
+        fields.update({f"name_{index}": f"Arrangement {index}", f"quantity_{index}": "1",
+                       f"price_{index}": "1.00"})
+    _, saved = await app.asgi_client.post("/admin/proposals/1/save", data=fields)
+    assert saved.status == 302
+    _, preview = await app.asgi_client.get("/admin/proposals/1")
+    assert preview.text.count('data-proposal-line="7"') == 1
+    assert preview.text.count("Arrangement 8") >= 1
+    async with session_scope() as db:
+        proposal = await db.get(BouquetProposal, 1)
+        assert len(proposal.draft["lines"]) == 7 and proposal.draft["total_cents"] == 700
+
+
+def test_dynamic_proposal_lines_validate_every_selected_row():
+    form = dict(title="Retail flowers", description="Spring", terms="Substitutions allowed",
+                fulfillment="pickup", location="Farm", line_ids="1,3,4,5,6,7,8")
+    for index in (1, 3, 4, 5, 6, 7, 8):
+        form.update({f"name_{index}": f"Flower {index}", f"quantity_{index}": "1",
+                     f"price_{index}": "1.00"})
+    form["name_2"] = "Deleted row"
+    lines = validate_draft(_proposal_form(form))["lines"]
+    assert len(lines) == 7 and all(line["name"] != "Deleted row" for line in lines)
+    form["name_8"] = ""
+    with pytest.raises(ValueError, match="Name each proposal line"):
+        _proposal_form(form)
+    form["name_8"] = "Flower 8"
+    form["line_ids"] = "1,1"
+    with pytest.raises(ValueError, match="distinct"):
+        _proposal_form(form)
+    form["line_ids"] = ",".join(str(i) for i in range(1, 202))
+    with pytest.raises(ValueError, match="200"):
+        _proposal_form(form)
 
 
 def test_amount_validation():
@@ -66,6 +105,9 @@ def test_amount_validation():
         with pytest.raises(ValueError):
             validate_draft(dict(title="A", description="B", terms="C", fulfillment="pickup", location="Here",
                                 lines=[dict(name="Flower", quantity=1, price=price)]))
+    with pytest.raises(ValueError, match="500 characters"):
+        validate_draft(dict(title="A", description="B", terms="C", fulfillment="pickup", location="Here",
+                            lines=[dict(name="Flower", description="x" * 500, quantity=1, price="1.00")]))
 
 
 @pytest.mark.asyncio
@@ -74,8 +116,15 @@ async def test_send_pay_and_duplicate_webhook_preserve_stock(monkeypatch):
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_mock")
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_mock")
     monkeypatch.setattr(stripe.Customer, "create", lambda **kw: SimpleNamespace(id="cus_1"))
-    monkeypatch.setattr(stripe.Invoice, "create", lambda **kw: SimpleNamespace(id="in_1"))
-    monkeypatch.setattr(stripe.InvoiceItem, "create", lambda **kw: SimpleNamespace(id="ii_1"))
+    invoices, items = [], []
+    def create_invoice(**kwargs):
+        invoices.append(kwargs)
+        return SimpleNamespace(id="in_1")
+    def create_item(**kwargs):
+        items.append(kwargs)
+        return SimpleNamespace(id="ii_1")
+    monkeypatch.setattr(stripe.Invoice, "create", create_invoice)
+    monkeypatch.setattr(stripe.InvoiceItem, "create", create_item)
     monkeypatch.setattr(stripe.Invoice, "finalize_invoice", lambda *args, **kw: SimpleNamespace(id="in_1", total=3825, currency="usd"))
     monkeypatch.setattr(stripe.Invoice, "send_invoice", lambda *args, **kw: SimpleNamespace(id="in_1", hosted_invoice_url="https://invoice.stripe.com/test", number="HS-1"))
     async with session_scope() as db:
@@ -90,6 +139,10 @@ async def test_send_pay_and_duplicate_webhook_preserve_stock(monkeypatch):
         await db.commit()
         proposal_id = proposal.id
     await send_invoice(proposal_id)
+    assert len(invoices[0]["description"]) <= 500
+    assert sum(item.get("amount", 0) for item in items) == 325
+    assert sum(item.get("quantity", 0) * int(item.get("unit_amount_decimal", 0)) for item in items) == 3500
+    assert any(item["description"].startswith("Terms:") for item in items)
     with pytest.raises(ValueError):
         await send_invoice(proposal_id)
     async with session_scope() as db:
