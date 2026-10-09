@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import select
 
 from .db import session_scope
+from .form_errors import FieldValidationError
 from .models import BouquetProposal, FlowerListing, Inquiry, InventoryMovement, Order, OrderItem, OrderNotification, StripeEvent
 from .orders import change_stock
 from .settings import get_settings
@@ -29,32 +30,49 @@ def validate_draft(data: dict) -> dict:
     terms = str(data.get("terms", "")).strip()[:2000]
     fulfillment = data.get("fulfillment")
     location = str(data.get("location", "")).strip()[:500]
-    if not title or not description or not terms or fulfillment not in ("pickup", "delivery") or not location:
-        raise ValueError("Title, description, substitution terms, and pickup/delivery details are required.")
+    for field, value in (("title", title), ("description", description), ("terms", terms), ("location", location)):
+        if not value:
+            raise FieldValidationError("This field is required for the proposal.", field)
+    if fulfillment not in ("pickup", "delivery"):
+        raise FieldValidationError("Choose pickup or delivery.", "fulfillment")
     lines = data.get("lines")
     if not isinstance(lines, list) or not 1 <= len(lines) <= 200:
-        raise ValueError("Add 1–200 itemized lines.")
+        raise FieldValidationError("Add 1–200 itemized lines.", "line_ids")
     normalized = []
     total = 0
-    for line in lines:
+    for position, line in enumerate(lines, start=1):
+        index = line.get("_form_index", position)
         name = str(line.get("name", "")).strip()[:160]
         detail = str(line.get("description", "")).strip()[:500]
         try:
             quantity = int(line.get("quantity", 0))
+        except (ValueError, TypeError):
+            raise FieldValidationError("Enter a valid quantity.", f"quantity_{index}") from None
+        try:
             listing_id = int(line["listing_id"]) if line.get("listing_id") else None
         except (ValueError, TypeError):
-            raise ValueError("Enter valid quantities and listing IDs.") from None
-        if not name or quantity < 1 or quantity > 9999 or (listing_id is not None and listing_id < 1):
-            raise ValueError("Each line needs a name and a positive quantity.")
+            raise FieldValidationError("Enter a valid listing ID.", f"listing_{index}") from None
+        if not name:
+            raise FieldValidationError("Name this itemized line.", f"name_{index}")
+        if quantity < 1 or quantity > 9999:
+            raise FieldValidationError("Quantity must be between 1 and 9999.", f"quantity_{index}")
+        if listing_id is not None and listing_id < 1:
+            raise FieldValidationError("Choose a valid listing ID.", f"listing_{index}")
         if len(name) + (3 + len(detail) if detail else 0) > 500:
-            raise ValueError("An item name and description must fit within 500 characters on the invoice.")
-        price = cents(str(line.get("price", "")))
+            raise FieldValidationError("An item name and description must fit within 500 characters on the invoice.", f"description_{index}")
+        try:
+            price = cents(str(line.get("price", "")))
+        except ValueError as exc:
+            raise FieldValidationError(str(exc), f"price_{index}") from None
         total += price * quantity
         normalized.append(dict(name=name, description=detail, quantity=quantity, unit_cents=price, listing_id=listing_id))
-    delivery = cents(str(data.get("delivery", "0"))) if fulfillment == "delivery" else 0
+    try:
+        delivery = cents(str(data.get("delivery", "0"))) if fulfillment == "delivery" else 0
+    except ValueError as exc:
+        raise FieldValidationError(str(exc), "delivery") from None
     total += delivery
     if total < 50 or total > 99999999:
-        raise ValueError("The total must be between $0.50 and $999,999.99.")
+        raise FieldValidationError("The total must be between $0.50 and $999,999.99.", "line_ids")
     return dict(title=title, description=description, terms=terms, fulfillment=fulfillment,
                 location=location, lines=normalized, delivery_cents=delivery, total_cents=total)
 

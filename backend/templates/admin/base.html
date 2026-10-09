@@ -42,6 +42,8 @@
     .status-badge--attention { background:#f8dede; color:#763c3c; }
     pre { white-space:pre-wrap; word-break:break-word; margin:0; font-size:0.8rem; }
     .error { background:#f8dede; border:1px solid var(--accent); padding:0.6rem 0.75rem; border-radius:8px; margin-bottom:0.75rem; }
+    .field-error { color:#873c3c; font-size:0.85rem; font-weight:600; margin:0.3rem 0 0.5rem; }
+    [aria-invalid="true"] { border-color:#a24b4b !important; box-shadow:0 0 0 2px #a24b4b30; }
     img.preview { max-width:160px; border-radius:8px; display:block; margin-top:0.4rem; }
     fieldset { border:1px solid var(--taupe); border-radius:12px; margin:0.8rem 0; padding:0.8rem; }
     .table-scroll { overflow-x:auto; margin-bottom:1rem; }
@@ -73,11 +75,69 @@
   </main>
   {% if admin %}
   <script>
+  let fieldErrorNumber = 0;
+  function clearFieldError(form, field) {
+    if (!field) return;
+    const fieldKey = { 'installment-total': 'installment_total', 'quote-lines': 'line_ids', 'proposal-lines': 'line_ids',
+      'installment-rows': 'installment_ids' }[field.id] || field.name || field.id;
+    for (const error of form.querySelectorAll('[data-inline-field-error]')) {
+      if (error.dataset.fieldErrorFor !== fieldKey) continue;
+      error.remove();
+    }
+    field.removeAttribute('aria-invalid');
+    const described = (field.getAttribute('aria-describedby') || '').split(' ').filter(id => id && !id.startsWith('admin-field-error-'));
+    if (described.length) field.setAttribute('aria-describedby', described.join(' '));
+    else field.removeAttribute('aria-describedby');
+  }
+  function showFieldError(form, fieldName, detail) {
+    const field = fieldName === 'installment_total' ? form.querySelector('#installment-total')
+      : fieldName === 'line_ids' ? form.querySelector('#quote-lines, #proposal-lines')
+      : fieldName === 'installment_ids' ? form.querySelector('#installment-rows')
+      : form.elements.namedItem(fieldName);
+    if (!(field instanceof HTMLElement) || field.closest('[hidden]')) return false;
+    const error = document.createElement('p');
+    error.id = `admin-field-error-${++fieldErrorNumber}`;
+    error.className = 'field-error';
+    error.dataset.inlineFieldError = '';
+    error.dataset.fieldErrorFor = fieldName;
+    error.setAttribute('role', 'alert');
+    error.textContent = detail;
+    const container = field.closest('label') || (field.matches('#installment-total, #quote-lines, #proposal-lines, #installment-rows') ? field : field.parentElement);
+    container.insertAdjacentElement('afterend', error);
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('aria-describedby', [field.getAttribute('aria-describedby'), error.id].filter(Boolean).join(' '));
+    if (!field.matches('input, select, textarea')) field.tabIndex = -1;
+    field.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    field.focus({ preventScroll: true });
+    return true;
+  }
+  for (const eventName of ['input', 'change']) document.addEventListener(eventName, event => {
+    const field = event.target;
+    const form = field.closest && field.closest('form');
+    if (!form) return;
+    clearFieldError(form, field);
+    if (field.closest('#quote-lines, #installment-rows')) clearFieldError(form, form.querySelector('#installment-total'));
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('#add-quote-line, [data-remove-line], #add-installment, [data-remove-installment], #add-proposal-line, [data-remove-proposal-line]')) return;
+    const form = event.target.closest('form');
+    if (!form) return;
+    for (const id of ['#installment-total', '#quote-lines', '#installment-rows', '#proposal-lines']) {
+      clearFieldError(form, form.querySelector(id));
+    }
+  });
   document.addEventListener('submit', async event => {
     const form = event.target;
     if (event.defaultPrevented || !(form instanceof HTMLFormElement) || form.method.toLowerCase() !== 'post' ||
         new URL(form.action).origin !== location.origin || !new URL(form.action).pathname.startsWith('/admin/')) return;
     event.preventDefault();
+    for (const error of [...form.querySelectorAll('[data-inline-field-error]')]) {
+      const field = error.dataset.fieldErrorFor === 'installment_total' ? form.querySelector('#installment-total')
+        : error.dataset.fieldErrorFor === 'line_ids' ? form.querySelector('#quote-lines, #proposal-lines')
+        : error.dataset.fieldErrorFor === 'installment_ids' ? form.querySelector('#installment-rows')
+        : form.elements.namedItem(error.dataset.fieldErrorFor);
+      clearFieldError(form, field);
+    }
     let notice = form.querySelector('[data-form-error]');
     if (!notice) {
       notice = document.createElement('p');
@@ -95,9 +155,10 @@
       const response = await fetch(form.action, { method: 'POST', body: new FormData(form),
         credentials: 'same-origin', headers: { Accept: 'application/json' } });
       if (response.redirected && response.ok) { location.assign(response.url); return; }
-      const detail = (response.headers.get('content-type') || '').includes('application/json')
-        ? (await response.json()).detail : null;
-      notice.textContent = typeof detail === 'string' ? detail : 'Could not save. Check the current record before trying again.';
+      const payload = (response.headers.get('content-type') || '').includes('application/json')
+        ? await response.json() : {};
+      if (typeof payload.detail === 'string' && payload.field && showFieldError(form, payload.field, payload.detail)) return;
+      notice.textContent = typeof payload.detail === 'string' ? payload.detail : 'Could not save. Check the current record before trying again.';
     } catch (error) {
       notice.textContent = 'Connection lost. Check the current record before trying again.';
     } finally {

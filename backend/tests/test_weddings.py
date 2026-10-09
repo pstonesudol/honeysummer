@@ -419,6 +419,17 @@ async def test_invalid_installment_total_stays_in_admin_instead_of_raw_json():
     _, api = await app.asgi_client.post("/admin/weddings/1/save", data={**fields, "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE)},
                                         headers={"accept": "application/json"})
     assert api.status == 400 and "Current payments total $59.99" in api.json["detail"]
+    assert api.json["field"] == "installment_total"
+    fields["installment_amount_3"] = "30.00"
+    fields["installment_due_date_2"] = fields["installment_due_date_1"]
+    _, api = await app.asgi_client.post("/admin/weddings/1/save", data={**fields, "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE)},
+                                        headers={"accept": "application/json"})
+    assert api.status == 400 and api.json["field"] == "installment_due_date_2"
+    fields["installment_due_date_2"] = (today + timedelta(days=14)).isoformat()
+    fields["price_1"] = "invalid"
+    _, api = await app.asgi_client.post("/admin/weddings/1/save", data={**fields, "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE)},
+                                        headers={"accept": "application/json"})
+    assert api.status == 400 and api.json["field"] == "price_1"
 
 
 @pytest.mark.asyncio

@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from .models import FlowerListing, Order, OrderItem, OrderNotification
+from .form_errors import FieldValidationError
 from .orders import StockError, change_stock
 
 
@@ -30,15 +31,24 @@ def validate_manual(form) -> dict:
         key = str(UUID(str(form.get("manual_key", ""))))
     except ValueError:
         raise ValueError("Form expired. Reload and try again.") from None
-    if len(name) < 2 or len(name) > 200 or "@" not in email or len(email) > 254:
-        raise ValueError("Enter a customer name and valid email address.")
-    if method not in ("cash", "external") or (method == "external" and not reference) or len(reference) > 255:
-        raise ValueError("Choose cash or provide an external payment reference.")
+    if len(name) < 2 or len(name) > 200:
+        raise FieldValidationError("Enter a customer name between 2 and 200 characters.", "customer_name")
+    if "@" not in email or len(email) > 254:
+        raise FieldValidationError("Enter a valid customer email address.", "customer_email")
+    if method not in ("cash", "external"):
+        raise FieldValidationError("Choose cash or an external payment.", "payment_method")
+    if (method == "external" and not reference) or len(reference) > 255:
+        raise FieldValidationError("Provide an external payment reference.", "payment_reference")
     if form.get("payment_confirmed") != "on":
-        raise ValueError("Confirm the payment was collected before recording a paid order.")
-    collected = _money(str(form.get("amount_collected", "")))
-    if fulfillment not in ("pickup", "delivery") or (fulfillment == "delivery" and not str(form.get("delivery_address", "")).strip()):
-        raise ValueError("Choose pickup or provide a delivery address.")
+        raise FieldValidationError("Confirm the payment was collected before recording a paid order.", "payment_confirmed")
+    try:
+        collected = _money(str(form.get("amount_collected", "")))
+    except ValueError as exc:
+        raise FieldValidationError(str(exc), "amount_collected") from None
+    if fulfillment not in ("pickup", "delivery"):
+        raise FieldValidationError("Choose pickup or delivery.", "fulfillment")
+    if fulfillment == "delivery" and not str(form.get("delivery_address", "")).strip():
+        raise FieldValidationError("Provide a delivery address.", "delivery_address")
     lines = []
     for index in range(1, 6):
         listing_id = str(form.get(f"listing_{index}", "")).strip()
@@ -47,20 +57,28 @@ def validate_manual(form) -> dict:
             continue
         try:
             quantity = int(str(form.get(f"quantity_{index}", "")))
+        except ValueError:
+            raise FieldValidationError("Enter a valid quantity.", f"quantity_{index}") from None
+        try:
             listing = int(listing_id) if listing_id else None
         except ValueError:
-            raise ValueError("Enter valid listing IDs and quantities.") from None
-        if not 1 <= quantity <= 9999 or (listing is not None and listing < 1):
-            raise ValueError("Quantities must be between 1 and 9999.")
+            raise FieldValidationError("Enter a valid listing ID.", f"listing_{index}") from None
+        if not 1 <= quantity <= 9999:
+            raise FieldValidationError("Quantities must be between 1 and 9999.", f"quantity_{index}")
+        if listing is not None and listing < 1:
+            raise FieldValidationError("Enter a valid listing ID.", f"listing_{index}")
         if listing is None and (not 1 <= len(custom_name) <= 160):
-            raise ValueError("Name each custom arrangement (up to 160 characters).")
-        lines.append(dict(listing_id=listing, name=custom_name, quantity=quantity,
-                          price=_money(str(form.get(f"price_{index}", ""))) if listing is None else None))
+            raise FieldValidationError("Name each custom arrangement (up to 160 characters).", f"name_{index}")
+        try:
+            price = _money(str(form.get(f"price_{index}", ""))) if listing is None else None
+        except ValueError as exc:
+            raise FieldValidationError(str(exc), f"price_{index}") from None
+        lines.append(dict(listing_id=listing, name=custom_name, quantity=quantity, price=price))
     if not lines:
-        raise ValueError("Add at least one catalogue item or custom arrangement.")
+        raise FieldValidationError("Add at least one catalogue item or custom arrangement.", "listing_1")
     for field, maximum in (("customer_phone", 40), ("pickup_window", 200), ("delivery_address", 1000), ("notes", 4000)):
         if len(str(form.get(field, ""))) > maximum:
-            raise ValueError(f"{field.replace('_', ' ').capitalize()} is too long.")
+            raise FieldValidationError(f"{field.replace('_', ' ').capitalize()} is too long.", field)
     return dict(key=key, name=name, email=email, method=method, reference=reference, collected=collected,
                 fulfillment=fulfillment, lines=lines)
 
@@ -108,7 +126,8 @@ async def create_manual_order(db, form, actor_id: int) -> Order:
         for line in data["lines"]
     )
     if total != data["collected"]:
-        raise ValueError(f"Collected amount must equal the order total (${total:.2f}, including delivery).")
+        raise FieldValidationError(f"Collected amount must equal the order total (${total:.2f}, including delivery).",
+                                   "amount_collected")
     for listing_id, quantity in sorted(counts.items()):
         listing = listings[listing_id]
         await change_stock(db, listing, -quantity, kind="market_sale", units=quantity,

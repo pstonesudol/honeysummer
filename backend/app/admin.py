@@ -892,6 +892,7 @@ async def wedding_save(request, quote_id: int):
     if not _valid_csrf(request):
         return json({"detail": "Invalid CSRF token."}, status=403)
     from .weddings import validate_installments, validate_quote, validate_schedule
+    from .form_errors import FieldValidationError
     try:
         draft, mode, deposit = validate_quote(request.form)
         if mode == "installments":
@@ -905,7 +906,7 @@ async def wedding_save(request, quote_id: int):
             parts = []
             schedule = validate_schedule(request.form, mode)
     except ValueError as exc:
-        return json({"detail": str(exc)}, status=400)
+        return json({"detail": str(exc), **({"field": exc.field} if isinstance(exc, FieldValidationError) else {})}, status=400)
     async with session_scope() as db:
         quote = await db.scalar(select(WeddingQuote).where(WeddingQuote.id == quote_id).with_for_update())
         if not quote or quote.status != "draft":
@@ -1042,6 +1043,7 @@ async def manual_order_submit(request):
     if not _valid_csrf(request):
         return json({"detail": "Invalid CSRF token."}, status=403)
     from .manual_orders import create_manual_order
+    from .form_errors import FieldValidationError
     from .orders import StockError
     from .payments import deliver_notifications
     try:
@@ -1049,7 +1051,7 @@ async def manual_order_submit(request):
             order = await create_manual_order(db, request.form, request.ctx.admin.id)
             order_id = order.id
     except (ValueError, StockError) as exc:
-        return json({"detail": str(exc)}, status=400)
+        return json({"detail": str(exc), **({"field": exc.field} if isinstance(exc, FieldValidationError) else {})}, status=400)
     except IntegrityError:
         # A repeated submission racing the first one must not charge stock twice.
         async with session_scope() as db:
@@ -1181,18 +1183,19 @@ async def proposal_start(request, inquiry_id: int):
 
 def _proposal_form(form) -> dict:
     import re
+    from .form_errors import FieldValidationError
     raw_ids = str(form.get("line_ids", "")).strip()
     if raw_ids:
         tokens = raw_ids.split(",")
         if not all(token.isdigit() and 1 <= int(token) <= 100000 for token in tokens):
-            raise ValueError("Proposal line identifiers are invalid.")
+            raise FieldValidationError("Proposal line identifiers are invalid.", "line_ids")
         indexes = [int(token) for token in tokens]
     else:
         # Older clients submitted numbered line fields without a row list.
         indexes = sorted(int(match.group(1)) for key in form.keys()
                          if (match := re.fullmatch(r"name_(\d+)", str(key))))
     if len(indexes) != len(set(indexes)) or len(indexes) > 200:
-        raise ValueError("Add no more than 200 distinct proposal lines.")
+        raise FieldValidationError("Add no more than 200 distinct proposal lines.", "line_ids")
     lines = []
     for index in indexes:
         name = str(form.get(f"name_{index}", "")).strip()
@@ -1200,9 +1203,9 @@ def _proposal_form(form) -> dict:
             if any(str(form.get(f"{field}_{index}", "")).strip() for field in ("description", "price", "listing")) or (
                 str(form.get(f"quantity_{index}", "")).strip() not in ("", "1")
             ):
-                raise ValueError("Name each proposal line that has details, a price, or a listing.")
+                raise FieldValidationError("Name each proposal line that has details, a price, or a listing.", f"name_{index}")
             continue
-        lines.append(dict(name=name, description=form.get(f"description_{index}", ""),
+        lines.append(dict(_form_index=index, name=name, description=form.get(f"description_{index}", ""),
                           quantity=form.get(f"quantity_{index}"), price=form.get(f"price_{index}"),
                           listing_id=form.get(f"listing_{index}")))
     return dict(title=form.get("title", ""), description=form.get("description", ""),
@@ -1229,18 +1232,23 @@ async def proposal_save(request, proposal_id: int):
     if not _valid_csrf(request):
         return json({"detail": "Invalid CSRF token."}, status=403)
     from .proposals import validate_draft
+    from .form_errors import FieldValidationError
 
     try:
         draft = validate_draft(_proposal_form(request.form))
     except ValueError as exc:
-        return json({"detail": str(exc)}, status=400)
+        return json({"detail": str(exc), **({"field": exc.field} if isinstance(exc, FieldValidationError) else {})}, status=400)
     async with session_scope() as db:
         proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.id == proposal_id).with_for_update())
         if not proposal or proposal.status != "draft":
             return json({"detail": "Only drafts can be edited."}, status=409)
-        for line in draft["lines"]:
+        for index, line in enumerate(draft["lines"], start=1):
             if line["listing_id"] and not await db.get(FlowerListing, line["listing_id"]):
-                return json({"detail": "A listing reference does not exist."}, status=400)
+                raw_index = ([int(token) for token in str(request.form.get("line_ids", "")).split(",")
+                              if token and str(request.form.get(f"name_{token}", "")).strip()]
+                             if request.form.get("line_ids") else None)
+                return json({"detail": "A listing reference does not exist.",
+                             "field": f"listing_{raw_index[index - 1] if raw_index else index}"}, status=400)
         proposal.draft = draft
         proposal.internal_notes = str(request.form.get("internal_notes", "")).strip()[:4000]
         proposal.activity = [*(proposal.activity or []), dict(action="draft saved", actor=request.ctx.admin.id, at=datetime.now(timezone.utc).isoformat())]

@@ -505,6 +505,7 @@ async def test_manual_paid_order_stock_custom_lines_and_idempotency(monkeypatch)
     path = "/admin/orders/manual/new"
     _, wrong_total = await app.asgi_client.post(path, data={**form, "amount_collected": "12.00"})
     assert wrong_total.status == 400
+    assert wrong_total.json["field"] == "amount_collected"
     _, created = await app.asgi_client.post(path, data=form)
     assert created.status == 302
     _, repeated = await app.asgi_client.post(path, data=form)

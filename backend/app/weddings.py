@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from .db import session_scope
+from .form_errors import FieldValidationError
 from .models import Inquiry, Order, OrderItem, OrderNotification, StripeEvent, WeddingInvoice, WeddingQuote
 from .proposals import cents
 from .settings import get_settings
@@ -27,34 +28,40 @@ def validate_schedule(form, payment_mode: str, *, today: date | None = None) -> 
     today = today or eastern_today()
     initial_mode = str(form.get("initial_send_mode", "manual"))
     balance_mode = str(form.get("balance_send_mode", "manual")) if payment_mode == "deposit" else "manual"
-    if initial_mode not in ("manual", "automatic") or balance_mode not in ("manual", "automatic"):
-        raise ValueError("Choose manual or automatic invoice sending.")
+    if initial_mode not in ("manual", "automatic"):
+        raise FieldValidationError("Choose manual or automatic invoice sending.", "initial_send_mode")
+    if balance_mode not in ("manual", "automatic"):
+        raise FieldValidationError("Choose manual or automatic invoice sending.", "balance_send_mode")
     def chosen_date(name):
         raw = str(form.get(name, "")).strip()
         try:
             return date.fromisoformat(raw) if raw else None
         except ValueError:
-            raise ValueError(f"Enter a valid {name.replace('_', ' ')}.") from None
+            raise FieldValidationError(f"Enter a valid {name.replace('_', ' ')}.", name) from None
     first_send = chosen_date("initial_send_date") if initial_mode == "automatic" else None
     first_due = chosen_date("initial_due_date")
     balance_send = chosen_date("balance_send_date") if balance_mode == "automatic" else None
     balance_due = chosen_date("balance_due_date") if payment_mode == "deposit" else None
     if initial_mode == "automatic" and not first_send:
-        raise ValueError("Choose when to send the first invoice automatically.")
+        raise FieldValidationError("Choose when to send the first invoice automatically.", "initial_send_date")
     if payment_mode == "deposit" and balance_mode == "automatic" and not balance_send:
-        raise ValueError("Choose when to send the balance invoice automatically.")
+        raise FieldValidationError("Choose when to send the balance invoice automatically.", "balance_send_date")
     if initial_mode == "automatic" and not first_due:
-        raise ValueError("Choose a due date for the scheduled first invoice.")
+        raise FieldValidationError("Choose a due date for the scheduled first invoice.", "initial_due_date")
     if payment_mode == "deposit" and balance_mode == "automatic" and not balance_due:
-        raise ValueError("Choose a due date for the scheduled balance invoice.")
+        raise FieldValidationError("Choose a due date for the scheduled balance invoice.", "balance_due_date")
     if payment_mode == "deposit" and balance_due and not first_due:
-        raise ValueError("Set the deposit due date before choosing a balance due date.")
-    if (first_send and first_send < today) or (balance_send and balance_send < today):
-        raise ValueError("Scheduled sending cannot start in the past.")
-    if (first_due and first_due < (first_send or today)) or (balance_due and balance_due < (balance_send or today)):
-        raise ValueError("Each due date must be on or after its sending date and not in the past.")
+        raise FieldValidationError("Set the deposit due date before choosing a balance due date.", "initial_due_date")
+    if first_send and first_send < today:
+        raise FieldValidationError("Scheduled sending cannot start in the past.", "initial_send_date")
+    if balance_send and balance_send < today:
+        raise FieldValidationError("Scheduled sending cannot start in the past.", "balance_send_date")
+    if first_due and first_due < (first_send or today):
+        raise FieldValidationError("Each due date must be on or after its sending date and not in the past.", "initial_due_date")
+    if balance_due and balance_due < (balance_send or today):
+        raise FieldValidationError("Each due date must be on or after its sending date and not in the past.", "balance_due_date")
     if payment_mode == "deposit" and first_due and balance_due and balance_due < first_due:
-        raise ValueError("Balance must be due on or after the deposit due date.")
+        raise FieldValidationError("Balance must be due on or after the deposit due date.", "balance_due_date")
     return dict(initial_send_mode=initial_mode, initial_send_date=first_send,
                 initial_due_date=first_due, balance_send_mode=balance_mode,
                 balance_send_date=balance_send, balance_due_date=balance_due)
@@ -71,72 +78,85 @@ def validate_installments(form, total_cents: int, *, today: date | None = None) 
     if raw_ids:
         tokens = raw_ids.split(",")
         if not all(token.isdigit() and 1 <= int(token) <= 100000 for token in tokens):
-            raise ValueError("Installment identifiers are invalid.")
+            raise FieldValidationError("Installment identifiers are invalid.", "installment_ids")
         indexes = [int(token) for token in tokens]
     else:
         # Accept older forms that posted fixed numbered amount fields.
         indexes = sorted(int(match.group(1)) for key in form.keys()
                          if (match := re.fullmatch(r"installment_amount_(\d+)", str(key))))
     if len(indexes) != len(set(indexes)) or len(indexes) > 200:
-        raise ValueError("Add no more than 200 distinct installments.")
+        raise FieldValidationError("Add no more than 200 distinct installments.", "installment_ids")
     parts = []
     previous_due = None
     previous_send = None
     for index in indexes:
         kind = str(form.get(f"installment_type_{index}", "amount"))
         if kind not in ("amount", "percent"):
-            raise ValueError("Choose a dollar amount or percentage for each installment.")
+            raise FieldValidationError("Choose a dollar amount or percentage for each installment.", f"installment_type_{index}")
         raw_amount = str(form.get(f"installment_amount_{index}", "")).strip()
         raw_percent = str(form.get(f"installment_percent_{index}", "")).strip()
         if kind == "percent":
             try:
                 percent = Decimal(raw_percent)
             except InvalidOperation:
-                raise ValueError("Enter a valid installment percentage.") from None
+                raise FieldValidationError("Enter a valid installment percentage.", f"installment_percent_{index}") from None
             if not percent.is_finite() or not 0 < percent <= 100 or percent.as_tuple().exponent < -2:
-                raise ValueError("Enter a percentage between 0 and 100 with at most two decimals.")
+                raise FieldValidationError("Enter a percentage between 0 and 100 with at most two decimals.", f"installment_percent_{index}")
             amount = int((Decimal(total_cents) * percent / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
         else:
             percent = None
-            amount = cents(raw_amount)
+            try:
+                amount = cents(raw_amount)
+            except ValueError as exc:
+                raise FieldValidationError(str(exc), f"installment_amount_{index}") from None
         mode = str(form.get(f"installment_send_mode_{index}", "manual"))
-        if mode not in ("manual", "automatic") or amount < 50:
-            raise ValueError("Every installment must be at least $0.50 with a valid sending mode.")
+        if mode not in ("manual", "automatic"):
+            raise FieldValidationError("Choose manual or automatic invoice sending.", f"installment_send_mode_{index}")
+        if amount < 50:
+            raise FieldValidationError("Every installment must be at least $0.50.",
+                                       f"installment_percent_{index}" if kind == "percent" else f"installment_amount_{index}")
         def parse_date(field):
             raw = str(form.get(f"installment_{field}_{index}", "")).strip()
             try:
                 return date.fromisoformat(raw) if raw else None
             except ValueError:
-                raise ValueError(f"Enter a valid installment {field.replace('_', ' ')}.") from None
+                raise FieldValidationError(f"Enter a valid installment {field.replace('_', ' ')}.",
+                                           f"installment_{field}_{index}") from None
         send = parse_date("send_date") if mode == "automatic" else None
         due = parse_date("due_date")
-        if not due or (mode == "automatic" and not send):
-            raise ValueError("Each installment needs a due date; automatic sending also needs a send date.")
-        if (send and send < today) or due < (send or today):
-            raise ValueError("Installment dates cannot be in the past or due before sending.")
+        if not due:
+            raise FieldValidationError("Each installment needs a due date.", f"installment_due_date_{index}")
+        if mode == "automatic" and not send:
+            raise FieldValidationError("Automatic sending needs a send date.", f"installment_send_date_{index}")
+        if send and send < today:
+            raise FieldValidationError("Installment send dates cannot be in the past.", f"installment_send_date_{index}")
+        if due < (send or today):
+            raise FieldValidationError("Installment due dates cannot be in the past or before sending.", f"installment_due_date_{index}")
         if previous_due and due <= previous_due:
-            raise ValueError("Installment due dates must increase in order.")
+            raise FieldValidationError("Installment due dates must increase in order.", f"installment_due_date_{index}")
         if previous_send and send and send < previous_send:
-            raise ValueError("Installment send dates must not move backward.")
+            raise FieldValidationError("Installment send dates must not move backward.", f"installment_send_date_{index}")
         parts.append(dict(amount_cents=amount, amount_type=kind,
                           percent=str(percent) if percent is not None else None, send_mode=mode,
                           send_date=send.isoformat() if send else None, due_date=due.isoformat()))
         previous_due, previous_send = due, send or previous_send
     if not 2 <= len(parts) <= 200:
-        raise ValueError("Enter between two and 200 installments.")
+        raise FieldValidationError("Enter between two and 200 installments.", "installment_ids")
     if all(part["amount_type"] == "percent" for part in parts) and sum(
             Decimal(part["percent"]) for part in parts) == 100:
         # Assign rounding pennies to the final payment, without changing the agreed total.
         parts[-1]["amount_cents"] = total_cents - sum(part["amount_cents"] for part in parts[:-1])
         if parts[-1]["amount_cents"] < 50:
-            raise ValueError("Every installment must be at least $0.50 after rounding.")
+            raise FieldValidationError("Every installment must be at least $0.50 after rounding.",
+                                       f"installment_percent_{indexes[-1]}")
     actual_cents = sum(part["amount_cents"] for part in parts)
     if actual_cents != total_cents:
         difference = total_cents - actual_cents
         action = "Add" if difference > 0 else "Reduce payments by"
-        raise ValueError(f"Installments must total exactly ${total_cents / 100:.2f}. "
+        raise FieldValidationError(f"Installments must total exactly ${total_cents / 100:.2f}. "
                          f"Current payments total ${actual_cents / 100:.2f}. "
-                         f"{action} ${abs(difference) / 100:.2f}{' to the payments' if difference > 0 else ''}.")
+                         f"{action} ${abs(difference) / 100:.2f}{' to the payments' if difference > 0 else ''}.",
+                         "installment_total")
     return parts
 
 
@@ -151,43 +171,56 @@ def validate_quote(form) -> tuple[dict, str, int]:
     terms = str(form.get("terms", "")).strip()
     location = str(form.get("location", "")).strip()
     mode = str(form.get("payment_mode", ""))
-    if not title or not description or not terms or not location or mode not in ("full", "deposit", "installments"):
-        raise ValueError("Title, description, terms, event location and payment mode are required.")
-    if any(len(value) > limit for value, limit in ((title, 160), (description, 2000), (terms, 2000), (location, 500))):
-        raise ValueError("Quote text is too long.")
+    for field, value, limit in (("title", title, 160), ("description", description, 2000),
+                                ("terms", terms, 2000), ("location", location, 500)):
+        if not value:
+            raise FieldValidationError(f"{field.capitalize()} is required.", field)
+        if len(value) > limit:
+            raise FieldValidationError(f"{field.capitalize()} must be {limit} characters or fewer.", field)
+    if mode not in ("full", "deposit", "installments"):
+        raise FieldValidationError("Choose a payment plan.", "payment_mode")
     raw_ids = str(form.get("line_ids", "")).strip()
     if raw_ids:
         tokens = raw_ids.split(",")
         if not all(token.isdigit() and 1 <= int(token) <= 100000 for token in tokens):
-            raise ValueError("Quote line identifiers are invalid.")
+            raise FieldValidationError("Quote line identifiers are invalid.", "line_ids")
         indexes = [int(token) for token in tokens]
     else:
         indexes = sorted(int(match.group(1)) for key in form.keys()
                          if (match := re.fullmatch(r"name_(\d+)", str(key))))
     if len(indexes) != len(set(indexes)) or len(indexes) > 200:
-        raise ValueError("Add no more than 200 distinct quote lines.")
+        raise FieldValidationError("Add no more than 200 distinct quote lines.", "line_ids")
     lines = []
     for index in indexes:
         name = str(form.get(f"name_{index}", "")).strip()
         if not name:
             if str(form.get(f"quantity_{index}", "")).strip() or str(form.get(f"price_{index}", "")).strip():
-                raise ValueError("Name each quote line that has a quantity or price.")
+                raise FieldValidationError("Name each quote line that has a quantity or price.", f"name_{index}")
             continue
         try:
             quantity = int(str(form.get(f"quantity_{index}", "")))
         except ValueError:
-            raise ValueError("Enter a valid line quantity.") from None
-        if len(name) > 160 or not 1 <= quantity <= 9999:
-            raise ValueError("Each line needs a name and a quantity from 1–9999.")
-        lines.append(dict(name=name, quantity=quantity, unit_cents=cents(str(form.get(f"price_{index}", "")))))
+            raise FieldValidationError("Enter a valid line quantity.", f"quantity_{index}") from None
+        if len(name) > 160:
+            raise FieldValidationError("Use a name of 160 characters or fewer.", f"name_{index}")
+        if not 1 <= quantity <= 9999:
+            raise FieldValidationError("Enter a quantity from 1–9999.", f"quantity_{index}")
+        try:
+            price = cents(str(form.get(f"price_{index}", "")))
+        except ValueError as exc:
+            raise FieldValidationError(str(exc), f"price_{index}") from None
+        lines.append(dict(name=name, quantity=quantity, unit_cents=price))
     if not lines:
-        raise ValueError("Add at least one itemized service or arrangement.")
+        raise FieldValidationError("Add at least one itemized service or arrangement.", "line_ids")
     total = sum(line["unit_cents"] * line["quantity"] for line in lines)
     if not 50 <= total <= 99999999:
-        raise ValueError("Total must be between $0.50 and $999,999.99.")
-    deposit = cents(str(form.get("deposit", ""))) if mode == "deposit" else 0
+        raise FieldValidationError("Total must be between $0.50 and $999,999.99.", "line_ids")
+    try:
+        deposit = cents(str(form.get("deposit", ""))) if mode == "deposit" else 0
+    except ValueError as exc:
+        raise FieldValidationError(str(exc), "deposit") from None
     if mode == "deposit" and not 50 <= deposit <= total - 50:
-        raise ValueError("Deposit and remaining balance must each be at least $0.50.")
+        raise FieldValidationError("Deposit and remaining balance must each be at least $0.50.", "deposit")
     return dict(title=title, description=description, terms=terms, location=location,
                 lines=lines, total_cents=total), mode, deposit
 

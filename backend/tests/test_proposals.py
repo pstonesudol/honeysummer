@@ -76,6 +76,11 @@ async def test_only_bouquet_inquiries_offer_proposals_and_csrf():
     async with session_scope() as db:
         proposal = await db.get(BouquetProposal, 1)
         assert len(proposal.draft["lines"]) == 7 and proposal.draft["total_cents"] == 700
+    fields["price_8"] = "not-a-price"
+    fields["csrf_token"] = app.asgi_client.cookies.get(CSRF_COOKIE)
+    _, invalid = await app.asgi_client.post("/admin/proposals/1/save", data=fields,
+                                            headers={"accept": "application/json"})
+    assert invalid.status == 400 and invalid.json["field"] == "price_8"
 
 
 def test_dynamic_proposal_lines_validate_every_selected_row():
