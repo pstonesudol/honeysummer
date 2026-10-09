@@ -515,6 +515,39 @@ async def logout(request):
 # --------------------------------------------------------------------------- #
 # Dashboard + CRUD
 # --------------------------------------------------------------------------- #
+async def _booked_weddings(db, *, limit: int) -> tuple[list[dict], int]:
+    """Partially paid event work, shown separately from paid Order records."""
+    paid = (select(WeddingInvoice.quote_id, func.sum(WeddingInvoice.amount_cents).label("paid_cents"),
+                   func.count(WeddingInvoice.id).label("paid_count"))
+            .where(WeddingInvoice.status == "paid").group_by(WeddingInvoice.quote_id).subquery())
+    rows = (await db.execute(select(WeddingQuote, Inquiry, paid.c.paid_cents, paid.c.paid_count)
+        .join(paid, paid.c.quote_id == WeddingQuote.id)
+        .join(Inquiry, Inquiry.id == WeddingQuote.inquiry_id)
+        .where(WeddingQuote.order_id.is_(None), WeddingQuote.payment_mode.in_(("deposit", "installments")),
+               WeddingQuote.status.in_(("deposit_paid", "balance_sent", "installment_paid",
+                                       "installment_sent", "issuing", "review")))
+        .order_by(WeddingQuote.id.desc()))).all()
+    booked = []
+    for quote, inquiry, paid_cents, paid_count in rows:
+        total = (quote.snapshot or {}).get("total_cents", 0)
+        if not 0 < paid_cents < total:
+            continue
+        if quote.payment_mode == "deposit":
+            next_label = "Balance"
+            next_due = quote.balance_due_date
+            next_send = quote.balance_send_date if quote.balance_send_mode == "automatic" else None
+        else:
+            parts = quote.installments or []
+            part = parts[paid_count] if paid_count < len(parts) else None
+            next_label = f"Installment {paid_count + 1} of {len(parts)}" if part else "Review plan"
+            next_due = date.fromisoformat(part["due_date"]) if part else None
+            next_send = date.fromisoformat(part["send_date"]) if part and part["send_mode"] == "automatic" else None
+        booked.append(dict(quote=quote, inquiry=inquiry, paid_cents=paid_cents,
+                           balance_cents=total - paid_cents, next_label=next_label,
+                           next_due=next_due, next_send=next_send))
+    return booked[:limit], len(booked)
+
+
 @bp.get("/")
 async def dashboard(request):
     if not request.ctx.admin:
@@ -542,10 +575,12 @@ async def dashboard(request):
             select(FlowerListing).where(FlowerListing.active.is_(True), FlowerListing.quantity_available <= FlowerListing.low_stock_threshold)
             .order_by(FlowerListing.quantity_available, FlowerListing.id).limit(30)
         )).all()
+        booked_weddings, booked_wedding_count = await _booked_weddings(session, limit=10)
     return _page(request, "admin/dashboard.html", counts=counts, upcoming=upcoming,
                  outstanding=outstanding, new_inquiries=new_inquiries,
                  pending_florists=pending_florists, low_stock=low_stock, today=today,
-                 due_inquiries=due_inquiries)
+                  due_inquiries=due_inquiries, booked_weddings=booked_weddings,
+                  booked_wedding_count=booked_wedding_count)
 
 
 @bp.post("/inquiries/<pk:int>/follow-up")
@@ -592,6 +627,7 @@ async def model_list(request, slug: str):
         page_number = 1
     page_number = min(page_number, 100000)
     page_size = 30
+    booked_weddings, booked_wedding_count = [], 0
     async with session_scope() as session:
         statement = select(admin.model).options(
             *_relationship_options(
@@ -612,6 +648,8 @@ async def model_list(request, slug: str):
             [(_display_value(row, column), column) for _, column in admin.list_columns]
             for row in rows
         ]
+        if slug == "orders":
+            booked_weddings, booked_wedding_count = await _booked_weddings(session, limit=30)
     return _page(
         request,
         "admin/list.html",
@@ -621,6 +659,7 @@ async def model_list(request, slug: str):
         query=query,
         page_number=page_number, pages=max(1, (total + page_size - 1) // page_size),
         total=total, status_filter=status_filter,
+        booked_weddings=booked_weddings, booked_wedding_count=booked_wedding_count,
     )
 
 

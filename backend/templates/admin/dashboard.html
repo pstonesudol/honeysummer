@@ -3,6 +3,7 @@
 <h1>Dashboard</h1>
 <div class="grid">
   <a class="card" href="/admin/orders">Orders to prepare <strong>{{ outstanding }}</strong></a>
+  <a class="card" href="/admin/orders#booked-weddings-heading">Booked weddings · balance due <strong>{{ booked_wedding_count }}</strong></a>
   <a class="card" href="/admin/inquiries">New inquiries <strong>{{ new_inquiries }}</strong></a>
   <a class="card" href="/admin/florists">Pending florist approvals <strong>{{ pending_florists }}</strong></a>
   <a class="card" href="/admin/flowers">Low stock listings <strong>{{ low_stock|length }}{% if low_stock|length == 30 %}+{% endif %}</strong></a>
@@ -13,6 +14,7 @@
 {% for order in upcoming %}<tr><td>{{ order.fulfillment_date }} {{ order.fulfillment_time.strftime('%I:%M %p') if order.fulfillment_time else 'Time not set' }}</td><td><a href="/admin/orders/{{ order.id }}">{{ order.order_reference }}</a></td><td>{{ order.customer_label }}</td><td>{{ order.fulfillment }}</td><td>{{ order.fulfillment_state }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% else %}<p class="muted">No paid orders scheduled for the next eight calendar days. Set a date on an order to add it here.</p>{% endif %}
+{% include "admin/_booked_weddings.html" %}
 <h2>Low stock</h2>
 {% if low_stock %}<div class="table-scroll"><table><thead><tr><th>Listing</th><th>Available</th><th>Alert at</th></tr></thead><tbody>
 {% for flower in low_stock %}<tr><td><a href="/admin/flowers/{{ flower.id }}/inventory">{{ flower.name }}</a></td><td>{{ flower.quantity_available }}</td><td>{{ flower.low_stock_threshold }}</td></tr>{% endfor %}

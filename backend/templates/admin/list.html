@@ -5,6 +5,7 @@
   {% if admin.can_create %}<a class="button" href="/admin/{{ admin.slug }}/new">New</a>{% endif %}
   {% if admin.slug == 'orders' %}<a class="button" href="/admin/orders/manual/new">Record paid order</a>{% endif %}
 </div>
+{% if admin.slug == 'orders' %}{% include "admin/_booked_weddings.html" %}{% endif %}
 {% if admin.search or admin.slug == 'orders' %}
 <form method="get" action="/admin/{{ admin.slug }}" class="row" style="margin:0 0 0.75rem">
   {% if admin.search %}<label for="list-q">Search</label><input id="list-q" type="text" name="q" value="{{ query }}" placeholder="Search…" style="max-width:280px">{% endif %}

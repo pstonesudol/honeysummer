@@ -349,6 +349,54 @@ async def test_admin_hides_irrelevant_payment_fields_and_builds_installments():
 
 
 @pytest.mark.asyncio
+async def test_booked_weddings_appear_on_dashboard_and_orders_without_becoming_paid_orders():
+    today = eastern_today()
+    async with session_scope() as db:
+        db.add(User(email="owner@example.com", password_hash=hash_password("password"), is_admin=True))
+        deposit_inquiry = Inquiry(kind="wedding", name="Deposit customer", email="deposit@example.com")
+        unpaid_inquiry = Inquiry(kind="wedding", name="Unpaid customer", email="unpaid@example.com")
+        installment_inquiry = Inquiry(kind="wedding", name="Installment customer", email="parts@example.com")
+        db.add_all([deposit_inquiry, unpaid_inquiry, installment_inquiry])
+        await db.flush()
+        snapshot = dict(title="Fall wedding", location="October 20, Barn", total_cents=5000)
+        deposit = WeddingQuote(inquiry_id=deposit_inquiry.id, status="deposit_paid", payment_mode="deposit",
+                               deposit_cents=1000, balance_due_date=today + timedelta(days=14),
+                               snapshot=snapshot, draft=snapshot, activity=[])
+        unpaid = WeddingQuote(inquiry_id=unpaid_inquiry.id, status="sent", payment_mode="deposit",
+                              deposit_cents=1000, snapshot=snapshot, draft=snapshot, activity=[])
+        installments = [dict(amount_cents=1000, send_mode="manual", due_date=(today + timedelta(days=7)).isoformat()),
+                        dict(amount_cents=4000, send_mode="automatic", send_date=(today + timedelta(days=8)).isoformat(),
+                             due_date=(today + timedelta(days=14)).isoformat())]
+        partial = WeddingQuote(inquiry_id=installment_inquiry.id, status="review", payment_mode="installments",
+                               installments=installments, snapshot=snapshot, draft=snapshot, activity=[])
+        db.add_all([deposit, unpaid, partial])
+        await db.flush()
+        db.add_all([WeddingInvoice(quote_id=deposit.id, step="deposit", status="paid", amount_cents=1000),
+                    WeddingInvoice(quote_id=unpaid.id, step="deposit", status="sent", amount_cents=1000),
+                    WeddingInvoice(quote_id=partial.id, step="part_01", status="paid", amount_cents=1000),
+                    WeddingInvoice(quote_id=partial.id, step="part_02", status="review", amount_cents=4000)])
+        await db.commit()
+    await app.asgi_client.get("/admin/login")
+    csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
+    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf))
+    for url in ("/admin/", "/admin/orders"):
+        _, page = await app.asgi_client.get(url)
+        assert page.status == 200
+        assert "Booked weddings · payments outstanding (2)" in page.text
+        assert "Deposit customer" in page.text and "Installment customer" in page.text
+        assert "Unpaid customer" not in page.text
+        assert "$10.00" in page.text and "$40.00" in page.text
+        assert "October 20, Barn" in page.text and "inspect Stripe" in page.text
+    async with session_scope() as db:
+        deposit = await db.get(WeddingQuote, deposit.id)
+        deposit.status = "paid"
+        await db.commit()
+    _, page = await app.asgi_client.get("/admin/orders")
+    assert "Booked weddings · payments outstanding (1)" in page.text
+    assert "Deposit customer" not in page.text
+
+
+@pytest.mark.asyncio
 async def test_deposit_books_work_balance_creates_one_paid_order(monkeypatch):
     mock_stripe(monkeypatch, {"in_deposit": 3000, "in_balance": 3000})
     snapshot, mode, deposit = validate_quote(form())
