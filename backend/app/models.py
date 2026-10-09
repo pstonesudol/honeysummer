@@ -57,7 +57,11 @@ class FloristProfile(Base):
         ForeignKey("users.id", ondelete="CASCADE"), unique=True
     )
     business_name: Mapped[str] = mapped_column(String(200))
+    contact_name: Mapped[str] = mapped_column(String(200), default="")
     phone: Mapped[str] = mapped_column(String(40), default="")
+    business_type: Mapped[str] = mapped_column(String(30), default="")
+    website: Mapped[str] = mapped_column(String(500), default="")
+    about_work: Mapped[str] = mapped_column(Text, default="")
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str] = mapped_column(Text, default="")
 

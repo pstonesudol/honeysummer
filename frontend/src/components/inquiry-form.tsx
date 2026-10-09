@@ -216,12 +216,17 @@ export function WholesaleShop() {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setMessage("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       const body: Record<string, string> = { email: String(form.get("email")), password: String(form.get("password")) };
-      if (mode === "signup") { body.business_name = String(form.get("business_name")); body.phone = String(form.get("phone")); }
+      if (mode === "signup") {
+        for (const field of ["name", "business_name", "phone", "business_type", "website", "message"]) {
+          body[field] = String(form.get(field) ?? "").trim();
+        }
+      }
       const data = await api(`auth/${mode}/`, { method: "POST", body: JSON.stringify(body) });
-      if (mode === "signup") setMessage(data.detail);
+      if (mode === "signup") { setMessage(data.detail); formElement.reset(); }
       else setAccount(data);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to continue."); }
     setBusy(false);
@@ -247,13 +252,25 @@ export function WholesaleShop() {
     setBusy(false);
   }
 
-  if (!account?.authenticated || !account.approved) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">
-    <div><p className="eyebrow">Wholesale shop</p><h2 id="shop-title">Sign in to see what is blooming.</h2><p>Approved Honey Summer florist accounts see live availability and wholesale pricing here.</p></div>
+  if (account?.authenticated && !account.approved) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">
+    <div><p className="eyebrow">Wholesale shop</p><h2 id="shop-title">Your account is awaiting approval.</h2><p>Isabella will email you once your account is ready. You can sign in with the password you chose.</p></div>
+    <div><button className="text-link" onClick={() => api("auth/logout/", { method: "POST" }).then(() => setAccount({ authenticated: false, approved: false, business_name: "" }))}>Sign out</button></div>
+  </section>;
+
+  if (!account?.authenticated) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">
+    <div><p className="eyebrow">Wholesale shop</p><h2 id="shop-title">{mode === "login" ? "Sign in to see what is blooming." : "Request a wholesale account."}</h2><p>{mode === "login" ? "Approved Honey Summer florist accounts see live availability and wholesale pricing here." : "Tell us about your business and choose a password. Isabella will review your request; you can sign in once your account is approved."}</p></div>
     <form className="wholesale-auth" onSubmit={submit}>
-      {mode === "signup" && <><label>Business name<input name="business_name" required /></label><label>Phone<input name="phone" /></label></>}
-      <label>Email<input name="email" type="email" required /></label><label>Password<input name="password" type="password" minLength={8} required /></label>
+      {mode === "signup" && <>
+        <label>Your name<input name="name" autoComplete="name" maxLength={200} required /></label>
+        <label>Business name<input name="business_name" autoComplete="organization" maxLength={200} required /></label>
+        <label>Phone (optional)<input name="phone" type="tel" autoComplete="tel" maxLength={40} /></label>
+        <label>Business type<select name="business_type" defaultValue=""><option value="">Please choose…</option><option value="florist">Florist</option><option value="event">Event designer or planner</option><option value="shop">Retail shop or studio</option><option value="other">Other</option></select></label>
+        <label>Website or Instagram<input name="website" type="url" placeholder="https://…" maxLength={500} /></label>
+        <label>Tell us about your work<textarea name="message" rows={4} maxLength={5000} /></label>
+      </>}
+      <label>Email<input name="email" type="email" autoComplete="email" required /></label><label>Password<input name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={8} required /></label>
       <button className="button button--dark" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Request account"}</button>
-      <button type="button" className="text-link" onClick={() => setMode(mode === "login" ? "signup" : "login")}>{mode === "login" ? "Need wholesale access? Request an account" : "Already approved? Sign in"}</button>
+      <button type="button" className="text-link" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMessage(""); }}>{mode === "login" ? "Need wholesale access? Request an account" : "Already have an account? Sign in"}</button>
       {message && <p role="status" className="form-message">{message}</p>}
     </form>
   </section>;

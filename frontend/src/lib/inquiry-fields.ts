@@ -1,4 +1,4 @@
-export type InquiryKind = "bouquet" | "wedding" | "contact" | "wholesale";
+export type InquiryKind = "bouquet" | "wedding" | "contact";
 
 export type InquiryFieldType =
   | "text"
@@ -204,40 +204,6 @@ export const inquiryFields: Record<InquiryKind, InquiryField[]> = {
       rows: 5,
     },
   ],
-  wholesale: [
-    ...identity,
-    {
-      name: "business_name",
-      label: "Business name",
-      type: "text",
-      required: true,
-      half: true,
-    },
-    {
-      name: "business_type",
-      label: "Business type",
-      type: "select",
-      half: true,
-      options: [
-        { value: "florist", label: "Florist" },
-        { value: "event", label: "Event designer or planner" },
-        { value: "shop", label: "Retail shop or studio" },
-        { value: "other", label: "Other" },
-      ],
-    },
-    {
-      name: "website",
-      label: "Website or Instagram",
-      type: "url",
-      placeholder: "https://…",
-    },
-    {
-      name: "message",
-      label: "Tell us about your work",
-      type: "textarea",
-      rows: 4,
-    },
-  ],
 };
 
 export const inquiryIntros: Record<InquiryKind, string> = {
@@ -246,6 +212,4 @@ export const inquiryIntros: Record<InquiryKind, string> = {
   wedding:
     "Share a few details about your day. We will follow up with availability, ideas, and a custom quote.",
   contact: "Send a note and we will get back to you within a few days.",
-  wholesale:
-    "Tell us about your business. We will set up your wholesale account and share a password with approved florists.",
 };

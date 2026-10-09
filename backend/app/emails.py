@@ -114,13 +114,13 @@ def send_inquiry_emails(inquiry: Inquiry) -> None:
         logger.exception("Unable to send inquiry emails for inquiry %s", inquiry.id)
 
 
-def send_signup_notification(*, business_name: str, email: str) -> None:
+def send_signup_notification(*, business_name: str, email: str, contact_name: str = "") -> None:
     """Tell the farm that a florist requested wholesale access."""
     try:
         send_email(
             subject="New Honey Summer wholesale account request",
             body=(
-                f"{business_name} ({email}) requested wholesale access. "
+                f"{contact_name} at {business_name} ({email}) requested wholesale access. "
                 "Review and approve them in the admin."
             ),
             to=get_settings().inquiry_notification_email,

@@ -44,11 +44,20 @@ async def signup(request):
     email = str(data.get("email", "")).strip().lower()
     password = str(data.get("password", ""))
     business = str(data.get("business_name", "")).strip()
+    contact_name = str(data.get("name", "")).strip()
+    business_type = str(data.get("business_type", "")).strip()
+    website = str(data.get("website", "")).strip()
+    about_work = str(data.get("message", "")).strip()
 
-    if not email or not password or not business:
+    if not email or not password or not business or not contact_name:
         return json(
-            {"detail": "Business name, email, and password are required."}, status=400
+            {"detail": "Name, business name, email, and password are required."}, status=400
         )
+    if business_type and business_type not in {"florist", "event", "shop", "other"}:
+        return json({"detail": "Select a valid business type."}, status=400)
+    phone = str(data.get("phone", "")).strip()
+    if len(contact_name) > 200 or len(business) > 200 or len(phone) > 40 or len(website) > 500 or len(about_work) > 5000:
+        return json({"detail": "Some account details are too long."}, status=400)
 
     async with session_scope() as session:
         if await session.scalar(select(User).where(User.email == email)):
@@ -59,14 +68,18 @@ async def signup(request):
         session.add(
             FloristProfile(
                 business_name=business,
-                phone=str(data.get("phone", "")),
+                contact_name=contact_name,
+                phone=phone,
+                business_type=business_type,
+                website=website,
+                about_work=about_work,
                 approved=False,
                 user=user,
             )
         )
         await session.commit()
 
-    send_signup_notification(business_name=business, email=email)
+    send_signup_notification(business_name=business, email=email, contact_name=contact_name)
     return json(
         {"detail": "Request received. Isabella will approve your account shortly."},
         status=201,

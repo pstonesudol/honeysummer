@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { BadgeCheck, Flower2, Truck } from "lucide-react";
 
-import { InquiryForm, WholesaleShop } from "@/components/inquiry-form";
-import { inquiryIntros } from "@/lib/inquiry-fields";
+import { WholesaleShop } from "@/components/inquiry-form";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -33,11 +33,11 @@ const benefits = [
 const steps = [
   {
     title: "Request access",
-    body: "Send us a note about your business using the form below.",
+    body: "Request an account above, tell us about your business, and choose your own password.",
   },
   {
     title: "We review & approve",
-    body: "We set up your account and share your login details.",
+    body: "Isabella reviews your request and emails you when your account is approved.",
   },
   {
     title: "Order what is blooming",
@@ -96,18 +96,8 @@ export default function WholesalePage() {
         ))}
       </section>
 
-      <section className="form-section section-wrap" id="inquiry" aria-labelledby="wholesale-form-title">
-        <div className="form-section__intro">
-          <p className="eyebrow">Request access</p>
-          <h2 id="wholesale-form-title">Tell us about your work.</h2>
-          <p>{inquiryIntros.wholesale}</p>
-          <ul className="form-section__list">
-            <li>For florists, designers, and shops</li>
-            <li>Approval keeps the list personal</li>
-            <li>Availability and pricing by email</li>
-          </ul>
-        </div>
-        <InquiryForm kind="wholesale" submitLabel="Request access" />
+      <section className="section-wrap wholesale-questions" aria-label="Wholesale questions">
+        <p>Have a wholesale question before requesting an account? <Link href="/contact#inquiry">Contact us</Link>.</p>
       </section>
     </>
   );

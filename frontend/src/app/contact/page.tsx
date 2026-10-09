@@ -90,8 +90,8 @@ const faqs = [
     answer: (
       <>
         Florists can request an account on the{" "}
-        <Link href="/wholesale">wholesale page</Link>. Once approved, we share
-        login details and the current availability list.
+        <Link href="/wholesale">wholesale page</Link>. Once approved, they can
+        sign in with the password they chose to see live availability and pricing.
       </>
     ),
   },

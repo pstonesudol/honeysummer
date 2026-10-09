@@ -55,7 +55,8 @@ The marketing pages read live content from the API and post inquiries back to it
 
 - `GET /api/announcement/` — the current active banner announcement (or `null`)
 - `GET /api/gallery/` — active wedding portfolio images, in sort order
-- `POST /api/inquiries/` — creates an inquiry and emails both the farm and the sender
+- `POST /api/inquiries/` — creates a bouquet, wedding, or contact inquiry and emails both the farm and the sender
+- `POST /api/auth/signup/` — creates a pending wholesale account with applicant/business details for admin approval; wholesale questions use the Contact form instead
 - `GET /api/retail/flowers/` — public list of retail offerings (`channel=retail|both`) with live availability
 - `POST /api/retail/checkout/` — guest retail checkout: holds stock, creates an order, and starts Stripe Checkout
 

@@ -47,4 +47,4 @@ Use `lucide-react` outline icons with rounded strokes. Default to `1.8` stroke w
 - Errors render inline in a `role="alert"` region above the submit button, never as a browser alert.
 - Submit buttons show a spinner and disable while the server action is pending.
 - A visually hidden honeypot field screens bots without affecting assistive technology.
-- Inquiry forms are defined once in `src/lib/inquiry-fields.ts` and rendered by the shared `InquiryForm` client component, so the bouquet, wedding, contact, and wholesale forms stay consistent.
+- Inquiry forms are defined once in `src/lib/inquiry-fields.ts` and rendered by the shared `InquiryForm` client component for bouquets, weddings, and general contact. Wholesale access uses the account signup form instead; wholesale questions link to Contact.

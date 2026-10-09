@@ -35,9 +35,13 @@ async def test_signup_creates_unapproved_profile_and_notifies_the_farm(sent):
         "/api/auth/signup/",
         json={
             "business_name": "Fern & Fig",
+            "name": "Jamie Rivera",
             "email": "New@Example.com",
             "password": "flowers-are-nice",
             "phone": "570-555-0100",
+            "business_type": "florist",
+            "website": "https://example.com",
+            "message": "Seasonal wedding designs",
         },
     )
 
@@ -48,9 +52,14 @@ async def test_signup_creates_unapproved_profile_and_notifies_the_farm(sent):
     assert user.email == "new@example.com"
     assert user.profile.approved is False
     assert user.profile.business_name == "Fern & Fig"
+    assert user.profile.contact_name == "Jamie Rivera"
+    assert user.profile.business_type == "florist"
+    assert user.profile.website == "https://example.com"
+    assert user.profile.about_work == "Seasonal wedding designs"
     assert len(sent) == 1
     assert sent[0]["to"] == "hello@hellohoneysummer.com"
     assert "new@example.com" in sent[0]["body"]
+    assert "Jamie Rivera" in sent[0]["body"]
 
 
 @pytest.mark.asyncio
@@ -59,7 +68,7 @@ async def test_signup_rejects_a_duplicate_email(sent):
 
     _, response = await app.asgi_client.post(
         "/api/auth/signup/",
-        json={"business_name": "X", "email": "florist@example.com", "password": "flowers-are-nice"},
+        json={"name": "Jamie", "business_name": "X", "email": "florist@example.com", "password": "flowers-are-nice"},
     )
 
     assert response.status == 400
@@ -72,6 +81,19 @@ async def test_signup_requires_business_email_and_password(sent):
     )
 
     assert response.status == 400
+    async with session_scope() as session:
+        assert (await session.scalar(select(User))) is None
+
+
+@pytest.mark.asyncio
+async def test_signup_requires_contact_name_and_rejects_unknown_business_type(sent):
+    details = {"business_name": "Fern & Fig", "email": "new@example.com", "password": "flowers-are-nice"}
+    _, missing_name = await app.asgi_client.post("/api/auth/signup/", json=details)
+    _, invalid_type = await app.asgi_client.post(
+        "/api/auth/signup/", json={**details, "name": "Jamie", "business_type": "unknown"}
+    )
+    assert missing_name.status == 400
+    assert invalid_type.status == 400
     async with session_scope() as session:
         assert (await session.scalar(select(User))) is None
 

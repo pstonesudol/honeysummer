@@ -82,3 +82,10 @@ async def test_rejects_a_missing_email(sent):
     assert response.status == 400
     assert "email" in response.json
     assert await _inquiry_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_wholesale_access_requests_must_use_signup(sent):
+    _, response = await app.asgi_client.post("/api/inquiries/", data=_form(kind="wholesale"))
+    assert response.status == 400
+    assert await _inquiry_count() == 0

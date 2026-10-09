@@ -6,7 +6,7 @@ import { getApiBaseUrl } from "@/lib/api";
 import { inquiryFields, type InquiryKind, type InquiryState } from "@/lib/inquiry-fields";
 import { site } from "@/lib/site";
 
-const KINDS: InquiryKind[] = ["bouquet", "wedding", "contact", "wholesale"];
+const KINDS: InquiryKind[] = ["bouquet", "wedding", "contact"];
 
 function apiErrorMessage(data: unknown): string {
   if (data && typeof data === "object") {

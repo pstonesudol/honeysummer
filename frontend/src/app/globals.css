@@ -108,7 +108,8 @@ textarea {
 .wholesale-access { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; padding: 3rem; background: var(--paper); border-radius: 1.5rem; box-shadow: var(--shadow); }
 .wholesale-auth { display: grid; gap: 1rem; align-content: start; }
 .wholesale-auth label, .quantity label { display: grid; gap: .35rem; font-family: var(--font-geist), sans-serif; font-size: 1rem; }
-.wholesale-auth input, .quantity input { border: 1px solid var(--taupe); border-radius: .5rem; background: var(--cream-light); padding: .7rem; }
+.wholesale-auth input, .wholesale-auth select, .wholesale-auth textarea, .quantity input { border: 1px solid var(--taupe); border-radius: .5rem; background: var(--cream-light); padding: .7rem; }
+.wholesale-auth textarea { resize: vertical; }
 .wholesale-shop__heading { display: flex; justify-content: space-between; align-items: end; margin-bottom: 1.5rem; }
 .flower-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
 .flower-card { overflow: hidden; background: var(--paper); border-radius: 1rem; box-shadow: var(--shadow); }

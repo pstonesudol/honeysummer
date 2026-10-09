@@ -1,4 +1,4 @@
-"""Inquiry intake: bouquet, wedding, contact, and wholesale access requests."""
+"""Inquiry intake: bouquet, wedding, and general contact requests."""
 
 import json
 import re
@@ -17,7 +17,7 @@ from ..settings import get_settings
 
 bp = Blueprint("inquiries", url_prefix="/api")
 
-KINDS = {"bouquet", "wedding", "contact", "wholesale"}
+KINDS = {"bouquet", "wedding", "contact"}
 MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
 
