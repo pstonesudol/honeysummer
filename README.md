@@ -73,6 +73,9 @@ instead of overwriting available quantity. Set up the independent scheduled
 reconciliation job before accepting live orders. See
 [`backend/INVENTORY_RUNBOOK.md`](backend/INVENTORY_RUNBOOK.md) for reservation,
 payment/refund, manual market sales, job commands, and incident procedures.
+For Stripe Dashboard Tap to Pay setup and the in-person sale workflow, see
+[`IN_PERSON_SALES.md`](IN_PERSON_SALES.md). Dashboard payments do not create
+website orders; record listed items in the admin inventory journal separately.
 
 ## Deployment
 
