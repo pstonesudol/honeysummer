@@ -121,6 +121,27 @@ class Inquiry(Base):
         return f"{self.kind} — {self.name}"
 
 
+class BouquetProposal(Base):
+    """An inquiry's editable draft and immutable sent invoice snapshots."""
+
+    __tablename__ = "bouquet_proposals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inquiry_id: Mapped[int] = mapped_column(ForeignKey("inquiries.id"), unique=True)
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    draft: Mapped[dict] = mapped_column(JSON, default=dict)
+    history: Mapped[list] = mapped_column(JSON, default=list)
+    activity: Mapped[list] = mapped_column(JSON, default=list)
+    internal_notes: Mapped[str] = mapped_column(Text, default="")
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    stripe_invoice_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
+    invoice_url: Mapped[str] = mapped_column(Text, default="")
+    invoice_number: Mapped[str] = mapped_column(String(100), default="")
+    order_id: Mapped[Optional[int]] = mapped_column(ForeignKey("orders.id"), unique=True, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class FlowerListing(Base):
     __tablename__ = "flower_listings"
     __table_args__ = (

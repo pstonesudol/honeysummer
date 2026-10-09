@@ -50,10 +50,16 @@
 </form>{% endif %}
 {% if obj and admin.slug == 'orders' %}
 <h2>Order items</h2>
-{% if obj.items %}
+{% if order_proposal %}<p><a href="/admin/proposals/{{ order_proposal.id }}">Bouquet proposal #{{ order_proposal.id }}</a></p>{% endif %}
+{% if obj.items or order_proposal %}
 <table>
   <thead><tr><th>Item</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead>
   <tbody>
+  {% if order_proposal %}
+  {% for line in order_proposal.history[-1].draft.lines %}
+    <tr><td>{{ line.name }}{% if line.listing_id %} (FL-{{ '%04d'|format(line.listing_id) }}){% endif %}</td><td>{{ line.quantity }}</td><td>${{ '%.2f'|format(line.unit_cents / 100) }}</td><td>${{ '%.2f'|format(line.unit_cents * line.quantity / 100) }}</td></tr>
+  {% endfor %}
+  {% else %}
   {% for item in obj.items %}
     <tr>
       <td>{{ item.name_snapshot }}</td>
@@ -62,6 +68,7 @@
       <td>${{ '%.2f'|format(item.price_snapshot * item.quantity) }}</td>
     </tr>
   {% endfor %}
+  {% endif %}
   <tr><th colspan="3">Items subtotal</th><td>${{ '%.2f'|format(order_total - obj.delivery_fee) }}</td></tr>
   {% if obj.delivery_fee %}<tr><th colspan="3">Delivery fee</th><td>${{ '%.2f'|format(obj.delivery_fee) }}</td></tr>{% endif %}
   <tr><th colspan="3">Order total</th><th>${{ '%.2f'|format(order_total) }}</th></tr>
@@ -73,5 +80,8 @@
 {% endif %}
 {% if obj and admin.slug == 'flowers' %}
 <p><a href="/admin/flowers/{{ obj.id }}/inventory">View inventory history and adjust stock</a></p>
+{% endif %}
+{% if obj and admin.slug == 'inquiries' and obj.kind == 'bouquet' %}
+<p><a class="button" href="/admin/proposals/{{ proposal_id if proposal_id else 'from-inquiry/' ~ obj.id }}">{{ 'Open bouquet proposal' if proposal_id else 'Start bouquet proposal' }}</a></p>
 {% endif %}
 {% endblock %}

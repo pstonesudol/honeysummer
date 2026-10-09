@@ -43,6 +43,7 @@
     <span class="brand">Honey Summer admin</span>
     <a href="/admin/">Dashboard</a>
     {% for item in models %}<a href="/admin/{{ item.slug }}">{{ item.label }}</a>{% endfor %}
+    <a href="/admin/proposals/">Bouquet proposals</a>
     <form class="inline" method="post" action="/admin/logout" style="margin-left:auto">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="button--ghost button--sm" type="submit">Sign out</button>

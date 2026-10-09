@@ -122,7 +122,11 @@ async def stripe_webhook(request):
 
     if not event.get("id"):
         return json({"detail": "Missing Stripe event ID."}, status=400)
-    outcome = await apply_checkout_event(event)
+    if event.get("type", "").startswith("invoice."):
+        from ..proposals import apply_invoice_event
+        outcome = await apply_invoice_event(event)
+    else:
+        outcome = await apply_checkout_event(event)
     if outcome == "review":
         logger.error("Stripe event %s (%s) requires manual reconciliation", event.get("id"), event.get("type"))
         return json({"detail": "Stripe event requires reconciliation."}, status=409)

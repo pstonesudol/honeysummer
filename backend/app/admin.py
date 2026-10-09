@@ -28,6 +28,7 @@ from .auth import verify_password
 from .db import session_scope
 from .models import (
     Announcement,
+    BouquetProposal,
     FlowerListing,
     FloristProfile,
     GalleryImage,
@@ -606,14 +607,160 @@ async def model_edit(request, slug: str, pk: int):
         for f in admin.fields
     ]
     order_total = None
+    order_proposal = None
     if slug == "orders":
         order_total = sum(
             (item.price_snapshot * item.quantity for item in obj.items), Decimal("0")
         ) + obj.delivery_fee
+        async with session_scope() as db:
+            order_proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.order_id == pk))
+        if order_proposal and order_proposal.history:
+            order_total = Decimal(order_proposal.history[-1]["draft"]["total_cents"]) / 100
     return _page(
         request, "admin/edit.html", admin=admin, obj=obj, rows=rows,
-        order_total=order_total,
+        order_total=order_total, order_proposal=order_proposal,
+        proposal_id=(await _proposal_for_inquiry(pk)) if slug == "inquiries" and obj.kind == "bouquet" else None,
     )
+
+
+async def _proposal_for_inquiry(inquiry_id: int) -> int | None:
+    async with session_scope() as db:
+        return await db.scalar(select(BouquetProposal.id).where(BouquetProposal.inquiry_id == inquiry_id))
+
+
+@bp.get("/proposals/")
+async def proposals_list(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        proposals = (await db.scalars(select(BouquetProposal).order_by(BouquetProposal.id.desc()))).all()
+    return _page(request, "admin/proposals.html", proposals=proposals)
+
+
+@bp.get("/proposals/from-inquiry/<inquiry_id:int>")
+async def proposal_start_page(request, inquiry_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        inquiry = await db.get(Inquiry, inquiry_id)
+        existing = await db.scalar(select(BouquetProposal.id).where(BouquetProposal.inquiry_id == inquiry_id))
+    if not inquiry or inquiry.kind != "bouquet":
+        return json({"detail": "Only bouquet inquiries can become proposals."}, status=404)
+    if existing:
+        return redirect(f"/admin/proposals/{existing}")
+    return _page(request, "admin/proposal.html", inquiry=inquiry, proposal=None, draft={}, error=None)
+
+
+@bp.post("/proposals/from-inquiry/<inquiry_id:int>")
+async def proposal_start(request, inquiry_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    async with session_scope() as db:
+        inquiry = await db.get(Inquiry, inquiry_id)
+        if not inquiry or inquiry.kind != "bouquet":
+            return json({"detail": "Only bouquet inquiries can become proposals."}, status=404)
+        existing = await db.scalar(select(BouquetProposal.id).where(BouquetProposal.inquiry_id == inquiry_id))
+        if existing:
+            return redirect(f"/admin/proposals/{existing}")
+        details = inquiry.details or {}
+        proposal = BouquetProposal(
+            inquiry_id=inquiry_id, status="draft",
+            draft=dict(
+                title=f"Custom bouquet — {details['occasion']}" if details.get("occasion") else "Custom seasonal bouquet",
+                description=inquiry.message or "",
+                fulfillment=details.get("fulfillment") if details.get("fulfillment") in ("pickup", "delivery") else "pickup",
+                location=str(details.get("desired_date") or ""),
+                terms="Seasonal flowers may be substituted with blooms of similar value and style.",
+            ),
+            history=[], activity=[dict(action="created", actor=request.ctx.admin.id, at=datetime.now(timezone.utc).isoformat())], internal_notes="",
+        )
+        db.add(proposal)
+        await db.commit()
+        return redirect(f"/admin/proposals/{proposal.id}")
+
+
+def _proposal_form(form) -> dict:
+    lines = []
+    for index in range(1, 6):
+        if str(form.get(f"name_{index}", "")).strip():
+            lines.append(dict(name=form.get(f"name_{index}"), description=form.get(f"description_{index}", ""),
+                              quantity=form.get(f"quantity_{index}"), price=form.get(f"price_{index}"),
+                              listing_id=form.get(f"listing_{index}")))
+    return dict(title=form.get("title", ""), description=form.get("description", ""),
+                terms=form.get("terms", ""), fulfillment=form.get("fulfillment", "pickup"),
+                location=form.get("location", ""), delivery=form.get("delivery", "0"), lines=lines)
+
+
+@bp.get("/proposals/<proposal_id:int>")
+async def proposal_detail(request, proposal_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        proposal = await db.get(BouquetProposal, proposal_id)
+        inquiry = await db.get(Inquiry, proposal.inquiry_id) if proposal else None
+    if not proposal:
+        return json({"detail": "Proposal not found."}, status=404)
+    return _page(request, "admin/proposal.html", proposal=proposal, inquiry=inquiry, draft=proposal.draft, error=None)
+
+
+@bp.post("/proposals/<proposal_id:int>/save")
+async def proposal_save(request, proposal_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .proposals import validate_draft
+
+    try:
+        draft = validate_draft(_proposal_form(request.form))
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=400)
+    async with session_scope() as db:
+        proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.id == proposal_id).with_for_update())
+        if not proposal or proposal.status != "draft":
+            return json({"detail": "Only drafts can be edited."}, status=409)
+        for line in draft["lines"]:
+            if line["listing_id"] and not await db.get(FlowerListing, line["listing_id"]):
+                return json({"detail": "A listing reference does not exist."}, status=400)
+        proposal.draft = draft
+        proposal.internal_notes = str(request.form.get("internal_notes", "")).strip()[:4000]
+        proposal.activity = [*(proposal.activity or []), dict(action="draft saved", actor=request.ctx.admin.id, at=datetime.now(timezone.utc).isoformat())]
+        await db.commit()
+    return redirect(f"/admin/proposals/{proposal_id}")
+
+
+@bp.post("/proposals/<proposal_id:int>/send")
+async def proposal_send(request, proposal_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .proposals import send_invoice
+    try:
+        await send_invoice(proposal_id)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    except Exception:
+        return json({"detail": "Invoice outcome is uncertain. Review Stripe before trying again."}, status=503)
+    return redirect(f"/admin/proposals/{proposal_id}")
+
+
+@bp.post("/proposals/<proposal_id:int>/<action:str>")
+async def proposal_invoice_action(request, proposal_id: int, action: str):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .proposals import update_sent_invoice
+    try:
+        await update_sent_invoice(proposal_id, action)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    except Exception:
+        return json({"detail": "Stripe outcome is uncertain; inspect the invoice before retrying."}, status=503)
+    return redirect(f"/admin/proposals/{proposal_id}")
 
 
 @bp.post("/<slug:str>/<pk:int>")

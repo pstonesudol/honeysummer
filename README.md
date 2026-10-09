@@ -99,3 +99,7 @@ Gaian and South Coast are self-hosted through `next/font/local` (`frontend/src/a
 South Coast supplies the headings and section titles; Gaian supplies body copy and the `<em>` emphasis inside headings. Both currently carry a desktop-only license, so the webfont binaries are git-ignored and a webfont license must be purchased before they are committed or deployed — see `frontend/src/app/fonts/README.md`. The header and footer wordmark continue to come from the logo image rather than a font. Site photography lives in `frontend/public/images/photography/` as web-sized JPEGs (up to 1800px). The full-resolution supplied originals are retained locally in the git-ignored `frontend/source-photos/` directory; back them up separately, since they are not committed or deployed. The homepage has a meadow splash, photographed shopping pathways, and an editorial floral feature; About features Isabella and a cutting-garden portrait; Order Flowers shows a flower bucket; Weddings & Events shows an arrangement and a seasonal gallery; Wholesale shows hand-tied stems; Contact shows a walk through the garden. The Weddings gallery continues to prefer admin-uploaded portfolio images whenever available.
 
 The implemented color, typography, icon, layout, and accessibility conventions are documented in `frontend/DESIGN_SYSTEM.md`.
+
+## Bouquet proposals
+
+Owner-led bouquet inquiry proposals and Stripe invoices: see [`backend/BOUQUET_PROPOSALS.md`](backend/BOUQUET_PROPOSALS.md).

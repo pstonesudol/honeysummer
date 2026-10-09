@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 
 from .db import session_scope
 from .emails import send_order_emails
-from .models import FlowerListing, InventoryMovement, Order, OrderItem, OrderNotification, StripeEvent
+from .models import BouquetProposal, FlowerListing, InventoryMovement, Order, OrderItem, OrderNotification, StripeEvent
 from .orders import items_context, load_order, release_order, settle_order
 from .settings import get_settings
 
@@ -97,6 +97,11 @@ async def deliver_notifications(order_id: int) -> None:
             if not notification:
                 continue
             order = await load_order(db, order_id)
+            proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.order_id == order_id))
+            context = items_context(order)
+            if proposal and proposal.history:
+                context = [dict(name=line["name"], price=f"{Decimal(line['unit_cents']) / 100:.2f}", quantity=line["quantity"])
+                           for line in proposal.history[-1]["draft"]["lines"]]
             notification.attempts += 1
             try:
                 send_order_emails(
@@ -104,7 +109,7 @@ async def deliver_notifications(order_id: int) -> None:
                     channel=order.channel, fulfillment=order.fulfillment,
                     pickup_window=order.pickup_window, delivery_address=order.delivery_address,
                     customer_email=order.customer.email if order.customer else order.customer_email,
-                    items=items_context(order), delivery_fee=order.delivery_fee,
+                    items=context, delivery_fee=order.delivery_fee,
                     recipient=recipient, raise_errors=True,
                 )
             except Exception:
@@ -154,7 +159,9 @@ async def apply_checkout_event(event: dict) -> str:
                 return "ignored"
             if order.status == "refunded":
                 return "ignored"
-            if order.status != "paid" or obj.get("amount") != expected_cents(order):
+            proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.order_id == order_id))
+            total = proposal.history[-1]["draft"]["total_cents"] if proposal and proposal.history else expected_cents(order)
+            if order.status != "paid" or obj.get("amount") != total:
                 return "review"
             order.status = "refunded"
             for item in order.items:
@@ -311,6 +318,10 @@ async def reconcile(*, apply: bool = False, full: bool = False) -> list[str]:
         if not full:
             paid_query = paid_query.where(Order.created_at >= now - timedelta(days=2))
         paid_ids = (await db.scalars(paid_query)).all()
+        invoice_ids = (await db.scalars(select(BouquetProposal.id).where(
+            BouquetProposal.stripe_invoice_id.is_not(None),
+            BouquetProposal.status.in_(("sent", "review", "stock_review", "paid")),
+        ))).all()
     for order_id in unsent_ids:
         findings.append(f"Order #{order_id}: unsent confirmation email")
         if apply:
@@ -319,6 +330,32 @@ async def reconcile(*, apply: bool = False, full: bool = False) -> list[str]:
         import stripe
 
         stripe.api_key = get_settings().stripe_secret_key
+        from .proposals import apply_invoice_event
+        for proposal_id in invoice_ids:
+            async with session_scope() as db:
+                proposal = await db.get(BouquetProposal, proposal_id)
+                invoice_id, local_status = proposal.stripe_invoice_id, proposal.status
+                snapshot = proposal.history[-1]["draft"] if proposal.history else None
+            try:
+                remote = await asyncio.to_thread(stripe.Invoice.retrieve, invoice_id)
+                if snapshot and (remote.currency != "usd" or remote.total != snapshot["total_cents"]):
+                    findings.append(f"Proposal #{proposal_id}: Stripe total/currency mismatch; manual review")
+                elif remote.status == "paid" and local_status != "paid":
+                    findings.append(f"Proposal #{proposal_id}: paid invoice not booked locally")
+                    if apply:
+                        outcome = await apply_invoice_event({"type": "invoice.paid", "data": {"object": remote}})
+                        if outcome != "applied":
+                            findings.append(f"Proposal #{proposal_id}: {outcome}; manual review")
+                elif local_status == "paid" and remote.status != "paid":
+                    findings.append(f"Proposal #{proposal_id}: local payment differs from Stripe; manual review")
+                elif remote.status == "void" and local_status == "sent":
+                    findings.append(f"Proposal #{proposal_id}: void on Stripe but sent locally")
+                    if apply:
+                        await apply_invoice_event({"type": "invoice.voided", "data": {"object": remote}})
+                elif remote.status == "open" and local_status == "sent" and remote.due_date and remote.due_date < int(now.timestamp()):
+                    findings.append(f"Proposal #{proposal_id}: invoice overdue")
+            except Exception as exc:
+                findings.append(f"Proposal #{proposal_id}: Stripe invoice lookup failed: {exc}")
         for order_id in paid_ids:
             async with session_scope() as db:
                 order = await load_order(db, order_id)

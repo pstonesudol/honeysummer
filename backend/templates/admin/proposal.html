@@ -1,0 +1,56 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Bouquet proposal {% if proposal %}#{{ proposal.id }} · {{ proposal.status }}{% else %}for inquiry #{{ inquiry.id }}{% endif %}</h1>
+<p><a href="/admin/inquiries/{{ inquiry.id }}">Original inquiry #{{ inquiry.id }}</a> · {{ inquiry.name }} · {{ inquiry.email }} · {{ inquiry.phone }}</p>
+<p class="muted">{{ inquiry.details }} · {{ inquiry.message }}</p>
+{% if inquiry.details %}<p class="muted">Requested date: {{ inquiry.details.desired_date or 'Not specified' }} · Budget: {{ inquiry.details.budget or 'Not specified' }} · Colors: {{ inquiry.details.color_preferences or 'Not specified' }} · Occasion: {{ inquiry.details.occasion or 'Not specified' }}</p>{% endif %}
+{% if not proposal %}
+<form method="post" action="/admin/proposals/from-inquiry/{{ inquiry.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button>Create draft</button></form>
+{% else %}
+{% if proposal.status == 'draft' %}
+<form method="post" action="/admin/proposals/{{ proposal.id }}/save">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<div class="grid">
+<div class="full"><label>Title<input name="title" required value="{{ draft.title or 'Custom seasonal bouquet' }}"></label></div>
+<div class="full"><label>Arrangement and design description<textarea name="description" required>{{ draft.description or '' }}</textarea></label></div>
+<div class="full"><label>Seasonal substitution / customer terms<textarea name="terms" required>{{ draft.terms or 'Seasonal flowers may be substituted with blooms of similar value and style.' }}</textarea></label></div>
+<div><label>Fulfillment<select name="fulfillment"><option value="pickup" {% if draft.fulfillment != 'delivery' %}selected{% endif %}>Pickup</option><option value="delivery" {% if draft.fulfillment == 'delivery' %}selected{% endif %}>Delivery</option></select></label></div>
+<div><label>Pickup window/location or delivery address/window<input name="location" required value="{{ draft.location or '' }}"></label></div>
+</div>
+<h2>Itemized offer</h2><p class="muted">Custom services need no listing ID. A catalogue line references a FL listing but does not reserve its stock until payment.</p>
+{% for i in range(5) %}{% set line = draft.lines[i] if draft.lines and draft.lines|length > i else {} %}
+<fieldset><legend>Line {{ i+1 }}</legend><div class="grid">
+<label>Name<input name="name_{{ i+1 }}" value="{{ line.name or '' }}"></label>
+<label>Description<input name="description_{{ i+1 }}" value="{{ line.description or '' }}"></label>
+<label>Quantity<input type="number" min="1" name="quantity_{{ i+1 }}" value="{{ line.quantity or 1 }}"></label>
+<label>Unit price ($)<input type="number" min="0" step="0.01" name="price_{{ i+1 }}" value="{{ ('%.2f'|format(line.unit_cents / 100)) if line.unit_cents is defined else '' }}"></label>
+<label>Listing ID (optional)<input type="number" min="1" name="listing_{{ i+1 }}" value="{{ line.listing_id or '' }}"></label>
+</div></fieldset>
+{% endfor %}
+<div class="grid"><label>Delivery / setup ($)<input type="number" step="0.01" min="0" name="delivery" value="{{ ('%.2f'|format(draft.delivery_cents / 100)) if draft.delivery_cents is defined else '0' }}"></label>
+<label>Internal notes (not sent to customer)<textarea name="internal_notes">{{ proposal.internal_notes }}</textarea></label></div>
+<p><button>Save draft</button></p></form>
+{% endif %}
+{% if draft.total_cents is defined %}
+<section class="card" style="display:block"><h2>Customer-facing preview</h2><h3>{{ draft.title }}</h3><p>{{ draft.description }}</p>
+<table><tr><th>Item</th><th>Quantity</th><th>Unit</th><th>Total</th></tr>
+{% for line in draft.lines %}<tr><td>{{ line.name }}<br>{{ line.description }}</td><td>{{ line.quantity }}</td><td>${{ '%.2f'|format(line.unit_cents / 100) }}</td><td>${{ '%.2f'|format(line.unit_cents * line.quantity / 100) }}</td></tr>{% endfor %}
+<tr><th colspan="3">Delivery / setup</th><td>${{ '%.2f'|format(draft.delivery_cents / 100) }}</td></tr>
+<tr><th colspan="3">Total USD</th><th>${{ '%.2f'|format(draft.total_cents / 100) }}</th></tr></table>
+<p>{{ draft.fulfillment }}: {{ draft.location }}</p><p>{{ draft.terms }}</p><p>Invoice due 7 days after sending. No stock is reserved by this proposal.</p></section>
+{% endif %}
+{% if proposal.status == 'draft' and draft.total_cents is defined %}
+<form method="post" action="/admin/proposals/{{ proposal.id }}/send" onsubmit="return confirm('Send this invoice to {{ inquiry.email }} via Stripe? Review the preview and saved draft first.');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button>Send Stripe invoice</button></form>
+{% endif %}
+{% if proposal.invoice_url %}<p><a href="{{ proposal.invoice_url }}" rel="noopener noreferrer" target="_blank">Hosted invoice / payment link ↗</a> · {{ proposal.invoice_number }}</p>{% endif %}
+{% if proposal.status == 'sent' %}
+<div class="row">{% for action in ['resend', 'void', 'revise'] %}
+<form method="post" action="/admin/proposals/{{ proposal.id }}/{{ action }}" onsubmit="return confirm('{{ action|capitalize }} this invoice in Stripe?');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button--ghost" type="submit">{{ action|capitalize }}{% if action == 'revise' %} (void old invoice){% endif %}</button></form>
+{% endfor %}</div>
+{% endif %}
+{% if proposal.order_id %}<p><a href="/admin/orders/{{ proposal.order_id }}">View booked order</a></p>{% endif %}
+{% if proposal.status in ['review', 'stock_review'] %}<p class="error">This invoice needs manual review in Stripe{% if proposal.status == 'stock_review' %} and stock reconciliation{% endif %}. Do not send another payment request.</p>{% endif %}
+{% for version in proposal.history %}<p class="muted">Version {{ version.version }} · Stripe invoice {{ version.invoice_id }} · sent {{ version.sent_at }}</p>{% endfor %}
+{% if proposal.activity %}<h2>Activity</h2>{% for entry in proposal.activity %}<p class="muted">{{ entry.at }} · {{ entry.action }}{% if entry.actor %} · admin #{{ entry.actor }}{% endif %}</p>{% endfor %}{% endif %}
+{% endif %}
+{% endblock %}
