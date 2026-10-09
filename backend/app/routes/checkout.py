@@ -123,8 +123,15 @@ async def stripe_webhook(request):
     if not event.get("id"):
         return json({"detail": "Missing Stripe event ID."}, status=400)
     if event.get("type", "").startswith("invoice."):
+        from sqlalchemy import select
+        from ..db import session_scope
+        from ..models import WeddingInvoice
         from ..proposals import apply_invoice_event
-        outcome = await apply_invoice_event(event)
+        from ..weddings import apply_wedding_invoice_event
+        invoice_id = event.get("data", {}).get("object", {}).get("id")
+        async with session_scope() as db:
+            wedding_id = await db.scalar(select(WeddingInvoice.id).where(WeddingInvoice.stripe_invoice_id == invoice_id)) if invoice_id else None
+        outcome = await (apply_wedding_invoice_event(event) if wedding_id else apply_invoice_event(event))
     else:
         outcome = await apply_checkout_event(event)
     if outcome == "review":

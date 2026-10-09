@@ -1,0 +1,17 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<div class="no-print"><p><button type="button" onclick="window.print()">Print</button> <a href="/admin/orders/{{ order.id }}">Back to order</a></p></div>
+<h1>Honey Summer · {{ order.order_reference }}</h1>
+<p>{{ order.fulfillment|capitalize }} · {{ order.fulfillment_date or 'Date not set' }} {{ order.fulfillment_time.strftime('%I:%M %p') if order.fulfillment_time else '' }} (Eastern)</p>
+<p><strong>{{ order.customer_name or order.customer_label }}</strong><br>{{ order.customer_email or (order.customer.email if order.customer else '') }}<br>{{ order.customer_phone }}<br>{{ order.delivery_address if order.fulfillment == 'delivery' else order.pickup_window }}</p>
+<h2>Prepare</h2>
+<table><thead><tr><th>Quantity</th><th>Item</th></tr></thead><tbody>
+{% if proposal and proposal.history %}
+{% for line in proposal.history[-1].draft.lines %}<tr><td>{{ line.quantity }}</td><td>{{ line.name }}{% if line.description %} · {{ line.description }}{% endif %}</td></tr>{% endfor %}
+{% else %}
+{% for item in order.items %}<tr><td>{{ item.quantity }}</td><td>{{ item.name_snapshot }}</td></tr>{% endfor %}
+{% endif %}
+</tbody></table>
+{% if order.notes %}<p><strong>Customer instructions:</strong> {{ order.notes }}</p>{% endif %}
+{% if order.internal_notes %}<p><strong>Internal notes:</strong> {{ order.internal_notes }}</p>{% endif %}
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Record a paid phone, email, or walk-in order</h1>
+<p class="muted">Only use this form after collecting payment outside website Checkout. Catalogue items deduct available stock once; custom arrangements do not affect stock. The unit price for a catalogue item comes from its current listing. Enter a separate line for each custom arrangement.</p>
+<form method="post" action="/admin/orders/manual/new">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="manual_key" value="{{ manual_key }}">
+  <div class="grid">
+    <div><label for="amount_collected">Amount collected ($), including delivery</label><input id="amount_collected" name="amount_collected" type="number" required min="0" max="999999.99" step="0.01"></div>
+    <div><label for="customer_name">Customer name</label><input id="customer_name" name="customer_name" required maxlength="200"></div>
+    <div><label for="customer_email">Customer email</label><input id="customer_email" name="customer_email" type="email" required maxlength="254"></div>
+    <div><label for="customer_phone">Phone</label><input id="customer_phone" name="customer_phone" maxlength="40"></div>
+    <div><label for="fulfillment">Fulfillment</label><select id="fulfillment" name="fulfillment"><option value="pickup">Pickup</option><option value="delivery">Delivery</option></select></div>
+    <div><label for="pickup_window">Pickup details</label><input id="pickup_window" name="pickup_window" maxlength="200"></div>
+    <div><label for="delivery_address">Delivery address (required for delivery)</label><textarea id="delivery_address" name="delivery_address" maxlength="1000"></textarea></div>
+  </div>
+  <h2>Items (up to five lines)</h2>
+  <p class="muted">Select a listing OR name a custom arrangement, then set the quantity. Custom arrangements require a price.</p>
+  {% for index in range(1, 6) %}
+  <fieldset><legend>Line {{ index }}</legend><div class="grid">
+    <div><label for="listing_{{ index }}">Catalogue listing</label><select id="listing_{{ index }}" name="listing_{{ index }}"><option value="">Custom or unused</option>{% for flower in listings %}<option value="{{ flower.id }}">{{ flower.listing_code }} · {{ flower.name }} · ${{ flower.price }} · {{ flower.quantity_available }} available</option>{% endfor %}</select></div>
+    <div><label for="name_{{ index }}">Custom arrangement name</label><input id="name_{{ index }}" name="name_{{ index }}" maxlength="160"></div>
+    <div><label for="quantity_{{ index }}">Quantity</label><input id="quantity_{{ index }}" name="quantity_{{ index }}" type="number" min="1" max="9999"></div>
+    <div><label for="price_{{ index }}">Custom unit price ($)</label><input id="price_{{ index }}" name="price_{{ index }}" type="number" min="0" max="999999.99" step="0.01"></div>
+  </div></fieldset>
+  {% endfor %}
+  <div class="grid">
+    <div><label for="payment_method">Payment received through</label><select id="payment_method" name="payment_method"><option value="cash">Cash</option><option value="external">External (e.g. Stripe Dashboard)</option></select></div>
+    <div><label for="payment_reference">External payment reference</label><input id="payment_reference" name="payment_reference" maxlength="255"></div>
+    <div class="full"><label for="notes">Customer instructions</label><textarea id="notes" name="notes" maxlength="4000"></textarea></div>
+  </div>
+  <label><input type="checkbox" name="payment_confirmed" required> I verified that this payment was actually collected.</label>
+  <p><button type="submit">Record paid order</button> <a href="/admin/orders">Cancel</a></p>
+</form>
+{% endblock %}

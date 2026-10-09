@@ -1,0 +1,14 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Shop-wide inventory</h1>
+<div class="table-scroll"><table><thead><tr><th>Listing</th><th>Channel</th><th>Available</th><th>Reserved</th><th>On hand</th><th>Alert at</th></tr></thead><tbody>
+{% for flower in flowers %}<tr><td><a href="/admin/flowers/{{ flower.id }}/inventory">{{ flower.listing_code }} · {{ flower.name }}</a></td><td>{{ flower.channel }}</td><td>{{ flower.quantity_available }}</td><td>{{ reserved.get(flower.id, 0) }}</td><td>{{ flower.quantity_available + reserved.get(flower.id, 0) }}</td><td>{{ flower.low_stock_threshold }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>Bulk harvest / restock</h2>
+<form method="post" action="/admin/inventory/bulk-restock">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid"><div><label for="source">Source / harvest batch</label><input id="source" name="source" maxlength="100" required></div><div><label for="reason">Reason</label><input id="reason" name="reason" maxlength="255" required></div></div>
+  {% for index in range(1, 11) %}<div class="grid"><div><label for="listing_{{ index }}">Listing {{ index }}</label><select id="listing_{{ index }}" name="listing_{{ index }}"><option value="">Choose listing</option>{% for flower in flowers %}<option value="{{ flower.id }}">{{ flower.listing_code }} · {{ flower.name }}</option>{% endfor %}</select></div><div><label for="units_{{ index }}">Units to add</label><input id="units_{{ index }}" name="units_{{ index }}" type="number" min="1" max="999999"></div></div>{% endfor %}
+  <p><button type="submit">Record restock</button></p>
+</form>
+{% endblock %}

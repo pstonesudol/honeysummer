@@ -5,7 +5,7 @@ Typed SQLAlchemy 2.0 models with clean table names; Alembic owns the schema.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -13,12 +13,14 @@ from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
     Numeric,
     String,
     Text,
+    Time,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -105,6 +107,7 @@ class GalleryImage(Base):
 
 class Inquiry(Base):
     __tablename__ = "inquiries"
+    __table_args__ = (CheckConstraint("stage IN ('new', 'contacted', 'quoted', 'booked', 'closed')", name="inquiry_stage_valid"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kind: Mapped[str] = mapped_column(String(20))
@@ -115,6 +118,9 @@ class Inquiry(Base):
     details: Mapped[dict] = mapped_column(JSON, default=dict)
     photo: Mapped[str] = mapped_column(String(255), default="")
     handled: Mapped[bool] = mapped_column(Boolean, default=False)
+    stage: Mapped[str] = mapped_column(String(20), default="new")
+    follow_up_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    internal_notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     def __str__(self) -> str:
@@ -142,11 +148,52 @@ class BouquetProposal(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class WeddingQuote(Base):
+    """An event quote; deposits book work, full payment creates the order."""
+
+    __tablename__ = "wedding_quotes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inquiry_id: Mapped[int] = mapped_column(ForeignKey("inquiries.id"), unique=True)
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    draft: Mapped[dict] = mapped_column(JSON, default=dict)
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    payment_mode: Mapped[str] = mapped_column(String(20), default="full")
+    deposit_cents: Mapped[int] = mapped_column(Integer, default=0)
+    installments: Mapped[list] = mapped_column(JSON, default=list)
+    initial_send_mode: Mapped[str] = mapped_column(String(12), default="manual")
+    initial_send_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    initial_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    balance_send_mode: Mapped[str] = mapped_column(String(12), default="manual")
+    balance_send_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    balance_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    order_id: Mapped[Optional[int]] = mapped_column(ForeignKey("orders.id"), unique=True, nullable=True)
+    activity: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class WeddingInvoice(Base):
+    __tablename__ = "wedding_invoices"
+    __table_args__ = (UniqueConstraint("quote_id", "step", name="uq_wedding_invoice_step"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    quote_id: Mapped[int] = mapped_column(ForeignKey("wedding_quotes.id"), index=True)
+    step: Mapped[str] = mapped_column(String(10))  # full | deposit | balance
+    status: Mapped[str] = mapped_column(String(20), default="issuing")
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    stripe_invoice_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
+    hosted_url: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class FlowerListing(Base):
     __tablename__ = "flower_listings"
     __table_args__ = (
         CheckConstraint("delivery_fee >= 0", name="flower_delivery_fee_nonnegative"),
         CheckConstraint("quantity_available >= 0", name="flower_available_nonnegative"),
+        CheckConstraint("low_stock_threshold >= 0", name="flower_low_stock_threshold_nonnegative"),
         CheckConstraint(
             "delivery_fee_mode IN ('per_listing', 'per_unit', 'per_order')",
             name="flower_delivery_fee_mode_valid",
@@ -168,6 +215,7 @@ class FlowerListing(Base):
     channel: Mapped[str] = mapped_column(String(10), default="wholesale")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    low_stock_threshold: Mapped[int] = mapped_column(Integer, default=5)
 
     @property
     def available(self) -> bool:
@@ -201,6 +249,7 @@ class InventoryMovement(Base):
 
 class Order(Base):
     __tablename__ = "orders"
+    __table_args__ = (CheckConstraint("fulfillment_state IN ('new', 'preparing', 'ready', 'completed')", name="order_fulfillment_state_valid"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # Wholesale orders reference the approved florist account. Retail orders
@@ -218,6 +267,14 @@ class Order(Base):
     pickup_window: Mapped[str] = mapped_column(String(200), default="")
     delivery_address: Mapped[str] = mapped_column(Text, default="")
     notes: Mapped[str] = mapped_column(Text, default="")
+    internal_notes: Mapped[str] = mapped_column(Text, default="")
+    fulfillment_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    fulfillment_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
+    fulfillment_state: Mapped[str] = mapped_column(String(20), default="new")
+    activity: Mapped[list] = mapped_column(JSON, default=list)
+    payment_method: Mapped[str] = mapped_column(String(20), default="stripe_checkout")
+    payment_reference: Mapped[str] = mapped_column(String(255), default="")
+    manual_key: Mapped[Optional[str]] = mapped_column(String(36), unique=True, nullable=True)
     stripe_session_id: Mapped[Optional[str]] = mapped_column(
         String(255), unique=True, nullable=True
     )
@@ -259,13 +316,13 @@ class OrderItem(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"))
-    listing_id: Mapped[int] = mapped_column(ForeignKey("flower_listings.id"))
+    listing_id: Mapped[Optional[int]] = mapped_column(ForeignKey("flower_listings.id"), nullable=True)
     name_snapshot: Mapped[str] = mapped_column(String(160))
     price_snapshot: Mapped[Decimal] = mapped_column(Numeric(8, 2))
     quantity: Mapped[int] = mapped_column(Integer)
 
     order: Mapped[Order] = relationship(back_populates="items")
-    listing: Mapped[FlowerListing] = relationship()
+    listing: Mapped[Optional[FlowerListing]] = relationship()
 
 
 class StripeEvent(Base):

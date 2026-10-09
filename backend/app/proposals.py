@@ -192,7 +192,8 @@ async def apply_invoice_event(event: dict) -> str:
                 return "review"
             inquiry = await db.get(Inquiry, proposal.inquiry_id)
             order = Order(customer_name=inquiry.name, customer_email=inquiry.email, customer_phone=inquiry.phone,
-                          channel="retail", status="paid", fulfillment=snapshot["fulfillment"],
+                           channel="retail", status="paid", payment_method="stripe_invoice",
+                           payment_reference=invoice_id, fulfillment=snapshot["fulfillment"],
                           pickup_window=snapshot["location"] if snapshot["fulfillment"] == "pickup" else "",
                           delivery_address=snapshot["location"] if snapshot["fulfillment"] == "delivery" else "",
                           delivery_fee=Decimal(snapshot["delivery_cents"]) / 100,

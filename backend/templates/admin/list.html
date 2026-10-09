@@ -3,15 +3,18 @@
 <div class="row" style="justify-content:space-between">
   <h1>{{ admin.label }}</h1>
   {% if admin.can_create %}<a class="button" href="/admin/{{ admin.slug }}/new">New</a>{% endif %}
+  {% if admin.slug == 'orders' %}<a class="button" href="/admin/orders/manual/new">Record paid order</a>{% endif %}
 </div>
-{% if admin.search %}
+{% if admin.search or admin.slug == 'orders' %}
 <form method="get" action="/admin/{{ admin.slug }}" class="row" style="margin:0 0 0.75rem">
-  <input type="text" name="q" value="{{ query }}" placeholder="Search…" style="max-width:280px">
+  {% if admin.search %}<label for="list-q">Search</label><input id="list-q" type="text" name="q" value="{{ query }}" placeholder="Search…" style="max-width:280px">{% endif %}
+  {% if admin.slug == 'orders' %}<label for="list-status">Status</label><select id="list-status" name="status" style="max-width:160px">{% for value in ['', 'pending', 'paid', 'refunded', 'cancelled', 'expired'] %}<option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ value|capitalize if value else 'All' }}</option>{% endfor %}</select>{% endif %}
   <button class="button--ghost" type="submit">Search</button>
 </form>
 {% endif %}
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
-<table>
+<p class="muted">{{ total }} result{{ '' if total == 1 else 's' }} · page {{ page_number }} of {{ pages }}</p>
+<div class="table-scroll"><table>
   <thead>
     <tr>{% for label, _ in admin.list_columns %}<th>{{ label }}</th>{% endfor %}<th></th></tr>
   </thead>
@@ -52,4 +55,20 @@
   {% endfor %}
   </tbody>
 </table>
+ </div>
+<nav class="row" aria-label="List pages">
+  {% if page_number > 1 %}<a href="?q={{ query|urlencode }}&status={{ status_filter }}&page={{ page_number - 1 }}">Previous</a>{% endif %}
+  {% if page_number < pages %}<a href="?q={{ query|urlencode }}&status={{ status_filter }}&page={{ page_number + 1 }}">Next</a>{% endif %}
+</nav>
+{% if admin.slug == 'flowers' %}
+<h2>Bulk listing update</h2>
+<p class="muted">Enter listing IDs separated by commas. This changes only activation, channel or price; stock and order price snapshots remain untouched.</p>
+<form method="post" action="/admin/flowers/bulk-update" class="grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div><label for="listing_ids">Listing IDs</label><input id="listing_ids" name="listing_ids" placeholder="1, 2, 3" required></div>
+  <div><label for="bulk-action">Update</label><select id="bulk-action" name="action"><option value="active">Active (true/false)</option><option value="channel">Channel (retail/wholesale/both)</option><option value="price">Price (USD)</option></select></div>
+  <div><label for="bulk-value">New value</label><input id="bulk-value" name="value" required></div>
+  <div><label>&nbsp;</label><button type="submit">Update selected listings</button></div>
+</form>
+{% endif %}
 {% endblock %}

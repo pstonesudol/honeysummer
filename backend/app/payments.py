@@ -165,6 +165,8 @@ async def apply_checkout_event(event: dict) -> str:
                 return "review"
             order.status = "refunded"
             for item in order.items:
+                if item.listing_id is None:
+                    continue  # Custom services have no inventory journal.
                 db.add(InventoryMovement(
                     listing_id=item.listing_id, order_id=order.id, kind="refund", delta=0,
                     units=item.quantity, reason="Full refund; no automatic restock", source="stripe",

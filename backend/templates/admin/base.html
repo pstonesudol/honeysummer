@@ -5,18 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Honey Summer admin{% endblock %}</title>
   <style>
-    :root { --bg:#F6F2EA; --ink:#6A4E42; --accent:#D7B3B6; --surface:#fff; --taupe:#C8B6A6; --gold:#E6CFAE; }
+    :root { --bg:#F6F2EA; --ink:#4C342D; --accent:#D7B3B6; --surface:#fffdf9; --taupe:#C8B6A6; --gold:#E6CFAE; }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
-    header { background:var(--surface); border-bottom:1px solid var(--taupe); padding:0.75rem 1rem; display:flex; flex-wrap:wrap; gap:0.4rem 1rem; align-items:center; }
-    header a { color:var(--ink); text-decoration:none; font-size:0.9rem; }
+    [hidden] { display:none !important; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); line-height:1.5; }
+    header { background:var(--surface); border-bottom:1px solid var(--taupe); padding:0.75rem 1rem; }
+    header nav { display:flex; flex-wrap:wrap; gap:0.3rem 0.7rem; align-items:center; max-width:1240px; margin:auto; }
+    header a { color:var(--ink); text-decoration:none; font-size:0.88rem; border-radius:8px; padding:0.25rem 0.4rem; }
     header a:hover { text-decoration:underline; }
-    .brand { font-weight:700; margin-right:0.5rem; }
-    main { max-width:1000px; margin:0 auto; padding:1rem; }
-    h1 { font-size:1.4rem; margin:0.5rem 0 1rem; }
+    .brand { font-family:Georgia, serif; font-size:1.25rem; font-weight:700; margin-right:0.5rem; white-space:nowrap; }
+    main { max-width:1240px; margin:0 auto; padding:1.5rem; }
+    h1, h2 { font-family:Georgia, serif; letter-spacing:-0.02em; }
+    h1 { font-size:clamp(1.65rem, 3vw, 2.4rem); margin:0.5rem 0 1rem; }
+    h2 { margin-top:2rem; font-size:1.35rem; }
     table { width:100%; border-collapse:collapse; background:var(--surface); border-radius:12px; overflow:hidden; }
     th, td { text-align:left; padding:0.6rem 0.75rem; border-bottom:1px solid #eee; font-size:0.9rem; vertical-align:top; }
-    th { background:var(--gold); }
+    th { background:#ede2d3; }
+    tbody tr:hover { background:#faf1ed; }
     .button, button { background:var(--ink); color:#fff; border:0; border-radius:999px; padding:0.5rem 0.9rem; font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
     .button:hover, button:hover { opacity:0.9; }
     .button--ghost { background:transparent; color:var(--ink); border:1px solid var(--taupe); }
@@ -24,31 +29,41 @@
     form.inline { display:inline; }
     .actions-cell { min-width:190px; }
     .actions { display:flex; align-items:center; flex-wrap:wrap; gap:0.4rem; }
-    .card { background:var(--surface); border-radius:12px; padding:1rem; margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem; color:var(--ink); text-decoration:none; }
+    .card { background:var(--surface); border:1px solid #e8dcd0; box-shadow:0 3px 16px #6a4e4210; border-radius:16px; padding:1.1rem; margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem; color:var(--ink); text-decoration:none; }
+    .card strong { font-family:Georgia, serif; font-size:1.6rem; }
     .grid { display:grid; grid-template-columns:1fr; gap:0.5rem 1rem; }
     label { display:block; font-size:0.8rem; margin:0.6rem 0 0.2rem; }
-    input[type=text], input[type=email], input[type=password], input[type=number], textarea, select { width:100%; padding:0.5rem; border:1px solid var(--taupe); border-radius:8px; font:inherit; background:#fff; color:var(--ink); }
+    input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=time], textarea, select { width:100%; padding:0.5rem; border:1px solid var(--taupe); border-radius:8px; font:inherit; background:#fff; color:var(--ink); }
     input[type=checkbox] { width:1.1rem; height:1.1rem; margin-top:0.4rem; }
     .row { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
     .muted { color:#8a7368; font-size:0.85rem; }
     pre { white-space:pre-wrap; word-break:break-word; margin:0; font-size:0.8rem; }
     .error { background:#f8dede; border:1px solid var(--accent); padding:0.6rem 0.75rem; border-radius:8px; margin-bottom:0.75rem; }
     img.preview { max-width:160px; border-radius:8px; display:block; margin-top:0.4rem; }
+    fieldset { border:1px solid var(--taupe); border-radius:12px; margin:0.8rem 0; padding:0.8rem; }
+    .table-scroll { overflow-x:auto; margin-bottom:1rem; }
+    a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:3px solid #965576; outline-offset:2px; }
+    @media print { header, .no-print, button { display:none !important; } body { background:white; color:black; } main { max-width:none; } }
     @media (min-width:640px){ .grid { grid-template-columns:1fr 1fr; } .grid .full { grid-column:1 / -1; } }
+    @media (max-width:680px){ main { padding:1rem; } header nav a:not(.brand) { padding:0.35rem; } th, td { white-space:nowrap; } }
   </style>
 </head>
 <body>
   {% if admin %}
-  <header>
-    <span class="brand">Honey Summer admin</span>
+   <header><nav aria-label="Admin navigation">
+     <a class="brand" href="/admin/">Honey Summer <span class="muted">· studio</span></a>
     <a href="/admin/">Dashboard</a>
     {% for item in models %}<a href="/admin/{{ item.slug }}">{{ item.label }}</a>{% endfor %}
     <a href="/admin/proposals/">Bouquet proposals</a>
+    <a href="/admin/weddings/">Wedding quotes</a>
+    <a href="/admin/inventory/stock">Shop-wide stock</a>
+    <a href="/admin/reports/sales">Sales ledger</a>
+    <a href="/admin/customers">Customers</a>
     <form class="inline" method="post" action="/admin/logout" style="margin-left:auto">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="button--ghost button--sm" type="submit">Sign out</button>
     </form>
-  </header>
+   </nav></header>
   {% endif %}
   <main>
     {% block content %}{% endblock %}

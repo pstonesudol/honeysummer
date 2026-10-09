@@ -1,0 +1,6 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Wedding & event quotes</h1>
+<p>Start a quote from a wedding inquiry. A paid deposit books work but does not mark the full order paid.</p>
+<ul>{% for quote in quotes %}<li><a href="/admin/weddings/{{ quote.id }}">Quote #{{ quote.id }}</a> · {{ quote.status }} · {{ quote.payment_mode }}</li>{% else %}<li>No quotes yet.</li>{% endfor %}</ul>
+{% endblock %}

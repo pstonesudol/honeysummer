@@ -8,18 +8,21 @@ a small per-model registry.
 from __future__ import annotations
 
 import re
+import csv
+import io
 import secrets
 import uuid
 from dataclasses import dataclass, field as dataclass_field
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import Blueprint
-from sanic.response import html, json, redirect
+from sanic.response import html, json, redirect, text
 from sqlalchemy import func, inspect as sa_inspect, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
@@ -37,6 +40,8 @@ from .models import (
     Order,
     OrderItem,
     User,
+    WeddingInvoice,
+    WeddingQuote,
 )
 from .settings import BASE_DIR, get_settings
 
@@ -150,6 +155,7 @@ REGISTRY: list[ModelAdmin] = [
             ),
             Field("active", "Active", "bool"),
             Field("sort_order", "Sort order", "int"),
+            Field("low_stock_threshold", "Low stock alert at or below", "int"),
         ],
         list_columns=[
             ("Code", "listing_code"),
@@ -158,6 +164,7 @@ REGISTRY: list[ModelAdmin] = [
             ("Channel", "channel"),
             ("Price", "price"),
             ("Qty", "quantity_available"),
+            ("Low at", "low_stock_threshold"),
             ("Sold out", "sold_out"),
             ("Active", "active"),
         ],
@@ -203,13 +210,18 @@ REGISTRY: list[ModelAdmin] = [
             Field("message", "Message", "readonly"),
             Field("details", "Details", "readonly"),
             Field("photo", "Photo", "readonly"),
-            Field("handled", "Handled", "bool"),
+            Field("handled", "Handled", "readonly"),
+            Field("stage", "Stage", "readonly"),
+            Field("follow_up_date", "Follow up", "readonly"),
+            Field("internal_notes", "Internal notes", "readonly"),
         ],
         list_columns=[
             ("Kind", "kind"),
             ("Name", "name"),
             ("Email", "email"),
             ("Handled", "handled"),
+            ("Stage", "stage"),
+            ("Follow up", "follow_up_date"),
             ("Received", "created_at"),
         ],
         order_by=["-created_at"],
@@ -235,6 +247,9 @@ REGISTRY: list[ModelAdmin] = [
             Field("pickup_window", "Pickup window", "readonly"),
             Field("delivery_address", "Delivery address", "readonly"),
             Field("notes", "Notes", "readonly"),
+            Field("fulfillment_date", "Scheduled date", "readonly"),
+            Field("fulfillment_time", "Scheduled time", "readonly"),
+            Field("fulfillment_state", "Preparation", "readonly"),
             Field("stripe_session_id", "Stripe session", "readonly"),
         ],
         list_columns=[
@@ -243,6 +258,8 @@ REGISTRY: list[ModelAdmin] = [
             ("Channel", "channel"),
             ("Status", "status"),
             ("Fulfillment", "fulfillment"),
+            ("Scheduled", "fulfillment_date"),
+            ("Preparation", "fulfillment_state"),
             ("Placed", "created_at"),
         ],
         order_by=["-created_at"],
@@ -437,6 +454,13 @@ def _flower_delivery_fee_error(form) -> str | None:
     mode = form.get("delivery_fee_mode")
     if mode is not None and mode not in ("per_listing", "per_unit", "per_order"):
         return "Choose a valid delivery fee frequency."
+    threshold = form.get("low_stock_threshold")
+    if threshold is not None:
+        try:
+            if not 0 <= int(threshold) <= 999999:
+                raise ValueError
+        except (ValueError, TypeError):
+            return "Low stock threshold must be a nonnegative whole number."
     return None
 
 
@@ -501,7 +525,54 @@ async def dashboard(request):
             counts[admin.slug] = await session.scalar(
                 select(func.count()).select_from(admin.model)
             )
-    return _page(request, "admin/dashboard.html", counts=counts)
+        today = datetime.now(ZoneInfo("America/New_York")).date()
+        upcoming = (await session.scalars(
+            select(Order).options(selectinload(Order.customer).selectinload(User.profile))
+            .where(Order.status == "paid", Order.fulfillment_state != "completed",
+                   Order.fulfillment_date >= today, Order.fulfillment_date <= today + timedelta(days=7))
+            .order_by(Order.fulfillment_date, Order.fulfillment_time, Order.id).limit(30)
+        )).all()
+        outstanding = await session.scalar(select(func.count()).select_from(Order).where(Order.status == "paid", Order.fulfillment_state != "completed"))
+        new_inquiries = await session.scalar(select(func.count()).select_from(Inquiry).where(Inquiry.handled.is_(False)))
+        due_inquiries = (await session.scalars(select(Inquiry).where(
+            Inquiry.follow_up_date.is_not(None), Inquiry.follow_up_date <= today, Inquiry.stage != "closed"
+        ).order_by(Inquiry.follow_up_date, Inquiry.id).limit(30))).all()
+        pending_florists = await session.scalar(select(func.count()).select_from(FloristProfile).where(FloristProfile.approved.is_(False)))
+        low_stock = (await session.scalars(
+            select(FlowerListing).where(FlowerListing.active.is_(True), FlowerListing.quantity_available <= FlowerListing.low_stock_threshold)
+            .order_by(FlowerListing.quantity_available, FlowerListing.id).limit(30)
+        )).all()
+    return _page(request, "admin/dashboard.html", counts=counts, upcoming=upcoming,
+                 outstanding=outstanding, new_inquiries=new_inquiries,
+                 pending_florists=pending_florists, low_stock=low_stock, today=today,
+                 due_inquiries=due_inquiries)
+
+
+@bp.post("/inquiries/<pk:int>/follow-up")
+async def inquiry_follow_up(request, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    stage = str(request.form.get("stage", ""))
+    raw_date = str(request.form.get("follow_up_date", "")).strip()
+    notes = str(request.form.get("internal_notes", "")).strip()
+    if stage not in ("new", "contacted", "quoted", "booked", "closed") or len(notes) > 4000:
+        return json({"detail": "Choose a valid stage and notes up to 4000 characters."}, status=400)
+    try:
+        follow_up = date.fromisoformat(raw_date) if raw_date else None
+    except ValueError:
+        return json({"detail": "Enter a valid follow-up date."}, status=400)
+    async with session_scope() as db:
+        inquiry = await db.get(Inquiry, pk)
+        if not inquiry:
+            return json({"detail": "Inquiry not found."}, status=404)
+        inquiry.stage = stage
+        inquiry.handled = stage == "closed"
+        inquiry.follow_up_date = follow_up
+        inquiry.internal_notes = notes
+        await db.commit()
+    return redirect(f"/admin/inquiries/{pk}")
 
 
 @bp.get("/<slug:str>")
@@ -512,6 +583,15 @@ async def model_list(request, slug: str):
     if not request.ctx.admin:
         return redirect("/admin/login")
     query = request.args.get("q", "").strip()
+    status_filter = request.args.get("status", "") if slug == "orders" else ""
+    if status_filter not in ("", "pending", "paid", "refunded", "cancelled", "expired"):
+        status_filter = ""
+    try:
+        page_number = max(1, int(request.args.get("page", "1")))
+    except ValueError:
+        page_number = 1
+    page_number = min(page_number, 100000)
+    page_size = 30
     async with session_scope() as session:
         statement = select(admin.model).options(
             *_relationship_options(
@@ -523,8 +603,11 @@ async def model_list(request, slug: str):
             statement = statement.where(
                 or_(*[getattr(admin.model, name).ilike(f"%{query}%") for name in admin.search])
             )
-        statement = statement.order_by(*_order_columns(admin.model, admin.order_by))
-        rows = (await session.execute(statement)).scalars().all()
+        if status_filter:
+            statement = statement.where(Order.status == status_filter)
+        total = await session.scalar(select(func.count()).select_from(statement.order_by(None).subquery()))
+        rows = (await session.execute(statement.order_by(*_order_columns(admin.model, admin.order_by))
+                                      .limit(page_size).offset((page_number - 1) * page_size))).scalars().all()
         display = [
             [(_display_value(row, column), column) for _, column in admin.list_columns]
             for row in rows
@@ -536,6 +619,8 @@ async def model_list(request, slug: str):
         rows=rows,
         display=display,
         query=query,
+        page_number=page_number, pages=max(1, (total + page_size - 1) // page_size),
+        total=total, status_filter=status_filter,
     )
 
 
@@ -626,6 +711,310 @@ async def model_edit(request, slug: str, pk: int):
 async def _proposal_for_inquiry(inquiry_id: int) -> int | None:
     async with session_scope() as db:
         return await db.scalar(select(BouquetProposal.id).where(BouquetProposal.inquiry_id == inquiry_id))
+
+
+@bp.get("/weddings/from-inquiry/<inquiry_id:int>")
+async def wedding_start(request, inquiry_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        inquiry = await db.get(Inquiry, inquiry_id)
+        if not inquiry or inquiry.kind != "wedding":
+            return json({"detail": "Only wedding inquiries can become event quotes."}, status=404)
+        quote = await db.scalar(select(WeddingQuote).where(WeddingQuote.inquiry_id == inquiry_id))
+    if quote:
+        return redirect(f"/admin/weddings/{quote.id}")
+    return _page(request, "admin/wedding.html", inquiry=inquiry, quote=None, invoices=[], draft={})
+
+
+@bp.get("/weddings/")
+async def weddings_list(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        quotes = (await db.scalars(select(WeddingQuote).order_by(WeddingQuote.id.desc()).limit(100))).all()
+    return _page(request, "admin/weddings.html", quotes=quotes)
+
+
+@bp.post("/weddings/from-inquiry/<inquiry_id:int>")
+async def wedding_create(request, inquiry_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    async with session_scope() as db:
+        inquiry = await db.get(Inquiry, inquiry_id)
+        if not inquiry or inquiry.kind != "wedding":
+            return json({"detail": "Only wedding inquiries can become event quotes."}, status=404)
+        existing = await db.scalar(select(WeddingQuote).where(WeddingQuote.inquiry_id == inquiry_id))
+        if existing:
+            return redirect(f"/admin/weddings/{existing.id}")
+        quote = WeddingQuote(inquiry_id=inquiry_id, draft=dict(
+            title="Wedding floral design", description=inquiry.message or "",
+            location=str((inquiry.details or {}).get("venue", "")),
+            terms="Seasonal flowers may be substituted with blooms of similar value and style.",
+            lines=[]), snapshot={}, activity=[])
+        db.add(quote)
+        await db.commit()
+    return redirect(f"/admin/weddings/{quote.id}")
+
+
+@bp.get("/weddings/<quote_id:int>")
+async def wedding_detail(request, quote_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        quote = await db.get(WeddingQuote, quote_id)
+        inquiry = await db.get(Inquiry, quote.inquiry_id) if quote else None
+        invoices = (await db.scalars(select(WeddingInvoice).where(WeddingInvoice.quote_id == quote_id).order_by(WeddingInvoice.id))).all() if quote else []
+        from .weddings import next_installment_index
+        next_part_index = await next_installment_index(db, quote) if quote and quote.status == "installment_paid" else None
+    if not quote:
+        return json({"detail": "Quote not found."}, status=404)
+    return _page(request, "admin/wedding.html", quote=quote, inquiry=inquiry, invoices=invoices,
+                 draft=quote.draft if quote.status == "draft" else quote.snapshot,
+                 next_part_index=next_part_index)
+
+
+@bp.post("/weddings/<quote_id:int>/save")
+async def wedding_save(request, quote_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .weddings import validate_installments, validate_quote, validate_schedule
+    try:
+        draft, mode, deposit = validate_quote(request.form)
+        if mode == "installments":
+            parts = validate_installments(request.form, draft["total_cents"])
+            first = parts[0]
+            schedule = dict(initial_send_mode=first["send_mode"],
+                initial_send_date=date.fromisoformat(first["send_date"]) if first["send_date"] else None,
+                initial_due_date=date.fromisoformat(first["due_date"]),
+                balance_send_mode="manual", balance_send_date=None, balance_due_date=None)
+        else:
+            parts = []
+            schedule = validate_schedule(request.form, mode)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=400)
+    async with session_scope() as db:
+        quote = await db.scalar(select(WeddingQuote).where(WeddingQuote.id == quote_id).with_for_update())
+        if not quote or quote.status != "draft":
+            return json({"detail": "Only unsent quotes can be edited."}, status=409)
+        quote.draft, quote.payment_mode, quote.deposit_cents = draft, mode, deposit
+        quote.installments = parts
+        for name, value in schedule.items():
+            setattr(quote, name, value)
+        await db.commit()
+    return redirect(f"/admin/weddings/{quote_id}")
+
+
+@bp.post("/weddings/<quote_id:int>/schedule")
+async def wedding_schedule_approve(request, quote_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .weddings import approve_wedding_schedule
+    try:
+        await approve_wedding_schedule(quote_id)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    return redirect(f"/admin/weddings/{quote_id}")
+
+
+@bp.post("/weddings/<quote_id:int>/send/<step:str>")
+async def wedding_send(request, quote_id: int, step: str):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .weddings import send_wedding_invoice
+    try:
+        await send_wedding_invoice(quote_id, step)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    except Exception:
+        return json({"detail": "Invoice outcome uncertain. Review Stripe before retrying."}, status=503)
+    return redirect(f"/admin/weddings/{quote_id}")
+
+
+@bp.post("/weddings/<quote_id:int>/refresh/<invoice_id:int>")
+async def wedding_refresh(request, quote_id: int, invoice_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    async with session_scope() as db:
+        invoice = await db.get(WeddingInvoice, invoice_id)
+        if not invoice or invoice.quote_id != quote_id:
+            return json({"detail": "Invoice not found."}, status=404)
+    from .weddings import reconcile_wedding_invoice
+    try:
+        result = await reconcile_wedding_invoice(invoice_id)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    except Exception:
+        return json({"detail": "Stripe unavailable. Try again later."}, status=503)
+    if result == "review":
+        return json({"detail": "Invoice requires payment review in Stripe."}, status=409)
+    return redirect(f"/admin/weddings/{quote_id}")
+
+
+@bp.post("/orders/<pk:int>/fulfillment")
+async def update_fulfillment(request, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    raw_date = str(request.form.get("fulfillment_date", "")).strip()
+    raw_time = str(request.form.get("fulfillment_time", "")).strip()
+    state = str(request.form.get("fulfillment_state", "")).strip()
+    notes = str(request.form.get("internal_notes", "")).strip()
+    try:
+        scheduled_date = date.fromisoformat(raw_date) if raw_date else None
+        scheduled_time = time.fromisoformat(raw_time) if raw_time else None
+    except ValueError:
+        return json({"detail": "Enter a valid schedule date and time."}, status=400)
+    if (scheduled_time and not scheduled_date) or state not in ("new", "preparing", "ready", "completed") or len(notes) > 4000:
+        return json({"detail": "Enter a valid preparation state, schedule and notes (up to 4000 characters)."}, status=400)
+    async with session_scope() as db:
+        order = await db.scalar(select(Order).where(Order.id == pk).with_for_update())
+        if order is None:
+            return json({"detail": "Order not found."}, status=404)
+        if order.status != "paid":
+            return json({"detail": "Only paid orders can be scheduled or prepared."}, status=409)
+        if order.fulfilled_at and state != "completed":
+            return json({"detail": "A completed order cannot be reopened."}, status=409)
+        before = (order.fulfillment_date, order.fulfillment_time, order.fulfillment_state, order.internal_notes)
+        after = (scheduled_date, scheduled_time, state, notes)
+        if before != after:
+            order.fulfillment_date, order.fulfillment_time, order.fulfillment_state, order.internal_notes = after
+            if state == "completed" and not order.fulfilled_at:
+                order.fulfilled_at = datetime.now(timezone.utc)
+            order.activity = [*(order.activity or []), dict(
+                action="fulfillment updated", actor=request.ctx.admin.id,
+                at=datetime.now(timezone.utc).isoformat(),
+                from_state=before[2], to_state=state,
+                date=scheduled_date.isoformat() if scheduled_date else None,
+                time=scheduled_time.isoformat(timespec="minutes") if scheduled_time else None,
+            )]
+            await db.commit()
+    return redirect(f"/admin/orders/{pk}")
+
+
+@bp.get("/orders/<pk:int>/packing-slip")
+async def packing_slip(request, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        order = await db.scalar(select(Order).options(
+            selectinload(Order.items), selectinload(Order.customer).selectinload(User.profile)
+        ).where(Order.id == pk))
+        proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.order_id == pk)) if order else None
+    if not order or order.status != "paid":
+        return json({"detail": "No paid order found."}, status=404)
+    return _page(request, "admin/packing_slip.html", order=order, proposal=proposal)
+
+
+@bp.get("/orders/manual/new")
+async def manual_order_page(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        listings = (await db.scalars(select(FlowerListing).where(FlowerListing.active.is_(True)).order_by(FlowerListing.name))).all()
+    return _page(request, "admin/manual_order.html", listings=listings, manual_key=str(uuid.uuid4()))
+
+
+@bp.post("/orders/manual/new")
+async def manual_order_submit(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .manual_orders import create_manual_order
+    from .orders import StockError
+    from .payments import deliver_notifications
+    try:
+        async with session_scope() as db:
+            order = await create_manual_order(db, request.form, request.ctx.admin.id)
+            order_id = order.id
+    except (ValueError, StockError) as exc:
+        return json({"detail": str(exc)}, status=400)
+    except IntegrityError:
+        # A repeated submission racing the first one must not charge stock twice.
+        async with session_scope() as db:
+            order_id = await db.scalar(select(Order.id).where(Order.manual_key == str(request.form.get("manual_key", ""))))
+        if order_id is None:
+            return json({"detail": "Order could not be recorded. Check the order list before retrying."}, status=409)
+    await deliver_notifications(order_id)
+    return redirect(f"/admin/orders/{order_id}")
+
+
+@bp.get("/reports/sales")
+async def sales_report(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    try:
+        start = date.fromisoformat(request.args.get("from")) if request.args.get("from") else None
+        end = date.fromisoformat(request.args.get("to")) if request.args.get("to") else None
+    except ValueError:
+        return json({"detail": "Use YYYY-MM-DD for report dates."}, status=400)
+    if start and end and end < start:
+        return json({"detail": "End date must be on or after start date."}, status=400)
+    async with session_scope() as db:
+        statement = select(Order).options(selectinload(Order.items), selectinload(Order.customer).selectinload(User.profile)).where(Order.status.in_(("paid", "refunded")))
+        # Timestamps are stored as UTC; filter on the Eastern calendar boundaries.
+        eastern = ZoneInfo("America/New_York")
+        if start:
+            statement = statement.where(Order.created_at >= datetime.combine(start, time.min, eastern).astimezone(timezone.utc))
+        if end:
+            statement = statement.where(Order.created_at < datetime.combine(end + timedelta(days=1), time.min, eastern).astimezone(timezone.utc))
+        orders = (await db.scalars(statement.order_by(Order.created_at.desc(), Order.id.desc()))).all()
+        proposal_ids = [order.id for order in orders]
+        proposals = (await db.scalars(select(BouquetProposal).where(BouquetProposal.order_id.in_(proposal_ids)))).all() if proposal_ids else []
+    by_order = {proposal.order_id: proposal for proposal in proposals}
+    rows = []
+    for order in orders:
+        proposal = by_order.get(order.id)
+        total = (Decimal(proposal.history[-1]["draft"]["total_cents"]) / 100
+                 if proposal and proposal.history else
+                 sum((item.price_snapshot * item.quantity for item in order.items), Decimal("0")) + order.delivery_fee)
+        rows.append(dict(order=order, total=total))
+    if request.args.get("format") == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(("Order", "Placed UTC", "Customer", "Channel", "Payment method", "Payment reference", "Status", "Total USD"))
+        def safe(value):
+            value = str(value or "")
+            return "'" + value if value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")) else value
+        for row in rows:
+            order = row["order"]
+            writer.writerow((order.order_reference, order.created_at.isoformat(), safe(order.customer_label),
+                             order.channel, order.payment_method, safe(order.payment_reference), order.status, f"{row['total']:.2f}"))
+        return text(output.getvalue(), content_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename=honey-summer-sales.csv"})
+    totals: dict[str, Decimal] = {}
+    for row in rows:
+        key = f"{row['order'].payment_method} · {row['order'].status}"
+        totals[key] = totals.get(key, Decimal("0")) + row["total"]
+    return _page(request, "admin/sales_report.html", rows=rows, totals=totals, start=start, end=end)
+
+
+@bp.get("/customers")
+async def customer_history(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    email = str(request.args.get("email", "")).strip().lower()
+    orders = []
+    inquiries = []
+    if email and "@" in email and len(email) <= 254:
+        async with session_scope() as db:
+            customer_id = await db.scalar(select(User.id).where(User.email == email))
+            clause = or_(func.lower(Order.customer_email) == email, Order.customer_id == customer_id) if customer_id else func.lower(Order.customer_email) == email
+            orders = (await db.scalars(select(Order).where(clause).order_by(Order.created_at.desc()).limit(100))).all()
+            inquiries = (await db.scalars(select(Inquiry).where(func.lower(Inquiry.email) == email).order_by(Inquiry.created_at.desc()).limit(100))).all()
+    return _page(request, "admin/customers.html", email=email, orders=orders, inquiries=inquiries)
 
 
 @bp.get("/proposals/")
@@ -772,6 +1161,8 @@ async def model_update(request, slug: str, pk: int):
         return redirect("/admin/login")
     if not _valid_csrf(request):
         return json({"detail": "Invalid CSRF token."}, status=403)
+    if slug == "inquiries":
+        return json({"detail": "Use the inquiry follow-up form to update its stage."}, status=400)
     if slug == "flowers" and (error := _flower_delivery_fee_error(request.form)):
         return json({"detail": error}, status=400)
     async with session_scope() as session:
@@ -825,6 +1216,7 @@ async def model_delete(request, slug: str, pk: int):
                 rows=[],
                 display=[],
                 query="",
+                total=0, page_number=1, pages=1, status_filter="",
                 error="This entry cannot be deleted because other records depend on it.",
             )
     return redirect(f"/admin/{slug}")
@@ -853,6 +1245,124 @@ async def flower_inventory(request, pk: int):
         request, "admin/inventory.html", listing=listing, movements=movements,
         reserved=reserved, on_hand=listing.quantity_available + reserved,
     )
+
+
+@bp.get("/inventory/stock")
+async def stock_overview(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        flowers = (await db.scalars(select(FlowerListing).order_by(FlowerListing.name))).all()
+        reserved_rows = (await db.execute(
+            select(OrderItem.listing_id, func.sum(OrderItem.quantity))
+            .join(Order, Order.id == OrderItem.order_id)
+            .where(Order.status == "pending", OrderItem.listing_id.is_not(None))
+            .group_by(OrderItem.listing_id)
+        )).all()
+    reserved = dict(reserved_rows)
+    return _page(request, "admin/stock_overview.html", flowers=flowers, reserved=reserved)
+
+
+@bp.post("/inventory/bulk-restock")
+async def bulk_restock(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .orders import change_stock
+    reason = str(request.form.get("reason", "")).strip()
+    source = str(request.form.get("source", "")).strip()
+    if not reason or len(reason) > 255 or not source or len(source) > 100:
+        return json({"detail": "Enter a harvest source and reason."}, status=400)
+    entries = []
+    for index in range(1, 11):
+        listing_id = str(request.form.get(f"listing_{index}", "")).strip()
+        units = str(request.form.get(f"units_{index}", "")).strip()
+        if not listing_id and not units:
+            continue
+        if not listing_id.isdigit() or not units.isdigit() or not 1 <= int(units) <= 999999:
+            return json({"detail": "Choose a listing and positive whole-number quantity for each line."}, status=400)
+        entries.append((int(listing_id), int(units)))
+    if not entries:
+        return json({"detail": "Add at least one listing to restock."}, status=400)
+    combined: dict[int, int] = {}
+    for listing_id, units in entries:
+        combined[listing_id] = combined.get(listing_id, 0) + units
+        if combined[listing_id] > 999999:
+            return json({"detail": "Too many units for one listing."}, status=400)
+    async with session_scope() as db:
+        for listing_id, units in sorted(combined.items()):
+            flower = await db.scalar(select(FlowerListing).where(FlowerListing.id == listing_id).with_for_update())
+            if not flower:
+                return json({"detail": "Listing not found; no stock was changed."}, status=404)
+            await change_stock(db, flower, units, kind="restock", units=units,
+                               actor_id=request.ctx.admin.id, reason=reason, source=source)
+        await db.commit()
+    return redirect("/admin/inventory/stock")
+
+
+@bp.post("/flowers/<pk:int>/duplicate")
+async def duplicate_flower(request, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .orders import change_stock
+    async with session_scope() as db:
+        original = await db.get(FlowerListing, pk)
+        if not original:
+            return json({"detail": "Listing not found."}, status=404)
+        duplicate = FlowerListing(
+            name=f"{original.name} (copy)"[:160], variety=original.variety,
+            color=original.color, photo=original.photo, stem_notes=original.stem_notes,
+            price=original.price, delivery_fee=original.delivery_fee,
+            delivery_fee_mode=original.delivery_fee_mode, unit=original.unit,
+            quantity_available=0, sold_out=original.sold_out, channel=original.channel,
+            active=False, sort_order=original.sort_order, low_stock_threshold=original.low_stock_threshold,
+        )
+        db.add(duplicate)
+        await db.flush()
+        await change_stock(db, duplicate, 0, kind="opening", units=0, actor_id=request.ctx.admin.id,
+                           source="duplicate", reason=f"Duplicated from {original.listing_code}; stock not copied")
+        await db.commit()
+    return redirect(f"/admin/flowers/{duplicate.id}")
+
+
+@bp.post("/flowers/bulk-update")
+async def bulk_update_flowers(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    raw_ids = str(request.form.get("listing_ids", ""))
+    try:
+        ids = sorted({int(value.strip()) for value in raw_ids.split(",")})
+    except ValueError:
+        return json({"detail": "Enter comma-separated listing IDs."}, status=400)
+    if not ids or len(ids) > 100 or any(value < 1 for value in ids):
+        return json({"detail": "Choose 1–100 valid listing IDs."}, status=400)
+    action = str(request.form.get("action", ""))
+    value = str(request.form.get("value", "")).strip()
+    if action == "active" and value not in ("true", "false"):
+        return json({"detail": "Choose active or inactive."}, status=400)
+    if action == "channel" and value not in ("retail", "wholesale", "both"):
+        return json({"detail": "Choose a valid channel."}, status=400)
+    if action == "price":
+        from .manual_orders import _money
+        try:
+            value = _money(value)
+        except ValueError as exc:
+            return json({"detail": str(exc)}, status=400)
+    elif action not in ("active", "channel"):
+        return json({"detail": "Choose an allowed bulk update."}, status=400)
+    async with session_scope() as db:
+        rows = (await db.scalars(select(FlowerListing).where(FlowerListing.id.in_(ids)).order_by(FlowerListing.id).with_for_update())).all()
+        if len(rows) != len(ids):
+            return json({"detail": "Some listings no longer exist; nothing was updated."}, status=404)
+        for flower in rows:
+            setattr(flower, action, value == "true" if action == "active" else value)
+        await db.commit()
+    return redirect("/admin/flowers")
 
 
 @bp.post("/flowers/<pk:int>/adjust")
@@ -891,6 +1401,36 @@ async def flower_adjust(request, pk: int):
     return redirect(f"/admin/flowers/{pk}/inventory")
 
 
+@bp.post("/flowers/<pk:int>/count")
+async def flower_count(request, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .orders import change_stock
+    try:
+        counted = int(str(request.form.get("on_hand", "")))
+    except ValueError:
+        return json({"detail": "Enter a whole-number physical count."}, status=400)
+    reason = str(request.form.get("reason", "")).strip()
+    if counted < 0 or counted > 999999 or not reason or len(reason) > 255:
+        return json({"detail": "Enter a nonnegative count and a reason."}, status=400)
+    async with session_scope() as db:
+        listing = await db.scalar(select(FlowerListing).where(FlowerListing.id == pk).with_for_update())
+        if not listing:
+            return json({"detail": "Listing not found."}, status=404)
+        reserved = await db.scalar(select(func.coalesce(func.sum(OrderItem.quantity), 0))
+                                   .join(Order, Order.id == OrderItem.order_id)
+                                   .where(OrderItem.listing_id == pk, Order.status == "pending"))
+        if counted < reserved:
+            return json({"detail": f"Count cannot be less than {reserved} reserved units. Resolve held orders first."}, status=409)
+        delta = counted - reserved - listing.quantity_available
+        await change_stock(db, listing, delta, kind="count", units=max(1, abs(delta)),
+                           actor_id=request.ctx.admin.id, reason=reason, source="physical_count")
+        await db.commit()
+    return redirect(f"/admin/flowers/{pk}/inventory")
+
+
 @bp.post("/<slug:str>/<pk:int>/action/<action:str>")
 async def model_action(request, slug: str, pk: int, action: str):
     admin = REGISTRY_BY_SLUG.get(slug)
@@ -919,6 +1459,8 @@ async def model_action(request, slug: str, pk: int, action: str):
                 order.status = "cancelled"
             elif action == "fulfill" and order.status == "paid" and not order.fulfilled_at:
                 order.fulfilled_at = datetime.now(timezone.utc)
+                order.fulfillment_state = "completed"
+                order.activity = [*(order.activity or []), dict(action="completed", actor=request.ctx.admin.id, at=order.fulfilled_at.isoformat())]
             elif action == "restock" and order.status == "refunded" and not order.restocked_at:
                 already = await session.scalar(
                     select(InventoryMovement.id).where(
@@ -928,7 +1470,7 @@ async def model_action(request, slug: str, pk: int, action: str):
                 if already:
                     return json({"detail": "Order has already been restocked."}, status=409)
                 from .models import FlowerListing
-                for item in sorted(order.items, key=lambda item: item.listing_id):
+                for item in sorted((item for item in order.items if item.listing_id is not None), key=lambda item: item.listing_id):
                     listing = await session.scalar(
                         select(FlowerListing).where(FlowerListing.id == item.listing_id).with_for_update()
                     )

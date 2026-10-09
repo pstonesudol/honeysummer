@@ -1,0 +1,226 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Wedding/event quote {% if quote %}#{{ quote.id }}{% else %}for {{ inquiry.name }}{% endif %}</h1>
+<p>Inquiry: <a href="/admin/inquiries/{{ inquiry.id }}">{{ inquiry.name }} · {{ inquiry.email }}</a> · {{ inquiry.created_at }}</p>
+<p class="muted">Invoices are sent by Stripe. The first deposit or installment books the work; only the final payment creates a paid order. No seasonal catalogue stock is reserved for future event florals. Enter custom work here, not current inventory listing IDs.</p>
+{% if not quote %}
+<form method="post" action="/admin/weddings/from-inquiry/{{ inquiry.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Start draft quote</button></form>
+{% elif quote.status == 'draft' %}
+<form method="post" action="/admin/weddings/{{ quote.id }}/save">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<div class="grid">
+<div><label for="wtitle">Title</label><input id="wtitle" name="title" maxlength="160" value="{{ draft.title or '' }}" required></div>
+<div><label for="wlocation">Event date, venue and setup details</label><input id="wlocation" name="location" maxlength="500" value="{{ draft.location or '' }}" required></div>
+<div class="full"><label for="wdescription">Design description</label><textarea id="wdescription" name="description" rows="4" required>{{ draft.description or '' }}</textarea></div>
+<div class="full"><label for="wterms">Customer-visible terms</label><textarea id="wterms" name="terms" rows="4" required>{{ draft.terms or '' }}</textarea></div>
+</div>
+<h2>Itemized quote</h2>
+<p class="muted">Start with one line item and add or remove rows as needed (up to 200, within Stripe's invoice-line limit).</p>
+<input type="hidden" id="line_ids" name="line_ids" value="{{ range(1, (draft.lines|length if draft.lines is defined and draft.lines else 1) + 1)|join(',') }}">
+<div id="quote-lines">
+{% for index in range(1, (draft.lines|length if draft.lines is defined and draft.lines else 1) + 1) %}{% set line = draft.lines[index - 1] if draft.lines is defined and draft.lines|length >= index else {} %}
+<fieldset data-line-id="{{ index }}"><legend>Line item {{ index }}</legend><div class="grid">
+<div class="full"><label for="name_{{ index }}">Flower arrangement or service</label><input id="name_{{ index }}" name="name_{{ index }}" maxlength="160" value="{{ line.name or '' }}"></div>
+<div><label for="quantity_{{ index }}">Quantity</label><input id="quantity_{{ index }}" type="number" name="quantity_{{ index }}" min="1" max="9999" value="{{ line.quantity or '' }}"></div>
+<div><label for="price_{{ index }}">Unit price ($)</label><input id="price_{{ index }}" type="number" step="0.01" min="0" name="price_{{ index }}" value="{{ '%.2f'|format(line.unit_cents / 100) if line.unit_cents is defined else '' }}"></div>
+</div><button class="button--ghost button--sm" type="button" data-remove-line>Remove line item</button></fieldset>{% endfor %}
+</div>
+<button id="add-quote-line" class="button--ghost" type="button">Add line item</button>
+<template id="quote-line-template"><fieldset data-line-id="__INDEX__"><legend>Line item __INDEX__</legend><div class="grid">
+<div class="full"><label for="name___INDEX__">Flower arrangement or service</label><input id="name___INDEX__" name="name___INDEX__" maxlength="160"></div>
+<div><label for="quantity___INDEX__">Quantity</label><input id="quantity___INDEX__" type="number" name="quantity___INDEX__" min="1" max="9999"></div>
+<div><label for="price___INDEX__">Unit price ($)</label><input id="price___INDEX__" type="number" step="0.01" min="0" name="price___INDEX__"></div>
+</div><button class="button--ghost button--sm" type="button" data-remove-line>Remove line item</button></fieldset></template>
+<h2>Payment plan</h2>
+<div class="grid">
+<div><label for="wpayment">Payment schedule</label><select id="wpayment" name="payment_mode"><option value="full" {% if quote.payment_mode == 'full' %}selected{% endif %}>Full upfront</option><option value="deposit" {% if quote.payment_mode == 'deposit' %}selected{% endif %}>Deposit, then balance</option><option value="installments" {% if quote.payment_mode == 'installments' %}selected{% endif %}>Installments (add payments)</option></select></div>
+<div data-payment-modes="deposit" {% if quote.payment_mode != 'deposit' %}hidden{% endif %}><label for="wdeposit">Deposit in USD</label><input id="wdeposit" name="deposit" type="number" step="0.01" min="0.50" value="{{ '%.2f'|format(quote.deposit_cents / 100) if quote.deposit_cents else '' }}"></div>
+</div>
+<section data-payment-modes="full deposit" {% if quote.payment_mode == 'installments' %}hidden{% endif %}>
+<h2>Invoice dates & sending</h2>
+<p class="muted">Dates are in Eastern time. With no due date, Stripe uses seven days after sending. Automatic sending requires the wedding scheduler to be running; it never sends the balance before the deposit is paid.</p>
+<div class="grid">
+<div><label for="initial_send_mode">First invoice</label><select id="initial_send_mode" name="initial_send_mode"><option value="manual" {% if quote.initial_send_mode == 'manual' %}selected{% endif %}>Send when I confirm</option><option value="automatic" {% if quote.initial_send_mode == 'automatic' %}selected{% endif %}>Send automatically on date</option></select></div>
+<div data-auto-date-for="initial_send_mode" {% if quote.initial_send_mode != 'automatic' %}hidden{% endif %}><label for="initial_send_date">First invoice send date</label><input id="initial_send_date" type="date" name="initial_send_date" value="{{ quote.initial_send_date or '' }}"></div>
+<div><label for="initial_due_date">First invoice due date</label><input id="initial_due_date" type="date" name="initial_due_date" value="{{ quote.initial_due_date or '' }}"></div>
+<div data-payment-modes="deposit" {% if quote.payment_mode != 'deposit' %}hidden{% endif %}><label for="balance_send_mode">Balance invoice</label><select id="balance_send_mode" name="balance_send_mode"><option value="manual" {% if quote.balance_send_mode == 'manual' %}selected{% endif %}>Send when I confirm</option><option value="automatic" {% if quote.balance_send_mode == 'automatic' %}selected{% endif %}>Send automatically on date, after deposit paid</option></select></div>
+<div data-payment-modes="deposit" data-auto-date-for="balance_send_mode" {% if quote.payment_mode != 'deposit' or quote.balance_send_mode != 'automatic' %}hidden{% endif %}><label for="balance_send_date">Balance invoice send date</label><input id="balance_send_date" type="date" name="balance_send_date" value="{{ quote.balance_send_date or '' }}"></div>
+<div data-payment-modes="deposit" {% if quote.payment_mode != 'deposit' %}hidden{% endif %}><label for="balance_due_date">Balance invoice due date</label><input id="balance_due_date" type="date" name="balance_due_date" value="{{ quote.balance_due_date or '' }}"></div>
+</div>
+</section>
+<section data-payment-modes="installments" {% if quote.payment_mode != 'installments' %}hidden{% endif %}>
+<h2>Installments</h2>
+<p class="muted">Add 2–200 payments. Enter dollars or a percentage of the quote total for each; the resulting dollar amounts must add up exactly. For an all-percentage plan totaling 100%, the last payment absorbs rounding pennies. Due dates must increase. Each invoice waits for the previous payment; past-due dates require review.</p>
+<input type="hidden" id="installment_ids" name="installment_ids" value="{{ range(1, (quote.installments|length if quote.installments else 2) + 1)|join(',') }}">
+<div id="installment-rows">
+{% for index in range(1, (quote.installments|length if quote.installments else 2) + 1) %}{% set part = quote.installments[index - 1] if quote.installments and quote.installments|length >= index else {} %}
+<fieldset data-installment-id="{{ index }}"><legend>Payment {{ index }}</legend><div class="grid">
+<div><label for="installment_type_{{ index }}">Set payment by</label><select id="installment_type_{{ index }}" name="installment_type_{{ index }}" data-installment-type><option value="amount" {% if part.amount_type != 'percent' %}selected{% endif %}>Dollar amount</option><option value="percent" {% if part.amount_type == 'percent' %}selected{% endif %}>Percentage of quote total</option></select></div>
+<div data-amount-field {% if part.amount_type == 'percent' %}hidden{% endif %}><label for="installment_amount_{{ index }}">Amount ($)</label><input id="installment_amount_{{ index }}" name="installment_amount_{{ index }}" type="number" min="0.50" max="999999.99" step="0.01" value="{{ '%.2f'|format(part.amount_cents / 100) if part.amount_cents is defined else '' }}"></div>
+<div data-percent-field {% if part.amount_type != 'percent' %}hidden{% endif %}><label for="installment_percent_{{ index }}">Percentage (%)</label><input id="installment_percent_{{ index }}" name="installment_percent_{{ index }}" type="number" min="0.01" max="100" step="0.01" value="{{ part.percent or '' }}"></div>
+<div><label for="installment_send_mode_{{ index }}">Sending</label><select id="installment_send_mode_{{ index }}" name="installment_send_mode_{{ index }}"><option value="manual" {% if part.send_mode != 'automatic' %}selected{% endif %}>Send when I confirm (after previous payment)</option><option value="automatic" {% if part.send_mode == 'automatic' %}selected{% endif %}>Send automatically on date (after previous payment)</option></select></div>
+<div data-auto-date-for="installment_send_mode_{{ index }}" {% if part.send_mode != 'automatic' %}hidden{% endif %}><label for="installment_send_date_{{ index }}">Send date</label><input id="installment_send_date_{{ index }}" name="installment_send_date_{{ index }}" type="date" value="{{ part.send_date or '' }}"></div>
+<div><label for="installment_due_date_{{ index }}">Due date</label><input id="installment_due_date_{{ index }}" name="installment_due_date_{{ index }}" type="date" value="{{ part.due_date or '' }}"></div>
+</div><button class="button--ghost button--sm" type="button" data-remove-installment>Remove payment</button></fieldset>{% endfor %}
+</div>
+<button id="add-installment" class="button--ghost" type="button">Add payment</button>
+<p id="installment-total" role="status" aria-live="polite"></p>
+<template id="installment-template"><fieldset data-installment-id="__INDEX__"><legend>Payment</legend><div class="grid">
+<div><label for="installment_type___INDEX__">Set payment by</label><select id="installment_type___INDEX__" name="installment_type___INDEX__" data-installment-type><option value="amount">Dollar amount</option><option value="percent">Percentage of quote total</option></select></div>
+<div data-amount-field><label for="installment_amount___INDEX__">Amount ($)</label><input id="installment_amount___INDEX__" name="installment_amount___INDEX__" type="number" min="0.50" max="999999.99" step="0.01"></div>
+<div data-percent-field hidden><label for="installment_percent___INDEX__">Percentage (%)</label><input id="installment_percent___INDEX__" name="installment_percent___INDEX__" type="number" min="0.01" max="100" step="0.01"></div>
+<div><label for="installment_send_mode___INDEX__">Sending</label><select id="installment_send_mode___INDEX__" name="installment_send_mode___INDEX__"><option value="manual">Send when I confirm (after previous payment)</option><option value="automatic">Send automatically on date (after previous payment)</option></select></div>
+<div data-auto-date-for="installment_send_mode___INDEX__" hidden><label for="installment_send_date___INDEX__">Send date</label><input id="installment_send_date___INDEX__" name="installment_send_date___INDEX__" type="date"></div>
+<div><label for="installment_due_date___INDEX__">Due date</label><input id="installment_due_date___INDEX__" name="installment_due_date___INDEX__" type="date"></div>
+</div><button class="button--ghost button--sm" type="button" data-remove-installment>Remove payment</button></fieldset></template>
+</section>
+<p><button type="submit">Save and preview quote</button></p></form>
+<script>
+(() => {
+  const plan = document.getElementById('wpayment');
+  const form = plan.closest('form');
+  const lines = document.getElementById('quote-lines');
+  const lineIds = document.getElementById('line_ids');
+  const payments = document.getElementById('installment-rows');
+  const paymentIds = document.getElementById('installment_ids');
+  let nextLineId = Math.max(0, ...[...lines.querySelectorAll('[data-line-id]')].map(row => Number(row.dataset.lineId))) + 1;
+  let nextPaymentId = Math.max(0, ...[...payments.querySelectorAll('[data-installment-id]')].map(row => Number(row.dataset.installmentId))) + 1;
+  function updateLines() {
+    const rows = [...lines.querySelectorAll('[data-line-id]')];
+    lineIds.value = rows.map(row => row.dataset.lineId).join(',');
+    rows.forEach(row => { row.querySelector('[data-remove-line]').disabled = rows.length === 1; });
+    document.getElementById('add-quote-line').disabled = rows.length >= 200;
+  }
+  document.getElementById('add-quote-line').addEventListener('click', () => {
+    const template = document.getElementById('quote-line-template');
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = template.innerHTML.replaceAll('__INDEX__', String(nextLineId++));
+    const row = wrapper.firstElementChild;
+    lines.appendChild(row);
+    updateLines();
+    row.querySelector('input').focus();
+  });
+  lines.addEventListener('click', event => {
+    const button = event.target.closest('[data-remove-line]');
+    if (button && lines.querySelectorAll('[data-line-id]').length > 1) {
+      button.closest('[data-line-id]').remove();
+      updateLines();
+    }
+  });
+  function updatePayments() {
+    const rows = [...payments.querySelectorAll('[data-installment-id]')];
+    paymentIds.value = rows.map(row => row.dataset.installmentId).join(',');
+    rows.forEach((row, index) => {
+      row.querySelector('legend').textContent = `Payment ${index + 1}`;
+      row.querySelector('[data-remove-installment]').disabled = rows.length <= 2;
+    });
+    document.getElementById('add-installment').disabled = rows.length >= 200;
+  }
+  document.getElementById('add-installment').addEventListener('click', () => {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = document.getElementById('installment-template').innerHTML.replaceAll('__INDEX__', String(nextPaymentId++));
+    const row = wrapper.firstElementChild;
+    payments.appendChild(row);
+    updatePayments();
+    refresh();
+    row.querySelector('select').focus();
+  });
+  payments.addEventListener('click', event => {
+    const button = event.target.closest('[data-remove-installment]');
+    if (button && payments.querySelectorAll('[data-installment-id]').length > 2) {
+      button.closest('[data-installment-id]').remove();
+      updatePayments();
+      refresh();
+    }
+  });
+  function showInstallmentTotal() {
+    const target = document.getElementById('installment-total');
+    if (plan.value !== 'installments') { target.textContent = ''; return; }
+    const quoteCents = [...lines.querySelectorAll('[data-line-id]')].reduce((sum, row) => {
+      const quantity = Number(row.querySelector('[name^="quantity_"]').value);
+      const price = Number(row.querySelector('[name^="price_"]').value);
+      return sum + (Number.isFinite(quantity * price) ? quantity * Math.round(price * 100) : 0);
+    }, 0);
+    const rows = [...payments.querySelectorAll('[data-installment-id]')];
+    const amounts = rows.map(row => {
+      const percent = row.querySelector('[data-installment-type]').value === 'percent';
+      const value = Number(row.querySelector(percent ? '[name^="installment_percent_"]' : '[name^="installment_amount_"]').value);
+      return Number.isFinite(value) ? Math.round(percent ? quoteCents * value / 100 : value * 100) : 0;
+    });
+    const allPercent = rows.every(row => row.querySelector('[data-installment-type]').value === 'percent');
+    const percentSum = rows.reduce((sum, row) => sum + Number(row.querySelector('[name^="installment_percent_"]').value || 0), 0);
+    if (allPercent && Math.abs(percentSum - 100) < 0.000001) amounts[amounts.length - 1] = quoteCents - amounts.slice(0, -1).reduce((a, b) => a + b, 0);
+    const assigned = amounts.reduce((a, b) => a + b, 0);
+    const money = cents => `$${(cents / 100).toFixed(2)}`;
+    target.textContent = `Quote total: ${money(quoteCents)} · Payments: ${money(assigned)} · ${assigned === quoteCents ? 'Matches exactly' : `Remaining: ${money(quoteCents - assigned)}`}. Final amounts are validated when saved.`;
+  }
+  function refresh() {
+    form.querySelectorAll('[data-payment-modes]').forEach(section => {
+      const visible = section.dataset.paymentModes.split(' ').includes(plan.value);
+      section.hidden = !visible;
+      section.querySelectorAll('input, select, textarea').forEach(field => { field.disabled = !visible; });
+    });
+    form.querySelectorAll('[data-auto-date-for]').forEach(section => {
+      const selector = document.getElementById(section.dataset.autoDateFor);
+      const modeSection = section.hasAttribute('data-payment-modes') ? section.dataset.paymentModes.split(' ').includes(plan.value) : true;
+      const parent = section.parentElement.closest('[data-payment-modes]');
+      const show = modeSection && (!parent || !parent.hidden) && selector && !selector.disabled && selector.value === 'automatic';
+      section.hidden = !show;
+      section.querySelectorAll('input').forEach(field => { field.disabled = !show; });
+    });
+    payments.querySelectorAll('[data-installment-id]').forEach(row => {
+      const percent = row.querySelector('[data-installment-type]').value === 'percent';
+      for (const [selector, visible] of [['[data-amount-field]', !percent], ['[data-percent-field]', percent]]) {
+        const field = row.querySelector(selector);
+        field.hidden = !visible;
+        field.querySelector('input').disabled = plan.value !== 'installments' || !visible;
+      }
+    });
+    showInstallmentTotal();
+  }
+  form.addEventListener('change', refresh);
+  form.addEventListener('input', showInstallmentTotal);
+  updateLines();
+  updatePayments();
+  refresh();
+})();
+</script>
+{% endif %}
+{% if quote and draft.total_cents is defined %}
+<h2>Quote preview</h2>
+<p class="muted">Stripe invoices show the scope lines and terms for reference; on deposits and installments only the current payment is charged. This full quote is not a separate public page.</p>
+<div class="card" style="display:block"><h3>{{ draft.title }}</h3><p>{{ draft.description }}</p><p>{{ draft.location }}</p>
+<table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead><tbody>
+{% for line in draft.lines %}<tr><td>{{ line.name }}</td><td>{{ line.quantity }}</td><td>${{ '%.2f'|format(line.unit_cents / 100) }}</td><td>${{ '%.2f'|format(line.quantity * line.unit_cents / 100) }}</td></tr>{% endfor %}
+<tr><th colspan="3">Quote total</th><th>${{ '%.2f'|format(draft.total_cents / 100) }}</th></tr></tbody></table>
+<p>{{ draft.terms }}</p>
+{% if quote.payment_mode == 'installments' %}
+<h4>Payment plan</h4><ol>{% for part in quote.installments %}<li>${{ '%.2f'|format(part.amount_cents / 100) }}{% if part.amount_type == 'percent' %} ({{ part.percent }}% of quote total{% if loop.last %}, including any rounding adjustment{% endif %}){% endif %} · {{ part.send_date if part.send_mode == 'automatic' else 'send after previous payment, on confirmation' }} · due {{ part.due_date }}</li>{% endfor %}</ol>
+{% else %}<p>Payment: {% if quote.payment_mode == 'deposit' %}${{ '%.2f'|format(quote.deposit_cents / 100) }} deposit; ${{ '%.2f'|format((draft.total_cents - quote.deposit_cents) / 100) }} balance after deposit{% else %}full upfront{% endif %}.</p>
+<p>First invoice: {{ quote.initial_send_date if quote.initial_send_mode == 'automatic' else 'send on confirmation' }} · due {{ quote.initial_due_date or '7 days after send' }}.
+{% if quote.payment_mode == 'deposit' %}<br>Balance: {{ quote.balance_send_date if quote.balance_send_mode == 'automatic' else 'send on confirmation after deposit' }} · due {{ quote.balance_due_date or '7 days after send' }}.{% endif %}</p>{% endif %}
+</div>
+{% endif %}
+{% if quote %}
+<h2>Payment & booking · {{ quote.status }}</h2>
+{% if quote.status == 'draft' and draft.total_cents is defined and quote.initial_send_mode == 'manual' %}
+<form method="post" action="/admin/weddings/{{ quote.id }}/send/{{ 'part_01' if quote.payment_mode == 'installments' else quote.payment_mode }}" onsubmit="return confirm('Send this Stripe invoice to {{ inquiry.email }}? The sent quote cannot be edited.');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Send {{ 'first installment' if quote.payment_mode == 'installments' else quote.payment_mode }} invoice</button></form>
+{% elif quote.status == 'draft' and draft.total_cents is defined and quote.initial_send_mode == 'automatic' %}
+<form method="post" action="/admin/weddings/{{ quote.id }}/schedule" onsubmit="return confirm('Approve this quote and schedule its Stripe invoice? A running scheduler will send it on the selected date.');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Approve and schedule first invoice</button></form>
+{% elif quote.status == 'scheduled' %}<p>Approved. The first invoice will be sent on {{ quote.initial_send_date }} Eastern when the scheduler runs. It has not been sent yet.</p>
+{% elif quote.status == 'deposit_paid' and quote.balance_send_mode == 'manual' %}
+<p>Deposit paid and work booked. The balance is still due; send its invoice when ready.</p>
+<form method="post" action="/admin/weddings/{{ quote.id }}/send/balance" onsubmit="return confirm('Send the remaining balance invoice to {{ inquiry.email }}?');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Send balance invoice</button></form>
+{% elif quote.status == 'deposit_paid' and quote.balance_send_mode == 'automatic' %}<p>Deposit paid and work booked. The balance invoice will be sent on {{ quote.balance_send_date }} Eastern when the scheduler runs. No balance invoice has been sent yet.</p>
+{% elif quote.status == 'installment_paid' and next_part_index is not none %}
+{% set next_part = quote.installments[next_part_index] %}
+<p>Payment {{ next_part_index + 1 }} of {{ quote.installments|length }} is next. No paid order is created until every installment has been verified.</p>
+{% if next_part.send_mode == 'manual' %}<form method="post" action="/admin/weddings/{{ quote.id }}/send/part_{{ '%02d'|format(next_part_index + 1) }}" onsubmit="return confirm('Send the next Stripe invoice to {{ inquiry.email }}?');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Send installment {{ next_part_index + 1 }} invoice</button></form>
+{% else %}<p>The scheduler will send installment {{ next_part_index + 1 }} on {{ next_part.send_date }} Eastern, after the previous payment has been verified.</p>{% endif %}
+{% elif quote.status == 'installment_sent' %}<p>Waiting for the current installment to be paid in Stripe.</p>
+{% endif %}
+{% if quote.status == 'review' %}<p class="error">Invoice outcome uncertain. Inspect Stripe before taking another payment. Do not issue a duplicate invoice.</p>{% endif %}
+{% if quote.order_id %}<p><a href="/admin/orders/{{ quote.order_id }}">Paid order HS{{ '%06d'|format(quote.order_id) }}</a></p>{% endif %}
+<ul>{% for invoice in invoices %}<li>{{ invoice.step }} · ${{ '%.2f'|format(invoice.amount_cents / 100) }} · {{ invoice.status }}{% if invoice.hosted_url %} · <a href="{{ invoice.hosted_url }}" target="_blank" rel="noopener">Stripe invoice</a>{% endif %}{% if invoice.stripe_invoice_id %} · {{ invoice.stripe_invoice_id }}<form method="post" class="inline" action="/admin/weddings/{{ quote.id }}/refresh/{{ invoice.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button--ghost button--sm" type="submit">Refresh from Stripe</button></form>{% endif %}</li>{% endfor %}</ul>
+{% endif %}
+{% endblock %}

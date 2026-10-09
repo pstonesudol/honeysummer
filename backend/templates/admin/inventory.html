@@ -3,6 +3,7 @@
 <h1>Inventory — {{ listing.name }}</h1>
 <p>On hand: {{ on_hand }} · Reserved: {{ reserved }} · Available: {{ listing.quantity_available }}</p>
 <p><a href="/admin/flowers/{{ listing.id }}">Back to listing</a></p>
+<p><a href="/admin/inventory/stock">Shop-wide stock</a></p>
 <form method="post" action="/admin/flowers/{{ listing.id }}/adjust">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <div class="grid">
@@ -18,6 +19,14 @@
       <input id="reason" name="reason" maxlength="255" required></div>
   </div>
   <p><button type="submit">Record movement</button></p>
+</form>
+<h2>Physical count</h2>
+<p class="muted">Count all units on hand, including units reserved for pending orders. The correction changes available stock only; pending reservations remain untouched.</p>
+<form method="post" action="/admin/flowers/{{ listing.id }}/count">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid"><div><label for="on_hand">Counted on hand</label><input id="on_hand" type="number" min="0" max="999999" step="1" name="on_hand" required value="{{ on_hand }}"></div>
+  <div><label for="count_reason">Reason / count reference</label><input id="count_reason" name="reason" required maxlength="255"></div></div>
+  <p><button type="submit">Record physical count</button></p>
 </form>
 <h2>Movement history</h2>
 <div style="overflow-x:auto">

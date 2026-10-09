@@ -48,6 +48,21 @@ services:
       timeout: 5s
       retries: 10
 
+  wedding-scheduler:
+    build:
+      context: ./backend
+    environment:
+      SECRET_KEY: local-docker-development-key
+      DEBUG: "true"
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/honeysummer
+    command: ["sh", "-c", "while true; do uv run --no-sync python -m app.wedding_schedule --apply; sleep 60; done"]
+    volumes:
+      - ./backend:/app
+      - backend_venv:/app/.venv
+    depends_on:
+      backend:
+        condition: service_healthy
+
   frontend:
     build:
       context: .

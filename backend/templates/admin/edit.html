@@ -11,7 +11,7 @@
   {% endfor %}
 </div>
 {% endif %}
-{% if admin.slug != 'orders' %}<form method="post"
+{% if admin.slug not in ['orders', 'inquiries'] %}<form method="post"
       action="{% if obj %}/admin/{{ admin.slug }}/{{ obj.id }}{% else %}/admin/{{ admin.slug }}/new{% endif %}"
       enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -49,6 +49,22 @@
   <p><button type="submit">Save</button> <a class="button--ghost" href="/admin/{{ admin.slug }}">Cancel</a></p>
 </form>{% endif %}
 {% if obj and admin.slug == 'orders' %}
+<h2>Fulfillment</h2>
+{% if obj.status == 'paid' %}<p><a class="button button--ghost" href="/admin/orders/{{ obj.id }}/packing-slip" target="_blank" rel="noopener">Print packing slip</a></p>{% endif %}
+<p class="muted">Customer: {{ obj.customer_name or obj.customer_label }} · {{ obj.customer_email or (obj.customer.email if obj.customer else '') }} · {{ obj.customer_phone }}<br>{{ obj.delivery_address if obj.fulfillment == 'delivery' else obj.pickup_window }}</p>
+{% if obj.status == 'paid' %}
+<form method="post" action="/admin/orders/{{ obj.id }}/fulfillment">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid">
+    <div><label for="fulfillment_date">Date (Eastern)</label><input id="fulfillment_date" type="date" name="fulfillment_date" value="{{ obj.fulfillment_date or '' }}"></div>
+    <div><label for="fulfillment_time">Time (Eastern)</label><input id="fulfillment_time" type="time" name="fulfillment_time" value="{{ obj.fulfillment_time.strftime('%H:%M') if obj.fulfillment_time else '' }}"></div>
+    <div><label for="fulfillment_state">Preparation</label><select id="fulfillment_state" name="fulfillment_state">{% for state in ['new', 'preparing', 'ready', 'completed'] %}<option value="{{ state }}" {% if obj.fulfillment_state == state %}selected{% endif %}>{{ state|capitalize }}</option>{% endfor %}</select></div>
+    <div class="full"><label for="internal_notes">Internal notes (never sent to customer)</label><textarea id="internal_notes" name="internal_notes" maxlength="4000" rows="4">{{ obj.internal_notes or '' }}</textarea></div>
+  </div>
+  <p><button type="submit">Save fulfillment</button></p>
+</form>
+{% endif %}
+{% if obj.activity %}<h3>Activity</h3><ol>{% for event in obj.activity|reverse %}<li>{{ event.at }} · {{ event.action }}{% if event.to_state %} → {{ event.to_state }}{% endif %} · operator #{{ event.actor }}</li>{% endfor %}</ol>{% endif %}
 <h2>Order items</h2>
 {% if order_proposal %}<p><a href="/admin/proposals/{{ order_proposal.id }}">Bouquet proposal #{{ order_proposal.id }}</a></p>{% endif %}
 {% if obj.items or order_proposal %}
@@ -80,8 +96,26 @@
 {% endif %}
 {% if obj and admin.slug == 'flowers' %}
 <p><a href="/admin/flowers/{{ obj.id }}/inventory">View inventory history and adjust stock</a></p>
+<form method="post" action="/admin/flowers/{{ obj.id }}/duplicate">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button class="button--ghost" type="submit">Duplicate as inactive listing (zero stock)</button>
+</form>
 {% endif %}
 {% if obj and admin.slug == 'inquiries' and obj.kind == 'bouquet' %}
 <p><a class="button" href="/admin/proposals/{{ proposal_id if proposal_id else 'from-inquiry/' ~ obj.id }}">{{ 'Open bouquet proposal' if proposal_id else 'Start bouquet proposal' }}</a></p>
+{% endif %}
+{% if obj and admin.slug == 'inquiries' and obj.kind == 'wedding' %}
+<p><a class="button" href="/admin/weddings/from-inquiry/{{ obj.id }}">Open wedding quote</a></p>
+{% endif %}
+{% if obj and admin.slug == 'inquiries' %}
+<h2>Follow-up</h2>
+<p><a href="/admin/customers?email={{ obj.email|urlencode }}">View customer history</a></p>
+<form method="post" action="/admin/inquiries/{{ obj.id }}/follow-up">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid"><div><label for="stage">Stage</label><select id="stage" name="stage">{% for state in ['new', 'contacted', 'quoted', 'booked', 'closed'] %}<option value="{{ state }}" {% if obj.stage == state %}selected{% endif %}>{{ state|capitalize }}</option>{% endfor %}</select></div>
+  <div><label for="follow_up_date">Follow-up date</label><input id="follow_up_date" name="follow_up_date" type="date" value="{{ obj.follow_up_date or '' }}"></div>
+  <div class="full"><label for="inquiry_notes">Private notes</label><textarea id="inquiry_notes" name="internal_notes" maxlength="4000" rows="5">{{ obj.internal_notes or '' }}</textarea></div></div>
+  <p><button type="submit">Save follow-up</button></p>
+</form>
 {% endif %}
 {% endblock %}
