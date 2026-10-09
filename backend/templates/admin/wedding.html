@@ -1,7 +1,7 @@
 {% extends "admin/base.html" %}
 {% block content %}
 <h1>Wedding/event quote {% if quote %}#{{ quote.id }}{% else %}for {{ inquiry.name }}{% endif %}</h1>
-<p>Inquiry: <a href="/admin/inquiries/{{ inquiry.id }}">{{ inquiry.name }} · {{ inquiry.email }}</a> · {{ inquiry.created_at }}</p>
+<p>Inquiry: <a href="/admin/inquiries/{{ inquiry.id }}">{{ inquiry.name }} · {{ inquiry.email }}</a> · {{ inquiry.created_at|admin_date }}</p>
 <p class="muted">Invoices are sent by Stripe. The first deposit or installment books the work; only the final payment creates a paid order. No seasonal catalogue stock is reserved for future event florals. Enter custom work here, not current inventory listing IDs.</p>
 {% if not quote %}
 <form method="post" action="/admin/weddings/from-inquiry/{{ inquiry.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Start draft quote</button></form>
@@ -195,32 +195,32 @@
 <tr><th colspan="3">Quote total</th><th>${{ '%.2f'|format(draft.total_cents / 100) }}</th></tr></tbody></table>
 <p>{{ draft.terms }}</p>
 {% if quote.payment_mode == 'installments' %}
-<h4>Payment plan</h4><ol>{% for part in quote.installments %}<li>${{ '%.2f'|format(part.amount_cents / 100) }}{% if part.amount_type == 'percent' %} ({{ part.percent }}% of quote total{% if loop.last %}, including any rounding adjustment{% endif %}){% endif %} · {{ part.send_date if part.send_mode == 'automatic' else 'send after previous payment, on confirmation' }} · due {{ part.due_date }}</li>{% endfor %}</ol>
+<h4>Payment plan</h4><ol>{% for part in quote.installments %}<li>${{ '%.2f'|format(part.amount_cents / 100) }}{% if part.amount_type == 'percent' %} ({{ part.percent }}% of quote total{% if loop.last %}, including any rounding adjustment{% endif %}){% endif %} · {{ 'Send ' ~ (part.send_date|admin_date) if part.send_mode == 'automatic' else 'Send on confirmation after previous payment' }} · due {{ part.due_date|admin_date }}</li>{% endfor %}</ol>
 {% else %}<p>Payment: {% if quote.payment_mode == 'deposit' %}${{ '%.2f'|format(quote.deposit_cents / 100) }} deposit; ${{ '%.2f'|format((draft.total_cents - quote.deposit_cents) / 100) }} balance after deposit{% else %}full upfront{% endif %}.</p>
-<p>First invoice: {{ quote.initial_send_date if quote.initial_send_mode == 'automatic' else 'send on confirmation' }} · due {{ quote.initial_due_date or '7 days after send' }}.
-{% if quote.payment_mode == 'deposit' %}<br>Balance: {{ quote.balance_send_date if quote.balance_send_mode == 'automatic' else 'send on confirmation after deposit' }} · due {{ quote.balance_due_date or '7 days after send' }}.{% endif %}</p>{% endif %}
+<p>First invoice: {{ 'Send ' ~ (quote.initial_send_date|admin_date) if quote.initial_send_mode == 'automatic' else 'send on confirmation' }} · due {{ quote.initial_due_date|admin_date if quote.initial_due_date else '7 days after send' }}.
+{% if quote.payment_mode == 'deposit' %}<br>Balance: {{ 'Send ' ~ (quote.balance_send_date|admin_date) if quote.balance_send_mode == 'automatic' else 'send on confirmation after deposit' }} · due {{ quote.balance_due_date|admin_date if quote.balance_due_date else '7 days after send' }}.{% endif %}</p>{% endif %}
 </div>
 {% endif %}
 {% if quote %}
-<h2>Payment & booking · {{ quote.status }}</h2>
+<h2>Payment & booking <span class="status-badge status-badge--{{ quote.status|admin_tone }}">{{ quote.status|admin_label }}</span></h2>
 {% if quote.status == 'draft' and draft.total_cents is defined and quote.initial_send_mode == 'manual' %}
 <form method="post" action="/admin/weddings/{{ quote.id }}/send/{{ 'part_01' if quote.payment_mode == 'installments' else quote.payment_mode }}" onsubmit="return confirm('Send this Stripe invoice to {{ inquiry.email }}? The sent quote cannot be edited.');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Send {{ 'first installment' if quote.payment_mode == 'installments' else quote.payment_mode }} invoice</button></form>
 {% elif quote.status == 'draft' and draft.total_cents is defined and quote.initial_send_mode == 'automatic' %}
 <form method="post" action="/admin/weddings/{{ quote.id }}/schedule" onsubmit="return confirm('Approve this quote and schedule its Stripe invoice? A running scheduler will send it on the selected date.');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Approve and schedule first invoice</button></form>
-{% elif quote.status == 'scheduled' %}<p>Approved. The first invoice will be sent on {{ quote.initial_send_date }} Eastern when the scheduler runs. It has not been sent yet.</p>
+{% elif quote.status == 'scheduled' %}<p>Approved. The first invoice will be sent on {{ quote.initial_send_date|admin_date }} Eastern when the scheduler runs. It has not been sent yet.</p>
 {% elif quote.status == 'deposit_paid' and quote.balance_send_mode == 'manual' %}
 <p>Deposit paid and work booked. The balance is still due; send its invoice when ready.</p>
 <form method="post" action="/admin/weddings/{{ quote.id }}/send/balance" onsubmit="return confirm('Send the remaining balance invoice to {{ inquiry.email }}?');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Send balance invoice</button></form>
-{% elif quote.status == 'deposit_paid' and quote.balance_send_mode == 'automatic' %}<p>Deposit paid and work booked. The balance invoice will be sent on {{ quote.balance_send_date }} Eastern when the scheduler runs. No balance invoice has been sent yet.</p>
+{% elif quote.status == 'deposit_paid' and quote.balance_send_mode == 'automatic' %}<p>Deposit paid and work booked. The balance invoice will be sent on {{ quote.balance_send_date|admin_date }} Eastern when the scheduler runs. No balance invoice has been sent yet.</p>
 {% elif quote.status == 'installment_paid' and next_part_index is not none %}
 {% set next_part = quote.installments[next_part_index] %}
 <p>Payment {{ next_part_index + 1 }} of {{ quote.installments|length }} is next. No paid order is created until every installment has been verified.</p>
 {% if next_part.send_mode == 'manual' %}<form method="post" action="/admin/weddings/{{ quote.id }}/send/part_{{ '%02d'|format(next_part_index + 1) }}" onsubmit="return confirm('Send the next Stripe invoice to {{ inquiry.email }}?');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Send installment {{ next_part_index + 1 }} invoice</button></form>
-{% else %}<p>The scheduler will send installment {{ next_part_index + 1 }} on {{ next_part.send_date }} Eastern, after the previous payment has been verified.</p>{% endif %}
+{% else %}<p>The scheduler will send installment {{ next_part_index + 1 }} on {{ next_part.send_date|admin_date }} Eastern, after the previous payment has been verified.</p>{% endif %}
 {% elif quote.status == 'installment_sent' %}<p>Waiting for the current installment to be paid in Stripe.</p>
 {% endif %}
 {% if quote.status == 'review' %}<p class="error">Invoice outcome uncertain. Inspect Stripe before taking another payment. Do not issue a duplicate invoice.</p>{% endif %}
 {% if quote.order_id %}<p><a href="/admin/orders/{{ quote.order_id }}">Paid order HS{{ '%06d'|format(quote.order_id) }}</a></p>{% endif %}
-<ul>{% for invoice in invoices %}<li>{{ invoice.step }} · ${{ '%.2f'|format(invoice.amount_cents / 100) }} · {{ invoice.status }}{% if invoice.hosted_url %} · <a href="{{ invoice.hosted_url }}" target="_blank" rel="noopener">Stripe invoice</a>{% endif %}{% if invoice.stripe_invoice_id %} · {{ invoice.stripe_invoice_id }}<form method="post" class="inline" action="/admin/weddings/{{ quote.id }}/refresh/{{ invoice.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button--ghost button--sm" type="submit">Refresh from Stripe</button></form>{% endif %}</li>{% endfor %}</ul>
+<ul>{% for invoice in invoices %}<li>{{ invoice.step|admin_label }} · ${{ '%.2f'|format(invoice.amount_cents / 100) }} · <span class="status-badge status-badge--{{ invoice.status|admin_tone }}">{{ invoice.status|admin_label }}</span>{% if invoice.hosted_url %} · <a href="{{ invoice.hosted_url }}" target="_blank" rel="noopener">Stripe invoice</a>{% endif %}{% if invoice.stripe_invoice_id %} · <span class="muted" title="Stripe invoice ID">{{ invoice.stripe_invoice_id }}</span><form method="post" class="inline" action="/admin/weddings/{{ quote.id }}/refresh/{{ invoice.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button--ghost button--sm" type="submit">Refresh from Stripe</button></form>{% endif %}</li>{% endfor %}</ul>
 {% endif %}
 {% endblock %}

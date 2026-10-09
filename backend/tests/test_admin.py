@@ -413,7 +413,7 @@ async def test_orders_list_renders_guest_orders_and_channel():
 
     assert listing.status == 200
     assert "Dana Bloom" in listing.text
-    assert "retail" in listing.text
+    assert "Retail" in listing.text
     assert detail.status == 200
     assert "Dana Bloom" in detail.text
     assert "Order items" in detail.text
@@ -445,7 +445,7 @@ async def test_fulfillment_schedule_dashboard_and_packing_slip():
     assert saved.status == 302
     _, dashboard = await app.asgi_client.get("/admin/")
     assert f"HS{order_id:06d}" in dashboard.text
-    assert "ready" in dashboard.text
+    assert "Ready" in dashboard.text
     _, slip = await app.asgi_client.get(f"/admin/orders/{order_id}/packing-slip")
     assert slip.status == 200
     assert "Bring twine" in slip.text

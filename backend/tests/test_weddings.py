@@ -1,11 +1,11 @@
 from types import SimpleNamespace
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 import stripe
 from sqlalchemy import select
 
-from app.admin import CSRF_COOKIE
+from app.admin import CSRF_COOKIE, _admin_date, _admin_label
 from app.auth import hash_password
 from app.db import session_scope
 from app.models import Inquiry, Order, OrderItem, User, WeddingInvoice, WeddingQuote
@@ -52,6 +52,44 @@ def test_quote_validation_and_schedule():
             validate_quote(form(deposit=amount))
 
 
+def test_admin_payment_labels_and_eastern_dates_are_display_only():
+    assert _admin_label("part_01") == "Installment 1"
+    assert _admin_label("installment_paid") == "Installment paid · balance due"
+    assert _admin_label("stripe_invoice") == "Stripe invoice"
+    assert _admin_label("paid") == "Paid"
+    assert _admin_date("2027-12-04") == "Dec 4, 2027"
+    assert _admin_date(datetime(2026, 10, 9, 3, 24, tzinfo=timezone.utc)) == "Oct 8, 2026 · 11:24 PM EDT"
+
+
+@pytest.mark.asyncio
+async def test_wedding_admin_renders_installment_labels_not_storage_keys():
+    today = eastern_today()
+    snapshot, _, _ = validate_quote(form(mode="full"))
+    async with session_scope() as db:
+        db.add(User(email="owner@example.com", password_hash=hash_password("password"), is_admin=True))
+        inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        db.add(inquiry)
+        await db.flush()
+        quote = WeddingQuote(inquiry_id=inquiry.id, status="paid", payment_mode="installments",
+                             draft=snapshot, snapshot=snapshot, activity=[], installments=[
+                                 dict(amount_cents=3000, send_mode="manual", due_date=(today + timedelta(days=7)).isoformat()),
+                                 dict(amount_cents=3000, send_mode="manual", due_date=(today + timedelta(days=14)).isoformat())])
+        db.add(quote)
+        await db.flush()
+        db.add_all([WeddingInvoice(quote_id=quote.id, step=f"part_0{index}", status="paid", amount_cents=3000)
+                    for index in (1, 2)])
+        await db.commit()
+    await app.asgi_client.get("/admin/login")
+    csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
+    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf))
+    _, page = await app.asgi_client.get(f"/admin/weddings/{quote.id}")
+    assert page.status == 200
+    assert 'Payment & booking <span class="status-badge status-badge--success">Paid</span>' in page.text
+    assert 'Installment 1 · $30.00 · <span class="status-badge status-badge--success">Paid</span>' in page.text
+    assert 'Installment 2 · $30.00 · <span class="status-badge status-badge--success">Paid</span>' in page.text
+    assert "part_01" not in page.text and "part_02" not in page.text
+
+
 def test_dynamic_quote_lines_can_exceed_the_old_fixed_limit():
     fields = form(mode="full")
     fields["line_ids"] = "1,3,4,5,6,7,8,9"
@@ -91,6 +129,9 @@ def test_installments_must_sum_exactly_and_have_increasing_dates():
     wrong = installment_form(today)
     wrong["installment_amount_3"] = "29.99"
     with pytest.raises(ValueError, match="exactly"):
+        validate_installments(wrong, draft["total_cents"])
+    wrong["installment_amount_3"] = "30.01"
+    with pytest.raises(ValueError, match=r"Reduce payments by \$0.01"):
         validate_installments(wrong, draft["total_cents"])
     wrong = installment_form(today)
     wrong["installment_due_date_2"] = wrong["installment_due_date_1"]
@@ -346,6 +387,35 @@ async def test_admin_hides_irrelevant_payment_fields_and_builds_installments():
         quote = await db.get(WeddingQuote, 1)
         assert len(quote.installments) == 7
         assert sum(part["amount_cents"] for part in quote.installments) == quote.draft["total_cents"]
+
+
+@pytest.mark.asyncio
+async def test_invalid_installment_total_stays_in_admin_instead_of_raw_json():
+    today = eastern_today()
+    async with session_scope() as db:
+        db.add(User(email="owner@example.com", password_hash=hash_password("password"), is_admin=True))
+        inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        db.add(inquiry)
+        await db.flush()
+        db.add(WeddingQuote(inquiry_id=inquiry.id, draft={}, snapshot={}, activity=[]))
+        await db.commit()
+    await app.asgi_client.get("/admin/login")
+    csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
+    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf))
+    await app.asgi_client.get("/admin/weddings/1")
+    csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
+    fields = {**installment_form(today), "installment_amount_3": "29.99", "csrf_token": csrf}
+    _, page = await app.asgi_client.post("/admin/weddings/1/save", data=fields,
+                                         headers={"accept": "text/html"})
+    assert page.status == 400
+    assert "Could not save this change" in page.text
+    assert "Installments must total exactly $60.00." in page.text
+    assert "Current payments total $59.99. Add $0.01 to the payments." in page.text
+    assert "Return to form" in page.text
+    assert '{"detail":' not in page.text
+    _, api = await app.asgi_client.post("/admin/weddings/1/save", data={**fields, "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE)},
+                                        headers={"accept": "application/json"})
+    assert api.status == 400 and "Current payments total $59.99" in api.json["detail"]
 
 
 @pytest.mark.asyncio

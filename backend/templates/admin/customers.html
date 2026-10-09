@@ -4,7 +4,7 @@
 <p class="muted">Look up an exact email address. Guest orders and wholesale orders for that account are shown together; this is not an identity-merge or marketing-contact system.</p>
 <form method="get" action="/admin/customers" class="row"><label for="customer_email">Email</label><input id="customer_email" type="email" name="email" value="{{ email }}" required style="max-width:360px"><button type="submit">Find</button></form>
 {% if email %}
-<h2>Orders</h2><ul>{% for order in orders %}<li><a href="/admin/orders/{{ order.id }}">{{ order.order_reference }}</a> · {{ order.created_at }} · {{ order.status }} · {{ order.payment_method }}</li>{% else %}<li>No orders found.</li>{% endfor %}</ul>
-<h2>Inquiries</h2><ul>{% for inquiry in inquiries %}<li><a href="/admin/inquiries/{{ inquiry.id }}">{{ inquiry.kind }} #{{ inquiry.id }}</a> · {{ inquiry.created_at }} · {{ inquiry.stage }}</li>{% else %}<li>No inquiries found.</li>{% endfor %}</ul>
+<h2>Orders</h2><ul>{% for order in orders %}<li><a href="/admin/orders/{{ order.id }}">{{ order.order_reference }}</a> · {{ order.created_at|admin_date }} · {{ order.status|admin_label }} · {{ order.payment_method|admin_label }}</li>{% else %}<li>No orders found.</li>{% endfor %}</ul>
+<h2>Inquiries</h2><ul>{% for inquiry in inquiries %}<li><a href="/admin/inquiries/{{ inquiry.id }}">{{ inquiry.kind|admin_label }} #{{ inquiry.id }}</a> · {{ inquiry.created_at|admin_date }} · {{ inquiry.stage|admin_label }}</li>{% else %}<li>No inquiries found.</li>{% endfor %}</ul>
 {% endif %}
 {% endblock %}

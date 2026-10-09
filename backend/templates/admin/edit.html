@@ -6,7 +6,7 @@
   {% for row in rows %}
   <div class="{% if row.field.kind in ['textarea', 'readonly'] %}full{% endif %}">
     <label>{{ row.field.label }}</label>
-    <div class="muted">{% if row.field.name == 'details' %}<pre>{{ row.value }}</pre>{% else %}{{ row.value }}{% endif %}</div>
+    <div class="muted">{% if row.field.name == 'details' %}<pre>{{ row.value }}</pre>{% elif row.field.name in ['status', 'channel', 'fulfillment', 'fulfillment_state', 'stage', 'kind'] %}{{ row.value|admin_label }}{% elif row.field.name in ['created_at', 'fulfillment_date', 'follow_up_date', 'fulfilled_at', 'restocked_at'] %}{{ row.value|admin_date }}{% else %}{{ row.value }}{% endif %}</div>
   </div>
   {% endfor %}
 </div>
@@ -23,7 +23,7 @@
         {% if row.field.name in ['photo', 'image'] and row.value %}
           <img class="preview" src="{{ media_url }}/{{ row.value }}" alt="">
         {% else %}
-          <div class="muted">{% if row.field.name == 'details' %}<pre>{{ row.value }}</pre>{% else %}{{ row.value }}{% endif %}</div>
+          <div class="muted">{% if row.field.name == 'details' %}<pre>{{ row.value }}</pre>{% elif row.field.name in ['status', 'channel', 'fulfillment', 'fulfillment_state', 'stage', 'kind'] %}{{ row.value|admin_label }}{% elif row.field.name in ['created_at', 'fulfillment_date', 'follow_up_date', 'fulfilled_at', 'restocked_at'] %}{{ row.value|admin_date }}{% else %}{{ row.value }}{% endif %}</div>
         {% endif %}
       {% elif row.field.kind == 'bool' %}
         <input id="f-{{ row.field.name }}" name="{{ row.field.name }}" type="checkbox" {% if row.value %}checked{% endif %}>
@@ -64,7 +64,7 @@
   <p><button type="submit">Save fulfillment</button></p>
 </form>
 {% endif %}
-{% if obj.activity %}<h3>Activity</h3><ol>{% for event in obj.activity|reverse %}<li>{{ event.at }} · {{ event.action }}{% if event.to_state %} → {{ event.to_state }}{% endif %} · operator #{{ event.actor }}</li>{% endfor %}</ol>{% endif %}
+{% if obj.activity %}<h3>Activity</h3><ol>{% for event in obj.activity|reverse %}<li>{{ event.at|admin_date }} · {{ event.action|admin_label }}{% if event.to_state %} → {{ event.to_state|admin_label }}{% endif %} · operator #{{ event.actor }}</li>{% endfor %}</ol>{% endif %}
 <h2>Order items</h2>
 {% if order_proposal %}<p><a href="/admin/proposals/{{ order_proposal.id }}">Bouquet proposal #{{ order_proposal.id }}</a></p>{% endif %}
 {% if obj.items or order_proposal %}

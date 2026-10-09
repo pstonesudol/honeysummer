@@ -10,7 +10,7 @@
 </form>
 {% for label, amount in totals.items() %}<p>{{ label }}: <strong>${{ '%.2f'|format(amount) }}</strong></p>{% endfor %}
 <div class="table-scroll"><table><thead><tr><th>Order</th><th>Placed (UTC)</th><th>Customer</th><th>Channel</th><th>Payment</th><th>Status</th><th>Original total</th></tr></thead><tbody>
-{% for row in rows %}<tr><td><a href="/admin/orders/{{ row.order.id }}">{{ row.order.order_reference }}</a></td><td>{{ row.order.created_at }}</td><td>{{ row.order.customer_label }}</td><td>{{ row.order.channel }}</td><td>{{ row.order.payment_method }}{% if row.order.payment_reference %} · {{ row.order.payment_reference }}{% endif %}</td><td>{{ row.order.status }}</td><td>${{ '%.2f'|format(row.total) }}</td></tr>
+{% for row in rows %}<tr><td><a href="/admin/orders/{{ row.order.id }}">{{ row.order.order_reference }}</a></td><td>{{ row.order.created_at|admin_date }}</td><td>{{ row.order.customer_label }}</td><td>{{ row.order.channel|admin_label }}</td><td>{{ row.order.payment_method|admin_label }}{% if row.order.payment_reference %} · {{ row.order.payment_reference }}{% endif %}</td><td>{{ row.order.status|admin_label }}</td><td>${{ '%.2f'|format(row.total) }}</td></tr>
 {% else %}<tr><td colspan="7">No paid or refunded orders in this period.</td></tr>{% endfor %}
 </tbody></table></div>
 {% endblock %}

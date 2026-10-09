@@ -7,9 +7,9 @@
 <td><a href="/admin/weddings/{{ item.quote.id }}">{{ item.quote.snapshot.title or 'Wedding quote #' ~ item.quote.id }}</a><br>{{ item.inquiry.name }} · {{ item.quote.snapshot.location or 'Event details not set' }}</td>
 <td>${{ '%.2f'|format(item.paid_cents / 100) }}</td>
 <td>${{ '%.2f'|format(item.balance_cents / 100) }}</td>
-<td>{{ item.next_label }}{% if item.next_send %}<br>Send {{ item.next_send }}{% endif %}</td>
-<td>{{ item.next_due or '7 days after sending' }}</td>
-<td>{{ item.quote.status|replace('_', ' ') }}{% if item.quote.status == 'review' %} · inspect Stripe{% endif %}</td>
+<td>{{ item.next_label }}{% if item.next_send %}<br>Send {{ item.next_send|admin_date }}{% endif %}</td>
+<td>{{ item.next_due|admin_date if item.next_due else '7 days after sending' }}</td>
+<td><span class="status-badge status-badge--{{ item.quote.status|admin_tone }}">{{ item.quote.status|admin_label }}</span>{% if item.quote.status == 'review' %} · inspect Stripe{% endif %}</td>
 </tr>{% endfor %}
 </tbody></table></div>
 {% if booked_wedding_count > booked_weddings|length %}<p class="muted">Showing {{ booked_weddings|length }} of {{ booked_wedding_count }}. <a href="/admin/weddings/">View wedding quotes</a> for more.</p>{% endif %}

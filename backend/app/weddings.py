@@ -130,8 +130,13 @@ def validate_installments(form, total_cents: int, *, today: date | None = None) 
         parts[-1]["amount_cents"] = total_cents - sum(part["amount_cents"] for part in parts[:-1])
         if parts[-1]["amount_cents"] < 50:
             raise ValueError("Every installment must be at least $0.50 after rounding.")
-    if sum(part["amount_cents"] for part in parts) != total_cents:
-        raise ValueError(f"Installments must total exactly ${total_cents / 100:.2f}.")
+    actual_cents = sum(part["amount_cents"] for part in parts)
+    if actual_cents != total_cents:
+        difference = total_cents - actual_cents
+        action = "Add" if difference > 0 else "Reduce payments by"
+        raise ValueError(f"Installments must total exactly ${total_cents / 100:.2f}. "
+                         f"Current payments total ${actual_cents / 100:.2f}. "
+                         f"{action} ${abs(difference) / 100:.2f}{' to the payments' if difference > 0 else ''}.")
     return parts
 
 

@@ -32,7 +32,7 @@
 <div style="overflow-x:auto">
 <table><thead><tr><th>When</th><th>Type</th><th>Available change</th><th>Units</th><th>Order</th><th>Actor</th><th>Source</th><th>Reason</th></tr></thead>
 <tbody>{% for movement in movements %}<tr>
-  <td>{{ movement.created_at }}</td><td>{{ movement.kind }}</td><td>{{ movement.delta }}</td>
+  <td>{{ movement.created_at|admin_date }}</td><td>{{ movement.kind|admin_label }}</td><td>{{ movement.delta }}</td>
   <td>{{ movement.units }}</td><td>{{ movement.order_id or '—' }}</td><td>{{ movement.actor_id or '—' }}</td><td>{{ movement.source }}</td><td>{{ movement.reason }}</td>
 </tr>{% endfor %}</tbody></table>
 </div>

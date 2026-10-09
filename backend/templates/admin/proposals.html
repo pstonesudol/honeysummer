@@ -3,6 +3,6 @@
 <h1>Bouquet proposals</h1>
 <p class="muted">Start a new proposal from a bouquet inquiry. Invoices are sent by Stripe, not by this admin.</p>
 {% for proposal in proposals %}
-<a class="card" href="/admin/proposals/{{ proposal.id }}">Proposal #{{ proposal.id }} · {{ proposal.draft.title or 'Untitled' }} <strong>{{ proposal.status }}</strong></a>
+<a class="card" href="/admin/proposals/{{ proposal.id }}">Proposal #{{ proposal.id }} · {{ proposal.draft.title or 'Untitled' }} <span class="status-badge status-badge--{{ proposal.status|admin_tone }}">{{ proposal.status|admin_label }}</span></a>
 {% else %}<p>No proposals yet. Open a bouquet inquiry to get started.</p>{% endfor %}
 {% endblock %}

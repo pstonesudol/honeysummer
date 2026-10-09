@@ -11,7 +11,7 @@
 <h2>Pickups and deliveries · today through the next 7 days</h2>
 {% if upcoming %}
 <div class="table-scroll"><table><thead><tr><th>When (Eastern)</th><th>Order</th><th>Customer</th><th>Type</th><th>Preparation</th></tr></thead><tbody>
-{% for order in upcoming %}<tr><td>{{ order.fulfillment_date }} {{ order.fulfillment_time.strftime('%I:%M %p') if order.fulfillment_time else 'Time not set' }}</td><td><a href="/admin/orders/{{ order.id }}">{{ order.order_reference }}</a></td><td>{{ order.customer_label }}</td><td>{{ order.fulfillment }}</td><td>{{ order.fulfillment_state }}</td></tr>{% endfor %}
+{% for order in upcoming %}<tr><td>{{ order.fulfillment_date|admin_date }} {{ order.fulfillment_time.strftime('%I:%M %p') if order.fulfillment_time else 'Time not set' }}</td><td><a href="/admin/orders/{{ order.id }}">{{ order.order_reference }}</a></td><td>{{ order.customer_label }}</td><td>{{ order.fulfillment|admin_label }}</td><td>{{ order.fulfillment_state|admin_label }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% else %}<p class="muted">No paid orders scheduled for the next eight calendar days. Set a date on an order to add it here.</p>{% endif %}
 {% include "admin/_booked_weddings.html" %}
@@ -20,7 +20,7 @@
 {% for flower in low_stock %}<tr><td><a href="/admin/flowers/{{ flower.id }}/inventory">{{ flower.name }}</a></td><td>{{ flower.quantity_available }}</td><td>{{ flower.low_stock_threshold }}</td></tr>{% endfor %}
 </tbody></table></div>{% else %}<p class="muted">No active listings below their thresholds.</p>{% endif %}
 <h2>Follow-ups due</h2>
-{% if due_inquiries %}<ul>{% for inquiry in due_inquiries %}<li><a href="/admin/inquiries/{{ inquiry.id }}">{{ inquiry.name }} · {{ inquiry.kind }}</a> — {{ inquiry.follow_up_date }} · {{ inquiry.stage }}</li>{% endfor %}</ul>{% else %}<p class="muted">No follow-ups due.</p>{% endif %}
+{% if due_inquiries %}<ul>{% for inquiry in due_inquiries %}<li><a href="/admin/inquiries/{{ inquiry.id }}">{{ inquiry.name }} · {{ inquiry.kind|admin_label }}</a> — {{ inquiry.follow_up_date|admin_date }} · {{ inquiry.stage|admin_label }}</li>{% endfor %}</ul>{% else %}<p class="muted">No follow-ups due.</p>{% endif %}
 <h2>Manage the shop</h2>
 {% for item in models %}
 <a class="card" href="/admin/{{ item.slug }}">

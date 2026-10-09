@@ -1,0 +1,7 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Could not save this change</h1>
+<p class="error" role="alert">{{ error }}</p>
+<p>Your form has not been saved. Return to it to correct the details; check Stripe before retrying a payment request whose outcome is uncertain.</p>
+<p><button type="button" onclick="history.back()">Return to form</button> <a class="button button--ghost" href="/admin/">Dashboard</a></p>
+{% endblock %}

@@ -1,6 +1,6 @@
 {% extends "admin/base.html" %}
 {% block content %}
-<h1>Bouquet proposal {% if proposal %}#{{ proposal.id }} · {{ proposal.status }}{% else %}for inquiry #{{ inquiry.id }}{% endif %}</h1>
+<h1>Bouquet proposal {% if proposal %}#{{ proposal.id }} · {{ proposal.status|admin_label }}{% else %}for inquiry #{{ inquiry.id }}{% endif %}</h1>
 <p><a href="/admin/inquiries/{{ inquiry.id }}">Original inquiry #{{ inquiry.id }}</a> · {{ inquiry.name }} · {{ inquiry.email }} · {{ inquiry.phone }}</p>
 <p class="muted">{{ inquiry.details }} · {{ inquiry.message }}</p>
 {% if inquiry.details %}<p class="muted">Requested date: {{ inquiry.details.desired_date or 'Not specified' }} · Budget: {{ inquiry.details.budget or 'Not specified' }} · Colors: {{ inquiry.details.color_preferences or 'Not specified' }} · Occasion: {{ inquiry.details.occasion or 'Not specified' }}</p>{% endif %}

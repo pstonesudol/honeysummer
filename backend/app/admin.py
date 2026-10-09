@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import csv
 import io
+import json as json_module
 import secrets
 import uuid
 from dataclasses import dataclass, field as dataclass_field
@@ -55,6 +56,56 @@ _env = Environment(
     loader=FileSystemLoader(str(BASE_DIR / "templates")),
     autoescape=select_autoescape(["html"]),
 )
+
+
+def _admin_label(value) -> str:
+    """Human-readable display only; form/API values stay unchanged."""
+    if value is None or value == "":
+        return "—"
+    key = str(value)
+    if match := re.fullmatch(r"part_(\d+)", key):
+        return f"Installment {int(match.group(1))}"
+    labels = {
+        "full": "Full upfront", "deposit": "Deposit", "balance": "Balance",
+        "installments": "Installments", "deposit_paid": "Deposit paid · balance due",
+        "installment_paid": "Installment paid · balance due",
+        "balance_sent": "Balance invoice sent", "installment_sent": "Installment invoice sent",
+        "sent": "Invoice sent", "issuing": "Sending invoice", "review": "Needs review",
+        "scheduled": "Scheduled", "void": "Voided", "stripe_invoice": "Stripe invoice",
+        "external": "External payment", "market_sale": "Market sale",
+    }
+    return labels.get(key, key.replace("_", " ").capitalize())
+
+
+def _admin_date(value) -> str:
+    """Render stored dates in a readable form, converting timestamps to Eastern."""
+    if value is None or value == "":
+        return "—"
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value) if "T" in value else date.fromisoformat(value)
+        except ValueError:
+            return value
+    if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            value = value.astimezone(ZoneInfo("America/New_York"))
+        return f"{value.strftime('%b')} {value.day}, {value.year} · {value.strftime('%I:%M %p %Z').lstrip('0')}".strip()
+    if isinstance(value, date):
+        return f"{value.strftime('%b')} {value.day}, {value.year}"
+    return str(value)
+
+
+def _admin_tone(value) -> str:
+    if value in ("paid", "completed", "approved"):
+        return "success"
+    if value in ("review", "stock_review", "void", "refunded", "payment_failed"):
+        return "attention"
+    return "neutral"
+
+
+_env.filters["admin_label"] = _admin_label
+_env.filters["admin_date"] = _admin_date
+_env.filters["admin_tone"] = _admin_tone
 
 
 # --------------------------------------------------------------------------- #
@@ -320,6 +371,21 @@ async def load_admin(request):
     request.ctx.admin = await get_current_admin(request)
 
 
+@bp.middleware("response")
+async def show_form_error(request, response):
+    """Keep browser form failures in the admin, while preserving JSON for API clients."""
+    if (request.method != "POST" or not response or response.status < 400
+            or "text/html" not in request.headers.get("accept", "")
+            or "application/json" not in (response.content_type or "")):
+        return
+    try:
+        message = json_module.loads(response.body).get("detail")
+    except (ValueError, TypeError, AttributeError):
+        return
+    if isinstance(message, str):
+        return _page(request, "admin/error.html", status=response.status, error=message)
+
+
 def _page(request, template: str, status: int = 200, **context):
     token = secrets.token_urlsafe(32)
     context.setdefault("csrf_token", token)
@@ -386,6 +452,10 @@ def _display_value(obj, path: str) -> str:
     value: Any = obj
     for part in path.split("."):
         value = getattr(value, part, "")
+    if path in ("status", "channel", "fulfillment", "fulfillment_state", "stage", "kind"):
+        return _admin_label(value)
+    if path in ("created_at", "fulfillment_date", "follow_up_date"):
+        return _admin_date(value)
     return "" if value is None else str(value)
 
 
