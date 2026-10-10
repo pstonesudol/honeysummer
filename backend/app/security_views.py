@@ -3,6 +3,7 @@
 import json as json_module
 import secrets
 from datetime import UTC, datetime
+from urllib.parse import urlsplit
 
 import pyotp
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -24,6 +25,7 @@ from .auth import (
 from .db import session_scope
 from .models import FloristProfile, Order, User
 from .security import (
+    SECURITY_CSRF_COOKIE,
     audit,
     consume_token,
     decrypt,
@@ -34,6 +36,7 @@ from .security import (
     password_error,
     public_link,
     queue_mail,
+    reauth_seconds,
     recent,
     throttle,
     valid_email,
@@ -45,7 +48,7 @@ from .settings import BASE_DIR, get_settings
 bp = Blueprint("security", url_prefix="/admin/security")
 _env = Environment(loader=FileSystemLoader(str(BASE_DIR / "templates")), autoescape=select_autoescape())
 PREAUTH_COOKIE = "honeysummer_mfa_challenge"
-CSRF_COOKIE = "honeysummer_security_csrf"
+CSRF_COOKIE = SECURITY_CSRF_COOKIE
 
 
 def _challenge_serializer():
@@ -73,8 +76,22 @@ def _preauth(request):
         return None
 
 
+def _safe_reauth_next(value: str) -> str:
+    """Only return a same-site admin path; never an attacker-chosen redirect target."""
+    candidate = value.strip()
+    parsed = urlsplit(candidate)
+    if parsed.scheme or parsed.netloc or not parsed.path.startswith("/admin/"):
+        return ""
+    return candidate
+
+
 def _page(request, *, status=200, **context):
     token = request.cookies.get(CSRF_COOKIE) or secrets.token_urlsafe(32)
+    context.setdefault("reauth_seconds", reauth_seconds(request))
+    context.setdefault("reauth_csrf", token)
+    context.setdefault("reauth_next", request.path)
+    viewer = context.get("user")
+    context.setdefault("reauth_mfa", bool(viewer and getattr(viewer, "mfa_secret", "")))
     response = html(_env.get_template("security.html").render(csrf_token=token, **context), status=status)
     response.add_cookie(CSRF_COOKIE, token, httponly=True, secure=not get_settings().debug, samesite="Strict")
     response.headers["Cache-Control"] = "no-store"
@@ -114,6 +131,15 @@ async def accessible_errors(request, response):
         and "text/html" in request.headers.get("accept", "")
     ):
         detail = json_module.loads(response.body).get("detail", "Unable to save.")
+        if response.status == 403 and "Recently authenticated" in detail:
+            return _page(
+                request,
+                mode="reauth",
+                status=response.status,
+                error=detail,
+                user=await _user(request),
+                reauth_next=_safe_reauth_next(request.path) or "/admin/security/access",
+            )
         return _page(request, mode="done", status=response.status, error=detail)
 
 
@@ -398,6 +424,8 @@ async def account_change(request):
         audit(db, request, action, actor=user.id, target=user.id)
         await db.commit()
     await deliver_security_mail()
+    if action == "reauth":
+        return redirect(_safe_reauth_next(str(request.form.get("next", ""))) or "/admin/security/")
     if codes:
         return _page(request, mode="codes", codes=codes)
     if action == "mfa_start":

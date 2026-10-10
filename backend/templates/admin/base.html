@@ -145,6 +145,7 @@
     </nav></header>
   {% endif %}
   <main id="main-content" tabindex="-1">
+    {% if admin %}{% include "partials/reauth.html" %}{% endif %}
     {% block content %}{% endblock %}
   </main>
   {% if admin %}

@@ -70,7 +70,7 @@ from .orders import StockError, change_stock, load_order, release_order
 from .payments import deliver_notifications, expire_checkout
 from .proposals import send_invoice, update_sent_invoice, validate_draft
 from .refunds import issue_refund
-from .security import audit, recent, throttle
+from .security import SECURITY_CSRF_COOKIE, audit, reauth_seconds, recent, throttle
 from .security_views import begin_admin_mfa
 from .settings import BASE_DIR, get_settings
 from .site_content import PHOTO_SLOTS, validate_content
@@ -564,14 +564,20 @@ def _page(request, template: str, status: int = 200, **context):
     context.setdefault("models", REGISTRY)
     context.setdefault("active_href", _active_href(request.path))
     context.setdefault("media_url", public_media_url())
+    operator = request.ctx.admin
+    context.setdefault("reauth_seconds", reauth_seconds(request) if operator else None)
+    context.setdefault("reauth_csrf", token)
+    context.setdefault("reauth_next", request.path)
+    context.setdefault("reauth_mfa", bool(operator and operator.mfa_secret))
     response = html(_env.get_template(template).render(**context), status=status)
-    response.add_cookie(
-        CSRF_COOKIE,
-        token,
-        httponly=True,
-        samesite="Lax",
-        secure=not get_settings().debug,
-    )
+    for cookie in (CSRF_COOKIE, SECURITY_CSRF_COOKIE):
+        response.add_cookie(
+            cookie,
+            token,
+            httponly=True,
+            samesite="Lax",
+            secure=not get_settings().debug,
+        )
     return response
 
 

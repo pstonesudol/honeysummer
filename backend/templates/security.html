@@ -31,6 +31,7 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 </style></head><body><main>
 <a href="/">Honey Summer</a> · <a href="/wholesale">Wholesale</a> · <a href="/admin/">Admin</a>
 <h1>Account security</h1>
+{% if user and user.is_admin %}{% include "partials/reauth.html" %}{% endif %}
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 {% if message %}<p role="status">{{ message }}</p>{% endif %}
 {% if mode == 'recovery' %}
@@ -178,6 +179,10 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 <p>Send this single-use link to <strong>{{ link_email }}</strong> through a verified channel. It expires in 30 minutes.</p>
 <div class="share-box"><code>{{ link }}</code><button type="button" onclick="navigator.clipboard.writeText('{{ link }}')">Copy link</button></div>
 <p><a href="/admin/security/access">Back to Users</a></p>
+{% elif mode == 'reauth' %}
+<h2>Reauthenticate to continue</h2>
+<p>For your security, sensitive admin changes require your password every 10 minutes. You are still signed in — reauthenticate above to resume.</p>
+<p><a href="/admin/security/access">Back to Users</a> · <a href="/admin/security/">Account settings</a></p>
 {% elif mode == 'force' %}
 <h2>Choose a new password</h2>
 <p>An administrator set a temporary password for your account. Enter it below and choose a new one to continue.</p>

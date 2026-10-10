@@ -1,0 +1,92 @@
+{# Progressive reauthentication banner, shared by the admin and security pages.
+
+   Expects:
+     reauth_seconds  seconds until sensitive changes lapse (None hides the banner)
+     reauth_csrf     CSRF token accepted by /admin/security/change
+     reauth_next     same-site path to return to after reauthenticating
+     reauth_mfa      whether the operator has an authenticator enrolled
+#}
+{% if reauth_seconds is not none %}
+<style>
+.reauth{display:none;align-items:center;gap:.6rem;flex-wrap:wrap;border:1px solid #d9c6b2;background:#f4ead8;color:#6a4e42;border-radius:12px;padding:.6rem .85rem;margin:0 0 1rem;font-size:.9rem}
+.reauth.is-visible{display:flex}
+.reauth--soon{background:#f8e2c0;border-color:#e0b878;color:#7a4f12}
+.reauth--urgent{background:#f7d9cf;border-color:#e0a58f;color:#8a3b22}
+.reauth--expired{background:#f8dede;border-color:#e2b9b9;color:#763c3c}
+.reauth__dot{width:.7rem;height:.7rem;border-radius:50%;background:currentColor;flex:0 0 auto}
+.reauth__text{flex:1 1 220px}
+.reauth button{background:#4c342d;color:#fff;border:0;border-radius:999px;padding:.4rem .85rem;font:inherit;cursor:pointer}
+.reauth__toggle{background:transparent !important;color:inherit !important;border:1px solid currentColor !important}
+.reauth form{display:flex;flex-wrap:wrap;gap:.6rem;align-items:flex-end;width:100%;margin:.4rem 0 0}
+.reauth form span{display:flex;flex-direction:column;gap:.15rem}
+.reauth form label{font-size:.72rem;color:inherit;margin:0}
+.reauth form input{padding:.4rem .5rem;border:1px solid #c8b6a6;border-radius:6px;font:inherit;min-width:12rem}
+.reauth [hidden]{display:none !important}
+</style>
+<div class="reauth" id="reauth-banner" data-seconds="{{ reauth_seconds }}" role="status" aria-live="polite">
+  <span class="reauth__dot" aria-hidden="true"></span>
+  <span class="reauth__text" id="reauth-text"></span>
+  <button type="button" class="reauth__toggle" id="reauth-toggle">Reauthenticate</button>
+  <form method="post" action="/admin/security/change" id="reauth-form" hidden>
+    <input type="hidden" name="csrf_token" value="{{ reauth_csrf }}">
+    <input type="hidden" name="action" value="reauth">
+    <input type="hidden" name="next" value="{{ reauth_next }}">
+    <span><label for="reauth-password">Current password</label>
+    <input id="reauth-password" name="current_password" type="password" required autocomplete="current-password"></span>
+    {% if reauth_mfa %}<span><label for="reauth-code">Authenticator / recovery code</label>
+    <input id="reauth-code" name="code" autocomplete="one-time-code"></span>{% endif %}
+    <button type="submit">Confirm</button>
+  </form>
+</div>
+<script>
+(function () {
+  var banner = document.getElementById('reauth-banner');
+  if (!banner) return;
+  var text = document.getElementById('reauth-text');
+  var toggle = document.getElementById('reauth-toggle');
+  var form = document.getElementById('reauth-form');
+  var seconds = parseInt(banner.getAttribute('data-seconds'), 10);
+  if (isNaN(seconds)) return;
+  var STATES = ['reauth--soon', 'reauth--urgent', 'reauth--expired'];
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function openForm() {
+    if (!form) return;
+    form.hidden = false;
+    var field = form.querySelector('input:not([type=hidden])');
+    if (field) field.focus();
+  }
+  function render() {
+    banner.classList.remove.apply(banner.classList, STATES);
+    if (seconds <= 0) {
+      banner.classList.add('is-visible', 'reauth--expired');
+      text.textContent = 'Reauthentication required. You are still signed in, but saving changes is paused until you reauthenticate.';
+      openForm();
+      if (toggle) toggle.hidden = true;
+      return;
+    }
+    var clock = Math.floor(seconds / 60) + ':' + pad(seconds % 60);
+    if (seconds <= 60) {
+      banner.classList.add('is-visible', 'reauth--urgent');
+      text.textContent = 'Reauthentication expires in ' + clock + '. Save your work or reauthenticate now.';
+    } else if (seconds <= 120) {
+      banner.classList.add('is-visible', 'reauth--soon');
+      text.textContent = 'Sensitive changes require reauthentication in ' + clock + '.';
+    } else {
+      banner.classList.remove('is-visible');
+    }
+    if (toggle) toggle.hidden = false;
+  }
+  if (toggle && form) {
+    toggle.addEventListener('click', function () {
+      if (form.hidden) openForm();
+      else form.hidden = true;
+    });
+  }
+  render();
+  setInterval(function () {
+    if (seconds > -1) seconds -= 1;
+    render();
+  }, 1000);
+})();
+</script>
+{% endif %}

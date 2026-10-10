@@ -24,6 +24,13 @@ from .settings import get_settings
 
 COMMON_PASSWORDS = {"password1234", "password12345", "123456789012", "qwerty12345678"}
 
+# Cookie name shared by the security workspace; also set on admin pages so the
+# inline reauthentication form works from anywhere in the admin.
+SECURITY_CSRF_COOKIE = "honeysummer_security_csrf"
+
+# Sensitive admin changes require password reauthentication within this window.
+REAUTH_WINDOW = timedelta(minutes=10)
+
 
 def password_error(password: str) -> str:
     """Permit managers/paste and long passphrases; no periodic rotation."""
@@ -278,5 +285,18 @@ def effective_role(user: User) -> str:
 
 def recent(request) -> bool:
     """Sensitive changes require password reauthentication (and MFA if enrolled) within 10 minutes."""
+    remaining = reauth_seconds(request)
+    return bool(remaining is not None and remaining > 0)
+
+
+def reauth_seconds(request) -> int | None:
+    """Seconds left before sensitive changes require reauthentication.
+
+    Returns ``None`` when there is no session to reauthenticate (for example an
+    anonymous page), and ``0`` when the window has already lapsed.
+    """
     row = getattr(request.ctx, "account_session", None)
-    return bool(row and aware(row.reauthenticated_at) + timedelta(minutes=10) > datetime.now(UTC))
+    if not row:
+        return None
+    remaining = (aware(row.reauthenticated_at) + REAUTH_WINDOW - datetime.now(UTC)).total_seconds()
+    return max(0, int(remaining))

@@ -15,7 +15,7 @@ from app import emails
 from app.admin import ADMIN_COOKIE
 from app.admin import CSRF_COOKIE as ADMIN_CSRF_COOKIE
 from app.admin_recovery import recover
-from app.auth import COOKIE_NAME, create_session_token, hash_password, token_digest, verify_password
+from app.auth import COOKIE_NAME, aware, create_session_token, hash_password, token_digest, verify_password
 from app.db import session_scope
 from app.models import FloristProfile, Order, User
 from app.security import (
@@ -584,6 +584,90 @@ async def test_recent_reauth_gate_and_session_version_race():
         await db.commit()
     with pytest.raises(ValueError):
         await create_session_token(uid, "admin", expected_version=0)
+
+
+async def _stale_admin(mfa: bool = False) -> int:
+    """Create a signed-in admin whose reauthentication window has lapsed."""
+    uid = await make_user(role="admin", mfa=mfa)
+    app.asgi_client.cookies.set(ADMIN_COOKIE, await create_session_token(uid, "admin"))
+    async with session_scope() as db:
+        await db.execute(update(AccountSession).values(reauthenticated_at=datetime.now(UTC) - timedelta(minutes=11)))
+        await db.commit()
+    return uid
+
+
+@pytest.mark.asyncio
+async def test_admin_pages_show_progressive_reauth_banner():
+    await admin_session()
+    _, page = await app.asgi_client.get("/admin/")
+    assert page.status == 200
+    assert 'id="reauth-banner"' in page.text
+    assert 'data-seconds="' in page.text
+    assert 'action="/admin/security/change"' in page.text
+
+
+@pytest.mark.asyncio
+async def test_account_security_page_shows_reauth_banner_for_admins():
+    await admin_session()
+    _, page = await app.asgi_client.get("/admin/security/access")
+    assert 'id="reauth-banner"' in page.text and 'action="/admin/security/change"' in page.text
+
+
+@pytest.mark.asyncio
+async def test_reauth_extends_window_and_returns_to_the_admin_page():
+    await _stale_admin()
+    await app.asgi_client.get("/admin/security/access")
+    _, response = await app.asgi_client.post(
+        "/admin/security/change",
+        data={
+            "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE),
+            "action": "reauth",
+            "next": "/admin/security/access",
+            "current_password": PASSWORD,
+        },
+    )
+    assert response.status == 302 and response.headers["location"] == "/admin/security/access"
+    # The refreshed window unblocks a previously rejected sensitive change.
+    _, allowed = await access({"action": "invite", "email": "rebooted@example.com"})
+    assert allowed.status == 302
+    async with session_scope() as db:
+        row = await db.get(AccountSession, token_digest(app.asgi_client.cookies.get(ADMIN_COOKIE)))
+        assert aware(row.reauthenticated_at) > datetime.now(UTC) - timedelta(minutes=10)
+
+
+@pytest.mark.asyncio
+async def test_reauth_ignores_offsite_redirect_targets():
+    await _stale_admin()
+    await app.asgi_client.get("/admin/security/")
+    _, response = await app.asgi_client.post(
+        "/admin/security/change",
+        data={
+            "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE),
+            "action": "reauth",
+            "next": "https://evil.example/takeover",
+            "current_password": PASSWORD,
+        },
+    )
+    assert response.status == 302 and response.headers["location"] == "/admin/security/"
+
+
+@pytest.mark.asyncio
+async def test_reauth_gate_renders_a_helpful_page_for_browsers():
+    uid = await _stale_admin()
+    await app.asgi_client.get("/admin/security/access")
+    _, response = await app.asgi_client.post(
+        "/admin/security/access",
+        data={
+            "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE),
+            "user_id": uid,
+            "action": "revoke",
+            "reason": "Synthetic self-check",
+        },
+        headers={"Accept": "text/html"},
+    )
+    assert response.status == 403
+    assert "still signed in" in response.text
+    assert 'id="reauth-banner"' in response.text
 
 
 @pytest.mark.asyncio
