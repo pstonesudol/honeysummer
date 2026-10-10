@@ -19,6 +19,9 @@ class Settings(BaseSettings):
 
     debug: bool = False
     secret_key: str = "insecure-local-development-key"
+    security_encryption_key: str = ""
+    public_origin: str = "http://localhost:3000"
+    trusted_proxy_cidrs: str = ""
     database_url: str = "postgresql://postgres:postgres@localhost:5432/honeysummer"
     media_root: Path = BASE_DIR / "media"
     private_media_root: Path = BASE_DIR / "private_media"

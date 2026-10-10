@@ -2,8 +2,8 @@
 {% block content %}
 <h1>Account settings</h1>
 <section class="card" style="display:block"><h2>Signed-in operator</h2><p>{{ account.email }}</p>
-<p>Access: administrator · {{ 'Active' if account.is_active else 'Inactive' }} · Created {{ account.created_at|admin_date }}</p>
-<p class="muted">Password changes, invitations, recovery and permission management belong to the security phase. This view does not change access or expose credentials.</p>
+<p>Access: {{ account.role }} · {{ 'Active' if account.is_active else 'Inactive' }} · Created {{ account.created_at|admin_date }}</p>
+<p><a href="/admin/security/">Manage password, MFA, recovery codes and sessions</a></p>
 <p><a href="/admin/activity">Review administrative activity</a></p></section>
 <form method="post" action="/admin/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Sign out on this browser</button></form>
 {% endblock %}

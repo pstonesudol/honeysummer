@@ -12,9 +12,12 @@ from sqlalchemy import select
 from .auth import hash_password
 from .db import get_engine, session_scope
 from .models import Base, User
+from .security import password_error
 
 
 async def _run(email: str, password: str) -> None:
+    if password_error(password):
+        raise ValueError(password_error(password))
     async with get_engine().begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     email = email.strip().lower()
@@ -25,7 +28,9 @@ async def _run(email: str, password: str) -> None:
             session.add(user)
         user.password_hash = hash_password(password)
         user.is_admin = True
+        user.role = "owner"
         user.is_active = True
+        user.security_version = (user.security_version or 0) + 1
         await session.commit()
     print(f"Admin ready: {email}")
 

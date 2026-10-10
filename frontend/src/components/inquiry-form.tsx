@@ -183,7 +183,7 @@ export function InquiryForm({
 type Flower = FlowerListing;
 
 async function api(path: string, options?: RequestInit) {
-  const response = await fetch(`/api/${path}`, { cache: "no-store", ...options, headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) } });
+  const response = await fetch(`/api/${path}`, { cache: "no-store", ...options, headers: { "Content-Type": "application/json", "X-HoneySummer-Request": "1", ...(options?.headers ?? {}) } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.detail || "Something went wrong.");
   return data;
@@ -207,7 +207,7 @@ export function WholesaleShop() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     try {
-      const body: Record<string, string> = { email: String(form.get("email")), password: String(form.get("password")) };
+      const body: Record<string, string> = { email: String(form.get("email")), password: String(form.get("password")), mfa_code: String(form.get("mfa_code") ?? "") };
       if (mode === "signup") {
         for (const field of ["name", "business_name", "phone", "business_type", "website", "message"]) {
           body[field] = String(form.get(field) ?? "").trim();
@@ -222,7 +222,7 @@ export function WholesaleShop() {
 
   if (account?.authenticated && !account.approved) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">
     <div><p className="eyebrow">Wholesale shop</p><h2 id="shop-title">Your account is awaiting approval.</h2><p>Isabella will email you once your account is ready. You can sign in with the password you chose.</p></div>
-    <div><button className="text-link" onClick={() => void logout()}>Sign out</button></div>
+    <div><a className="text-link" href="/admin/security/">Account security</a> · <button className="text-link" onClick={() => void logout()}>Sign out</button></div>
   </section>;
 
   if (!account?.authenticated) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">
@@ -236,7 +236,8 @@ export function WholesaleShop() {
         <label>Website or Instagram<input name="website" type="url" placeholder="https://…" maxLength={500} /></label>
         <label>Tell us about your work<textarea name="message" rows={4} maxLength={5000} /></label>
       </>}
-      <label>Email<input name="email" type="email" autoComplete="email" required /></label><label>Password<input name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={8} required /></label>
+      <label>Email<input name="email" type="email" autoComplete="email" required /></label><label>Password<input name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={mode === "signup" ? 12 : undefined} required /></label>
+      {mode === "login" && <><label>Authenticator or recovery code (if enabled)<input name="mfa_code" autoComplete="one-time-code" /></label><a className="text-link" href="/admin/security/recovery">Forgot password?</a></>}
       <button className="button button--dark" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Request account"}</button>
       <button type="button" className="text-link" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMessage(""); }}>{mode === "login" ? "Need wholesale access? Request an account" : "Already have an account? Sign in"}</button>
       {message && <p role="status" className="form-message">{message}</p>}
@@ -244,7 +245,7 @@ export function WholesaleShop() {
   </section>;
 
   return <section className="wholesale-shop section-wrap" aria-labelledby="shop-title">
-    <div className="wholesale-shop__heading"><div><p className="eyebrow">Welcome, {account.business_name}</p><h2 id="shop-title">This week’s stems.</h2></div><button className="text-link" onClick={() => void logout()}>Sign out</button></div>
+    <div className="wholesale-shop__heading"><div><p className="eyebrow">Welcome, {account.business_name}</p><h2 id="shop-title">This week’s stems.</h2></div><div><a className="text-link" href="/admin/security/">Account security</a> · <button className="text-link" onClick={() => void logout()}>Sign out</button></div></div>
     {flowers.length === 0 ? <p>Nothing is listed today — check back soon.</p> : <ProductGrid flowers={flowers} channel="wholesale" />}
     {message && <p role="status" className="form-message">{message}</p>}
   </section>;

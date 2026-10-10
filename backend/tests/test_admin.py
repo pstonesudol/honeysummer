@@ -20,6 +20,7 @@ from app.models import (
     OrderItem,
     User,
 )
+from app.security_views import CSRF_COOKIE as SECURITY_CSRF_COOKIE
 from app.server import app
 from app.settings import get_settings
 
@@ -286,22 +287,30 @@ async def test_approve_florist_action(monkeypatch):
         session.add(profile)
         await session.commit()
         profile_id = profile.id
+        user_id = profile.user_id
     await _login()
-    token = await _csrf("/admin/florists")
+    sent.clear()
+    await app.asgi_client.get("/admin/security/access")
+    token = app.asgi_client.cookies.get(SECURITY_CSRF_COOKIE)
 
-    _, response = await app.asgi_client.post(f"/admin/florists/{profile_id}/action/approve", data={"csrf_token": token})
+    _, response = await app.asgi_client.post(
+        "/admin/security/access",
+        data={"csrf_token": token, "action": "approve", "user_id": user_id, "reason": "Verified business"},
+    )
 
     assert response.status == 302
     async with session_scope() as session:
         profile = await session.get(FloristProfile, profile_id)
     assert profile.approved is True
-    assert len(sent) == 1
+    assert len(sent) == 2
     assert sent[0]["to"] == "florist@example.com"
-    assert "approved" in sent[0]["subject"]
+    assert "approve" in sent[0]["body"]
 
-    token = await _csrf("/admin/florists")
-    await app.asgi_client.post(f"/admin/florists/{profile_id}/action/approve", data={"csrf_token": token})
-    assert len(sent) == 1
+    await app.asgi_client.post(
+        "/admin/security/access",
+        data={"csrf_token": token, "action": "approve", "user_id": user_id, "reason": "Verified business"},
+    )
+    assert len(sent) == 2
 
 
 @pytest.mark.asyncio

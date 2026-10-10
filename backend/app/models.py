@@ -32,6 +32,11 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def initial_account_role(context) -> str:
+    """Preserve trusted legacy operator creation; invitations explicitly set staff."""
+    return "owner" if context.get_current_parameters().get("is_admin") else "florist"
+
+
 class User(Base):
     """A registered account, either a shop operator or a wholesale florist."""
 
@@ -42,6 +47,12 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    role: Mapped[str] = mapped_column(String(20), default=initial_account_role)
+    security_version: Mapped[int] = mapped_column(Integer, default=0)
+    mfa_secret: Mapped[str] = mapped_column(Text, default="")
+    mfa_pending: Mapped[str] = mapped_column(Text, default="")
+    mfa_last_step: Mapped[int] = mapped_column(Integer, default=0)
+    recovery_codes: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     profile: Mapped[FloristProfile | None] = relationship(
@@ -69,6 +80,8 @@ class FloristProfile(Base):
     about_work: Mapped[str] = mapped_column(Text, default="")
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str] = mapped_column(Text, default="")
+    application_state: Mapped[str] = mapped_column(String(20), default="pending")
+    decision_reason: Mapped[str] = mapped_column(Text, default="")
 
     user: Mapped[User] = relationship(back_populates="profile")
 

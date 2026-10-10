@@ -11,7 +11,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from app import models  # noqa: F401 - register models on the metadata
+from app import models, security_models  # noqa: F401 - register models on the metadata
 from app.db import Base, to_async_url
 from app.settings import get_settings
 

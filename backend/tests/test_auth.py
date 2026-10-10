@@ -6,6 +6,7 @@ from app import emails
 from app.auth import hash_password
 from app.db import session_scope
 from app.models import FloristProfile, User
+from app.security import deliver_security_mail
 from app.server import app
 
 
@@ -54,10 +55,11 @@ async def test_signup_creates_unapproved_profile_and_notifies_the_farm(sent):
     assert user.profile.business_type == "florist"
     assert user.profile.website == "https://example.com"
     assert user.profile.about_work == "Seasonal wedding designs"
-    assert len(sent) == 1
-    assert sent[0]["to"] == "hello@hellohoneysummer.com"
-    assert "new@example.com" in sent[0]["body"]
-    assert "Jamie Rivera" in sent[0]["body"]
+    await deliver_security_mail()
+    assert len(sent) == 2
+    assert sent[0]["to"] == "new@example.com"
+    assert sent[1]["to"] == "hello@hellohoneysummer.com"
+    assert "Fern & Fig" in sent[1]["body"]
 
 
 @pytest.mark.asyncio
@@ -69,7 +71,8 @@ async def test_signup_rejects_a_duplicate_email(sent):
         json={"name": "Jamie", "business_name": "X", "email": "florist@example.com", "password": "flowers-are-nice"},
     )
 
-    assert response.status == 400
+    assert response.status == 201
+    assert response.json["detail"] == "Request received. If eligible, Isabella will review your account."
 
 
 @pytest.mark.asyncio

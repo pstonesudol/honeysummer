@@ -31,7 +31,7 @@
         {% else %}
         <a class="button--ghost button--sm" href="/admin/{{ admin.slug }}/{{ row.id }}">Edit</a>
         {% endif %}
-        {% if admin.slug != 'orders' %}
+        {% if admin.slug not in ['orders', 'florists'] %}
         <form class="inline" method="post" action="/admin/{{ admin.slug }}/{{ row.id }}/delete"
               onsubmit="return confirm('Delete this entry? This cannot be undone.');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

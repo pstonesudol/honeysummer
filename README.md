@@ -60,7 +60,7 @@ pre-commit install
 
 After that the hooks run automatically on `git commit`. Run them against everything with `pre-commit run --all-files`. The hooks use the project's own toolchain (`uv run ruff …` and the frontend workspace's `eslint`), so versions always match the checked-in config.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the same gates on every push and pull request: `uv lock --check`, `ruff check`, `ruff format --check`, and `uv run pytest` (including the opt-in Postgres concurrency tests against a service database), plus `eslint` and cart unit tests for the frontend.
+GitHub Actions (`.github/workflows/ci.yml`) runs the same gates on every push and pull request: `uv lock --check`, `ruff check`, `ruff format --check`, and `uv run pytest` (including Postgres inventory and reset/MFA concurrency tests against a service database), plus `eslint` and cart unit tests for the frontend.
 
 ### Content and inquiries
 
@@ -78,6 +78,10 @@ Announcements, gallery images, flower listings, florist accounts, inquiries, and
 ### Global shopping carts
 
 The header cart persists separate retail and account-scoped wholesale baskets. Review each order at `/checkout/retail` or `/checkout/wholesale`; only server-verified payment clears purchased quantities, and the other basket remains saved. See [`backend/PHASE10_CART.md`](backend/PHASE10_CART.md) for checkout recovery, migration and verification details. Run cart unit tests with `npm run test --workspace frontend`.
+
+### Account security
+
+Owners and staff must enroll an authenticator at admin sign-in. `/admin/account` links to password, MFA, session and access management; wholesale includes self-service account/recovery links. Existing signed cookies are invalid after the Phase 11 migration. Configure `PUBLIC_ORIGIN` and a persistent `SECURITY_ENCRYPTION_KEY`, and schedule `python -m app.security_maintenance --apply` before launch. See [`backend/ACCOUNT_SECURITY.md`](backend/ACCOUNT_SECURITY.md) for permissions, migration, staff invitations, privacy review and audited owner recovery.
 
 ### Delivery fees
 

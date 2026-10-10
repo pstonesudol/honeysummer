@@ -22,7 +22,6 @@ from typing import Any
 from urllib.parse import urlencode, urlsplit
 from zoneinfo import ZoneInfo
 
-from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import Blueprint
 from sanic.response import html, json, raw, redirect, text
@@ -31,7 +30,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from .auth import verify_password
+from .auth import revoke_session, session_user, verify_login_password
 from .balance_report import invoice_balance_rows
 from .correspondence import parse_email
 from .db import session_scope
@@ -71,6 +70,8 @@ from .orders import StockError, change_stock, load_order, release_order
 from .payments import deliver_notifications, expire_checkout
 from .proposals import send_invoice, update_sent_invoice, validate_draft
 from .refunds import issue_refund
+from .security import audit, recent, throttle
+from .security_views import begin_admin_mfa
 from .settings import BASE_DIR, get_settings
 from .site_content import PHOTO_SLOTS, validate_content
 from .weddings import (
@@ -309,7 +310,7 @@ REGISTRY: list[ModelAdmin] = [
             Field("business_type", "Business type", "readonly"),
             Field("website", "Website or Instagram", "readonly"),
             Field("about_work", "About their work", "readonly"),
-            Field("approved", "Approved", "bool"),
+            Field("approved", "Approved (manage in Account security)", "readonly"),
             Field("notes", "Notes", "textarea"),
         ],
         list_columns=[
@@ -321,7 +322,7 @@ REGISTRY: list[ModelAdmin] = [
         order_by=["business_name"],
         search=("business_name", "contact_name"),
         can_create=False,
-        actions=("approve",),
+        actions=(),
     ),
     ModelAdmin(
         slug="inquiries",
@@ -403,38 +404,10 @@ REGISTRY_BY_SLUG = {admin.slug: admin for admin in REGISTRY}
 # --------------------------------------------------------------------------- #
 # Session + CSRF
 # --------------------------------------------------------------------------- #
-def _serializer() -> URLSafeTimedSerializer:
-    return URLSafeTimedSerializer(get_settings().secret_key, salt="honey-summer-admin")
-
-
-def create_admin_token(user_id: int) -> str:
-    """Sign an admin session token holding the operator id."""
-    return _serializer().dumps({"uid": user_id})
-
-
-def read_admin_token(token: str) -> int | None:
-    """Return the operator id from a valid admin session token."""
-    try:
-        data = _serializer().loads(token, max_age=ADMIN_SESSION_MAX_AGE)
-    except BadSignature, SignatureExpired:
-        return None
-    uid = data.get("uid") if isinstance(data, dict) else None
-    return uid if isinstance(uid, int) else None
-
-
 async def get_current_admin(request) -> User | None:
     """Load the signed-in operator from the request, if any."""
-    token = request.cookies.get(ADMIN_COOKIE)
-    if not token:
-        return None
-    uid = read_admin_token(token)
-    if uid is None:
-        return None
-    async with session_scope() as session:
-        user = await session.get(User, uid)
-        if user and user.is_admin and user.is_active:
-            return user
-    return None
+    user = await session_user(request, ADMIN_COOKIE, "admin")
+    return user if user and user.is_admin and user.role in {"owner", "staff"} and user.mfa_secret else None
 
 
 def _valid_csrf(request) -> bool:
@@ -449,6 +422,22 @@ def _valid_csrf(request) -> bool:
 async def load_admin(request):
     """Load the current operator into the request context."""
     request.ctx.admin = await get_current_admin(request)
+    user = request.ctx.admin
+    if user and user.role == "staff":
+        # Staff may fulfill orders/read preparation only, never finance, PII exports or access administration.
+        path = request.path.rstrip("/")
+        if path == "/admin":
+            return redirect("/admin/orders")
+        allowed = path in {"/admin/account", "/admin/logout", "/admin/orders/preparation", "/admin/orders"}
+        if request.method == "GET" and re.fullmatch(r"/admin/orders/\d+(/packing-slip)?", path):
+            allowed = True
+        if request.method == "POST" and re.fullmatch(r"/admin/orders/\d+/fulfillment", path):
+            allowed = True
+        if not allowed:
+            return json({"detail": "Owner permission required."}, status=403)
+    if user and request.method == "POST" and request.path not in {"/admin/logout", "/admin/login"}:
+        if not recent(request):
+            return json({"detail": "Reauthenticate in Account security before making changes."}, status=403)
 
 
 @bp.middleware("response")
@@ -542,6 +531,7 @@ def _page(request, template: str, status: int = 200, **context):
     token = secrets.token_urlsafe(32)
     context.setdefault("csrf_token", token)
     context.setdefault("admin", request.ctx.admin)
+    context.setdefault("operator", request.ctx.admin)
     context.setdefault("models", REGISTRY)
     context.setdefault("media_url", public_media_url())
     response = html(_env.get_template(template).render(**context), status=status)
@@ -750,22 +740,19 @@ async def login_submit(request):
         return _page(request, "admin/login.html", status=403, error="Your session expired. Please try again.")
     email = str(request.form.get("email", "")).strip().lower()
     password = str(request.form.get("password", ""))
+    if not await throttle(request, "admin_login", email):
+        return _page(request, "admin/login.html", status=429, error="Please try again later.")
     async with session_scope() as session:
         user = await session.scalar(select(User).where(User.email == email))
-        valid = bool(user and user.is_admin and user.is_active and verify_password(user.password_hash, password))
+        password_valid = verify_login_password(user, password)
+        valid = bool(password_valid and user.is_admin and user.role in {"owner", "staff"})
         user_id = user.id if valid else None
+        version = user.security_version if valid else 0
+        audit(session, request, "admin_password", target=user_id, outcome="success" if valid else "failed")
+        await session.commit()
     if not valid:
         return _page(request, "admin/login.html", status=400, error="Invalid email or password.")
-    response = redirect("/admin/")
-    response.add_cookie(
-        ADMIN_COOKIE,
-        create_admin_token(user_id),
-        max_age=ADMIN_SESSION_MAX_AGE,
-        httponly=True,
-        samesite="Lax",
-        secure=not get_settings().debug,
-    )
-    return response
+    return begin_admin_mfa(user_id, version)
 
 
 @bp.post("/logout")
@@ -774,6 +761,11 @@ async def logout(request):
     if not _valid_csrf(request):
         return json({"detail": "Invalid CSRF token."}, status=403)
     response = redirect("/admin/login")
+    user = request.ctx.admin
+    async with session_scope() as db:
+        audit(db, request, "admin_logout", actor=user.id if user else None, target=user.id if user else None)
+        await db.commit()
+    await revoke_session(request.cookies.get(ADMIN_COOKIE, ""))
     response.delete_cookie(ADMIN_COOKIE)
     return response
 
@@ -2448,6 +2440,8 @@ async def model_delete(request, slug: str, pk: int):
         return json({"detail": "Invalid CSRF token."}, status=403)
     if slug == "orders":
         return json({"detail": "Order history cannot be deleted."}, status=409)
+    if slug == "florists":
+        return json({"detail": "Use owner-reviewed account suspension/deletion in Account security."}, status=409)
     async with session_scope() as session:
         obj = await session.get(admin.model, pk)
         if obj is None:

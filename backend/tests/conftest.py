@@ -19,16 +19,26 @@ os.environ.setdefault("RESEND_API_KEY", "")
 # absent in CI.
 os.environ["DEBUG"] = "true"
 
+import pyotp  # noqa: E402
 import pytest_asyncio  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 
 from app import models  # noqa: E402,F401
-from app.db import Base, get_engine  # noqa: E402
+from app.db import (  # noqa: E402
+    Base,
+    get_engine,
+    session_scope,  # noqa: E402
+)
+from app.models import User  # noqa: E402
+from app.security import decrypt  # noqa: E402
+from app.security_views import CSRF_COOKIE as SECURITY_CSRF_COOKIE  # noqa: E402
 from app.server import app as sanic_app  # noqa: E402
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def _schema():
     sanic_app.asgi_client.cookies.clear()
+    sanic_app.asgi_client.headers["X-HoneySummer-Request"] = "1"
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -37,3 +47,30 @@ async def _schema():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     sanic_app.asgi_client.cookies.clear()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _complete_legacy_operator_login(request, monkeypatch):
+    """Existing operations tests complete actual MFA, not an auth bypass.
+
+    Security tests drive both steps themselves to exercise the preauth boundary.
+    """
+    if request.node.path.name == "test_security.py":
+        return
+    original = sanic_app.asgi_client.post
+
+    async def post(url, *args, **kwargs):
+        result = await original(url, *args, **kwargs)
+        response = result[1]
+        if url == "/admin/login" and response.status == 302:
+            await sanic_app.asgi_client.get("/admin/security/mfa")
+            async with session_scope() as db:
+                email = kwargs.get("data", {}).get("email", "")
+                user = await db.scalar(select(User).where(User.email == email))
+                secret = decrypt(user.mfa_secret or user.mfa_pending)
+            csrf = sanic_app.asgi_client.cookies.get(SECURITY_CSRF_COOKIE)
+            _, mfa = await original("/admin/security/mfa", data={"csrf_token": csrf, "code": pyotp.TOTP(secret).now()})
+            assert mfa.status in {200, 302}, mfa.text
+        return result
+
+    monkeypatch.setattr(sanic_app.asgi_client, "post", post)

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Account security · Honey Summer</title>
+<style>
+body{background:#f6f2ea;color:#6a4e42;font:1rem/1.6 system-ui;margin:0}main{max-width:850px;padding:24px;margin:auto}
+form,section{background:#fff9f3;border:1px solid #c8b6a6;border-radius:14px;padding:20px;margin:20px 0}
+label{display:block;margin-top:12px}input,select,textarea,button{font:inherit;max-width:100%;box-sizing:border-box;padding:10px;border:1px solid #6a4e42;border-radius:6px}
+input,textarea{width:100%}button{background:#6a4e42;color:white;margin-top:16px;cursor:pointer}a{color:inherit}.error{color:#a12b29}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;border-bottom:1px solid #c8b6a6}.scroll{overflow:auto}code{overflow-wrap:anywhere}
+</style></head><body><main>
+<a href="/">Honey Summer</a> · <a href="/wholesale">Wholesale</a> · <a href="/admin/">Admin</a>
+<h1>Account security</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if message %}<p role="status">{{ message }}</p>{% endif %}
+{% if mode == 'recovery' %}
+<h2>Forgot password</h2><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="email">Email</label><input id="email" name="email" type="email" required autocomplete="email">
+<button>Send recovery link</button></form>
+{% elif mode == 'reset' and token %}
+<h2>{{ 'Confirm email change' if kind == 'email' else 'Set your password' }}</h2>
+<form method="post" action="/admin/security/reset"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="kind" value="{{ kind }}">
+{% if kind != 'email' %}<label for="password">New password (at least 12 characters)</label>
+<input id="password" name="password" type="password" required minlength="12" maxlength="1024" autocomplete="new-password">{% endif %}
+<button>Confirm update</button></form>
+{% elif mode == 'mfa' %}
+<h2>Authenticator verification</h2>
+{% if secret %}<p>Add Honey Summer to an authenticator using this setup key, then enter its six-digit code.</p>
+<p><code>{{ secret }}</code></p><p><a href="{{ uri }}">Open authenticator setup</a></p>{% endif %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="code">Authenticator or recovery code</label><input id="code" name="code" autocomplete="one-time-code" required>
+<button>Verify and sign in</button></form>
+<p>Lost your authenticator? Use an unused recovery code or contact the owner. Password recovery does not remove MFA.</p>
+{% elif mode == 'codes' %}
+<h2>Save your recovery codes</h2><p>Shown only once. Keep offline in a safe place. Each code can be used once instead of an authenticator code.</p>
+<ul>{% for code in codes %}<li><code>{{ code }}</code></li>{% endfor %}</ul>
+{% elif mode == 'account' %}
+<p>{{ user.email }} · {{ user.role }} · {{ 'MFA enabled' if user.mfa_secret else 'MFA not enabled' }}</p>
+{% if user.role == 'owner' %}<p><a href="/admin/security/access">Manage accounts, security events and privacy requests</a></p>{% endif %}
+{% if pending %}<p>Authenticator setup key: <code>{{ pending }}</code>. Add it to your authenticator before confirming.</p>{% endif %}
+<form method="post" action="/admin/security/change">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="action">Action</label><select id="action" name="action">
+<option value="reauth">Reauthenticate for sensitive changes</option><option value="password">Change password</option>
+<option value="email">Change login email</option><option value="revoke">Sign out all browsers</option>
+{% if user.role == 'florist' %}<option value="profile">Update business contact details</option><option value="export">Request data export</option><option value="deletion">Request account deletion</option>{% endif %}
+{% if not user.mfa_secret %}<option value="mfa_start">Start MFA setup</option><option value="mfa_confirm">Confirm MFA setup</option>{% else %}<option value="recovery_codes">Replace recovery codes</option>{% endif %}
+</select>
+<label for="current_password">Current password</label><input id="current_password" name="current_password" type="password" required autocomplete="current-password">
+<label for="code">Authenticator / recovery code (required if MFA enabled)</label><input id="code" name="code" autocomplete="one-time-code">
+<label for="password">New password (password change only)</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024">
+<label for="email">New login email (email change only)</label><input id="email" name="email" type="email" autocomplete="email">
+{% if user.profile %}
+<label for="contact_name">Contact name</label><input id="contact_name" name="contact_name" value="{{ user.profile.contact_name }}" maxlength="200">
+<label for="business_name">Business name</label><input id="business_name" name="business_name" value="{{ user.profile.business_name }}" maxlength="200">
+<label for="phone">Phone</label><input id="phone" name="phone" value="{{ user.profile.phone }}" maxlength="40" autocomplete="tel">
+<label for="website">HTTPS website</label><input id="website" name="website" type="url" value="{{ user.profile.website }}" maxlength="500">{% endif %}
+<button>Confirm action</button></form>
+{% elif mode == 'access' %}
+<h2>Access management</h2><p>Staff can read and fulfill orders only. Florist approval does not activate a suspended account. Changes revoke existing sessions. You cannot change your own role here.</p>
+<form method="get"><label for="q">Find accounts by email (up to 200 matching accounts)</label><input id="q" name="q" type="search" maxlength="254"><button>Find accounts</button></form>
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="action">Action</label><select id="action" name="action">{% for action in ['invite','reinvite','approve','deny','suspend','reactivate','revoke','reset_mfa','staff','owner'] %}<option>{{ action }}</option>{% endfor %}</select>
+<label for="user_id">Target account (except new invitation)</label><select id="user_id" name="user_id">{% for account in users %}<option value="{{ account.id }}">{{ account.id }} · {{ account.email }} · {{ account.role }} · {{ 'active' if account.is_active else 'inactive' }}</option>{% endfor %}</select>
+<label for="email">Email for new staff invitation</label><input id="email" name="email" type="email">
+<label for="reason">Recorded reason</label><textarea id="reason" name="reason" required maxlength="2000"></textarea><button>Confirm access change</button></form>
+<h2>Security mail awaiting provider acceptance</h2><p>Console mail is local evidence only. Provider acceptance is not inbox delivery.</p><ul>{% for mail in failures %}<li>#{{ mail.id }} · {{ mail.subject }} · {{ mail.attempts }} attempts</li>{% else %}<li>No queued mail.</li>{% endfor %}</ul>
+<h2>Privacy requests</h2><ul>{% for item in requests %}<li>#{{ item.id }} · account {{ item.user_id }} · {{ item.kind }} · {{ item.status }} · {{ item.notes }} <a href="/admin/security/privacy/{{ item.id }}">Review</a></li>{% else %}<li>No requests.</li>{% endfor %}</ul>
+<h2>Security events</h2><form method="get"><label for="filter">Action filter</label><input id="filter" name="action"><button>Filter</button></form>
+<div class="scroll"><table><thead><tr><th>Time</th><th>Actor</th><th>Target</th><th>Action</th><th>Outcome</th></tr></thead><tbody>{% for event in events %}<tr><td>{{ event.created_at }}</td><td>{{ event.actor_id or '—' }}</td><td>{{ event.target_id or '—' }}</td><td>{{ event.action }}</td><td>{{ event.outcome }}</td></tr>{% endfor %}</tbody></table></div>
+{% elif mode == 'privacy' %}
+<h2>Review {{ item.kind }} request #{{ item.id }}</h2><p>Account {{ item.user_id }} · {{ item.status }}</p><p>Export excludes credentials, MFA and tokens. Deletion disables access and anonymizes contact details only after legal retention review; orders, invoices and audit IDs remain intact.</p>
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label for="notes">Retention/identity-review decision</label><textarea id="notes" name="notes" required maxlength="2000"></textarea><label for="decision">Decision</label><select id="decision" name="decision"><option value="approve">Approve</option><option value="deny">Deny</option></select><button>Record decision</button></form>
+{% if item.snapshot %}<h3>Reviewed export</h3><pre style="white-space:pre-wrap">{{ item.snapshot|tojson(indent=2) }}</pre>{% endif %}
+{% endif %}
+<p><a href="/admin/security/">Account settings</a> · <a href="/admin/security/recovery">Forgot password</a> · <a href="/admin/login">Operator sign in</a></p>
+</main></body></html>

@@ -23,7 +23,15 @@ FULFILLMENT_LABELS = {"pickup": "Pickup", "delivery": "Delivery"}
 ORDER_LABELS = {"wholesale": "wholesale order", "retail": "order"}
 
 
-def send_email(*, subject: str, body: str, to: str, reply_to: str | None = None) -> None:
+def send_email(
+    *,
+    subject: str,
+    body: str,
+    to: str,
+    reply_to: str | None = None,
+    html_body: str | None = None,
+    idempotency_key: str | None = None,
+) -> None:
     """Send one email through Resend, or log it when no key is configured."""
     settings = get_settings()
     if settings.resend_api_key:
@@ -36,7 +44,12 @@ def send_email(*, subject: str, body: str, to: str, reply_to: str | None = None)
         }
         if reply_to:
             params["reply_to"] = reply_to
-        resend.Emails.send(params)
+        if html_body:
+            params["html"] = html_body
+        if idempotency_key:
+            resend.Emails.send(params, {"idempotency_key": idempotency_key})
+        else:
+            resend.Emails.send(params)
         return
     logger.info("Email to %s · %s\n%s", to, subject, body)
 

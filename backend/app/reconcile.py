@@ -8,9 +8,13 @@ import argparse
 import asyncio
 import sys
 
+from sqlalchemy import func, select
+
 from .db import session_scope
 from .models import ReconciliationRun
 from .payments import reconcile
+from .security import deliver_security_mail
+from .security_models import SecurityMail
 
 
 async def record_run(findings: list[str], *, applied: bool, full: bool) -> None:
@@ -30,6 +34,14 @@ async def record_run(findings: list[str], *, applied: bool, full: bool) -> None:
 async def reconcile_and_record(*, apply: bool, full: bool) -> list[str]:
     """Use one event loop for the audit and its persistent run summary."""
     findings = await reconcile(apply=apply, full=full)
+    if apply:
+        await deliver_security_mail()
+    async with session_scope() as db:
+        pending = await db.scalar(
+            select(func.count()).select_from(SecurityMail).where(SecurityMail.accepted_at.is_(None))
+        )
+    if pending:
+        findings.append(f"{pending} security messages awaiting provider acceptance; retry with --apply.")
     await record_run(findings, applied=apply, full=full)
     return findings
 

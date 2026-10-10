@@ -12,7 +12,7 @@ const keyFor = (channel: Channel, id: number | null) => `hs-cart-v1:${channel ==
 
 export async function cartApi(path: string, options?: RequestInit) {
   const response = await fetch(`/api/${path}`, { cache: "no-store", signal: AbortSignal.timeout(15000), ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers } });
+    headers: { "Content-Type": "application/json", "X-HoneySummer-Request": "1", ...options?.headers } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(data.detail || Object.entries(data).map(([key, value]) => `${key.replaceAll("_", " ")}: ${Array.isArray(value) ? value.join(" ") : value}`).join(" ") || "Unable to connect. Please try again.");

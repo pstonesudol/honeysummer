@@ -38,8 +38,8 @@ async def florist(approved=True, active=True):
         return user.id
 
 
-def cookie(uid):
-    app.asgi_client.cookies.set(COOKIE_NAME, create_session_token(uid))
+async def cookie(uid):
+    app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
 
 
 async def retail(flower, key, **extra):
@@ -141,7 +141,7 @@ async def test_wrong_channels_price_changes_and_shared_stock():
     _, price = await retail(retail_only, str(uuid4()), items=[{"id": retail_only, "quantity": 1, "price": "0.01"}])
     assert price.status == 409 and "price" in price.json["detail"]
     uid = await florist()
-    cookie(uid)
+    await cookie(uid)
     _, wrong = await app.asgi_client.post(
         "/api/checkout/", json={"items": [{"id": retail_only, "quantity": 1}], "checkout_key": str(uuid4())}
     )
@@ -158,7 +158,7 @@ async def test_wrong_channels_price_changes_and_shared_stock():
 @pytest.mark.asyncio
 async def test_wholesale_attempt_is_scoped_to_active_approved_account():
     flower, key, uid = await listing(), str(uuid4()), await florist()
-    cookie(uid)
+    await cookie(uid)
     _, checkout = await app.asgi_client.post(
         "/api/checkout/", json={"items": [{"id": flower, "quantity": 1}], "checkout_key": key}
     )
@@ -166,10 +166,10 @@ async def test_wholesale_attempt_is_scoped_to_active_approved_account():
     app.asgi_client.cookies.clear()
     _, anonymous = await app.asgi_client.get(f"/api/cart/checkout/{key}/")
     assert anonymous.status == 403
-    cookie(await florist())
+    await cookie(await florist())
     _, other = await app.asgi_client.get(f"/api/cart/checkout/{key}/")
     assert other.status == 403
-    cookie(uid)
+    await cookie(uid)
     async with session_scope() as db:
         profile = await db.scalar(select(FloristProfile).where(FloristProfile.user_id == uid))
         profile.approved = False
@@ -191,7 +191,7 @@ async def test_invalid_and_unknown_keys_and_cross_channel_retry():
     _, missing = await app.asgi_client.get(f"/api/cart/checkout/{key}/")
     assert missing.status == 404
     await retail(flower, key)
-    cookie(await florist())
+    await cookie(await florist())
     _, cross = await app.asgi_client.post(
         "/api/checkout/", json={"items": [{"id": flower, "quantity": 1}], "checkout_key": key}
     )
