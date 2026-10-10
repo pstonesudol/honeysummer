@@ -593,6 +593,15 @@ async def test_bulk_restock_and_physical_count_keep_audit_trail():
     assert flower.quantity_available == 4
     assert any(entry.kind == "restock" and entry.delta == 3 for entry in movements)
     assert any(entry.kind == "count" and entry.delta == -1 for entry in movements)
+    url = f"/admin/flowers/{flower_id}/inventory"
+    _, filtered = await app.asgi_client.get(f"{url}?kind=restock&q=Garden")
+    assert filtered.status == 200 and "1 matching movement" in filtered.text
+    assert "Weekly count" not in filtered.text
+    _, exported = await app.asgi_client.get(f"{url}?kind=restock&format=csv")
+    assert exported.status == 200 and "Harvest 42" in exported.text
+    assert "Weekly count" not in exported.text
+    _, invalid_page = await app.asgi_client.get(f"{url}?page=abc")
+    assert invalid_page.status == 400
 
 
 @pytest.mark.asyncio

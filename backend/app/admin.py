@@ -18,6 +18,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -40,6 +41,7 @@ from .models import (
     InventoryMovement,
     Order,
     OrderItem,
+    OrderNotification,
     User,
     WeddingInvoice,
     WeddingQuote,
@@ -1112,6 +1114,82 @@ async def sales_report(request):
     return _page(request, "admin/sales_report.html", rows=rows, totals=totals, start=start, end=end)
 
 
+@bp.get("/reports/balances")
+async def invoice_balances(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    from .balance_report import invoice_balance_rows
+    async with session_scope() as db:
+        rows = await invoice_balance_rows(db)
+    totals = dict(remaining_cents=sum(row["balance_cents"] for row in rows),
+                  open_cents=sum(row["open_cents"] for row in rows),
+                  verified_paid_cents=sum(row["verified_paid_cents"] for row in rows))
+    if request.args.get("format") == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(("Type", "Reference", "Customer", "Title", "Status", "Verified paid USD",
+                         "Remaining USD", "Open invoice USD", "Estimated due Eastern", "Needs review"))
+        def safe(value):
+            value = str(value or "")
+            return "'" + value if value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")) else value
+        for row in rows:
+            writer.writerow((row["kind"], row["id"], safe(row["customer"]), safe(row["title"]), row["status"],
+                             f"{row['verified_paid_cents'] / 100:.2f}", f"{row['balance_cents'] / 100:.2f}",
+                             f"{row['open_cents'] / 100:.2f}", row["due"] or "", row["needs_review"]))
+        return text(output.getvalue(), content_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename=honey-summer-invoice-balances.csv"})
+    return _page(request, "admin/invoice_balances.html", rows=rows, totals=totals)
+
+
+@bp.get("/reports/operations")
+async def operations_report(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    try:
+        start = date.fromisoformat(request.args.get("from")) if request.args.get("from") else None
+        end = date.fromisoformat(request.args.get("to")) if request.args.get("to") else None
+    except ValueError:
+        return json({"detail": "Use YYYY-MM-DD for report dates."}, status=400)
+    if start and end and end < start:
+        return json({"detail": "End date must be on or after start date."}, status=400)
+    from .operations_report import operations_rows
+    async with session_scope() as db:
+        waste, products, channels = await operations_rows(db, start, end)
+    if request.args.get("format") == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(("Section", "Reference", "Name", "Channel / source", "Payment", "Status", "Orders", "Units", "Original gross USD", "Reason", "Date UTC"))
+        def safe(value):
+            value = str(value or "")
+            return "'" + value if value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")) else value
+        for row in waste:
+            writer.writerow(("Waste", row["code"], safe(row["name"]), safe(row["source"]), "", "", "", row["units"], "", safe(row["reason"]), row["date"].isoformat()))
+        for row in products:
+            writer.writerow(("Product", row["listing_id"] or "Custom", safe(row["name"]), row["channel"], "", row["status"], row["orders"], row["units"], f"{row['gross']:.2f}", "", ""))
+        for row in channels:
+            writer.writerow(("Channel", "", "", row["channel"], row["payment"], row["status"], row["orders"], "", f"{row['gross']:.2f}", "", ""))
+        return text(output.getvalue(), content_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename=honey-summer-operations.csv"})
+    return _page(request, "admin/operations_report.html", waste=waste, products=products,
+                 channels=channels, start=start, end=end)
+
+
+@bp.get("/operations/attention")
+async def operations_attention(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        notices = (await db.scalars(select(OrderNotification)
+            .where(OrderNotification.sent_at.is_(None))
+            .order_by(OrderNotification.created_at.desc()).limit(200))).all()
+        quotes = (await db.scalars(select(WeddingQuote).where(WeddingQuote.status.in_(("review", "issuing")))
+            .order_by(WeddingQuote.id.desc()).limit(200))).all()
+        proposals = (await db.scalars(select(BouquetProposal).where(BouquetProposal.status.in_(("review", "issuing", "stock_review")))
+            .order_by(BouquetProposal.id.desc()).limit(200))).all()
+    return _page(request, "admin/operations_attention.html", notices=notices,
+                 quotes=quotes, proposals=proposals)
+
+
 @bp.get("/customers")
 async def customer_history(request):
     if not request.ctx.admin:
@@ -1364,6 +1442,14 @@ async def flower_inventory(request, pk: int):
         return redirect("/admin/login")
     from .models import InventoryMovement, OrderItem
 
+    kind = str(request.args.get("kind", "")).strip()
+    query = str(request.args.get("q", "")).strip()[:100]
+    try:
+        page = max(1, int(request.args.get("page", "1")))
+    except ValueError:
+        return json({"detail": "Page must be a number."}, status=400)
+    page = min(page, 100000)
+
     async with session_scope() as db:
         listing = await db.get(FlowerListing, pk)
         if not listing:
@@ -1373,13 +1459,38 @@ async def flower_inventory(request, pk: int):
             .join(Order, Order.id == OrderItem.order_id)
             .where(OrderItem.listing_id == pk, Order.status == "pending")
         )
-        movements = (await db.scalars(
-            select(InventoryMovement).where(InventoryMovement.listing_id == pk)
-            .order_by(InventoryMovement.id.desc()).limit(100)
-        )).all()
+        filters = [InventoryMovement.listing_id == pk]
+        if kind:
+            filters.append(InventoryMovement.kind == kind)
+        if query:
+            escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            filters.append(or_(InventoryMovement.reason.ilike(pattern, escape="\\"),
+                               InventoryMovement.source.ilike(pattern, escape="\\")))
+        statement = select(InventoryMovement).where(*filters).order_by(InventoryMovement.id.desc())
+        if request.args.get("format") == "csv":
+            movements = (await db.scalars(statement)).all()
+        else:
+            movements = (await db.scalars(statement.limit(100).offset((page - 1) * 100))).all()
+        movement_count = await db.scalar(select(func.count()).select_from(InventoryMovement).where(*filters))
+    if request.args.get("format") == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(("Movement ID", "Date UTC", "Listing", "Kind", "Available change", "Units", "Order ID", "Actor ID", "Source", "Reason"))
+        def safe(value):
+            value = str(value or "")
+            return "'" + value if value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")) else value
+        for movement in movements:
+            writer.writerow((movement.id, movement.created_at.isoformat(), listing.listing_code,
+                             movement.kind, movement.delta, movement.units, movement.order_id or "",
+                             movement.actor_id or "", safe(movement.source), safe(movement.reason)))
+        return text(output.getvalue(), content_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f"attachment; filename=inventory-{listing.listing_code}.csv"})
     return _page(
         request, "admin/inventory.html", listing=listing, movements=movements,
         reserved=reserved, on_hand=listing.quantity_available + reserved,
+        movement_count=movement_count, page=page, kind=kind, query=query,
+        movement_params=urlencode({"kind": kind, "q": query}),
     )
 
 

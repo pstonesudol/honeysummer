@@ -1,7 +1,7 @@
 {% extends "admin/base.html" %}
 {% block content %}
 <h1>Sales ledger</h1>
-<p class="muted">Order totals are gross amounts, not net revenue. Refunded rows show their original order total, not the refund amount. Filter by order creation date in Eastern time. This view does not yet include outstanding invoices, partial refunds, fees or tax.</p>
+<p class="muted">Order totals are gross amounts, not net revenue. Refunded rows show their original order total, not the refund amount. Filter by order creation date in Eastern time. <a href="/admin/reports/balances">Invoice balances</a> are tracked separately; this view does not yet include partial refunds, fees or tax.</p>
 <form method="get" action="/admin/reports/sales" class="row">
   <label for="from">From <input type="date" id="from" name="from" value="{{ start or '' }}"></label>
   <label for="to">To <input type="date" id="to" name="to" value="{{ end or '' }}"></label>

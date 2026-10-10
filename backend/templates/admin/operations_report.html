@@ -1,0 +1,27 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Products, channels &amp; waste</h1>
+<p class="muted">Filter by order placement or waste-entry date in Eastern time. Gross figures use original paid-order item snapshots and include fully refunded orders in separate rows; they are not net revenue. Waste counts are actual recorded waste entries, not stock-count discrepancies. No historical waste dollar valuation is inferred from current prices.</p>
+<form method="get" action="/admin/reports/operations" class="row">
+  <label for="from">From <input type="date" id="from" name="from" value="{{ start or '' }}"></label>
+  <label for="to">To <input type="date" id="to" name="to" value="{{ end or '' }}"></label>
+  <button type="submit">Filter</button>
+  <button type="submit" name="format" value="csv">Export CSV</button>
+</form>
+<h2>Channels and payment methods</h2>
+<div class="table-scroll"><table><thead><tr><th>Channel</th><th>Payment</th><th>Status</th><th>Orders</th><th>Original gross (incl. delivery)</th></tr></thead><tbody>
+{% for row in channels %}<tr><td>{{ row.channel|admin_label }}</td><td>{{ row.payment|admin_label }}</td><td>{{ row.status|admin_label }}</td><td>{{ row.orders }}</td><td>${{ '%.2f'|format(row.gross) }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No paid orders in this period.</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>Products and custom arrangements</h2>
+<p class="muted">Product gross excludes delivery. Names and prices are the values recorded on each order; renamed listings may appear on separate rows.</p>
+<div class="table-scroll"><table><thead><tr><th>Product</th><th>Channel</th><th>Status</th><th>Orders</th><th>Units</th><th>Original gross</th></tr></thead><tbody>
+{% for row in products %}<tr><td>{{ row.name }}{% if row.listing_id %} · FL-{{ '%04d'|format(row.listing_id) }}{% else %} · Custom{% endif %}</td><td>{{ row.channel|admin_label }}</td><td>{{ row.status|admin_label }}</td><td>{{ row.orders }}</td><td>{{ row.units }}</td><td>${{ '%.2f'|format(row.gross) }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No sold items in this period.</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>Recorded waste</h2>
+<div class="table-scroll"><table><thead><tr><th>When (Eastern)</th><th>Listing</th><th>Units</th><th>Reason</th><th>Source</th></tr></thead><tbody>
+{% for row in waste %}<tr><td>{{ row.date|admin_date }}</td><td><a href="/admin/flowers/{{ row.listing_id }}/inventory">{{ row.code }} · {{ row.name }}</a></td><td>{{ row.units }}</td><td>{{ row.reason }}</td><td>{{ row.source }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No waste entries in this period.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

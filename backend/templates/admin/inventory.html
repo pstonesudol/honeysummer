@@ -29,11 +29,23 @@
   <p><button type="submit">Record physical count</button></p>
 </form>
 <h2>Movement history</h2>
+<form method="get" action="/admin/flowers/{{ listing.id }}/inventory" class="row">
+  <label for="movement-kind">Type <select id="movement-kind" name="kind">
+    <option value="">All movements</option>
+    {% for option in ['restock', 'waste', 'market_sale', 'adjustment', 'count', 'reserve', 'release', 'sale', 'refund', 'return', 'opening'] %}<option value="{{ option }}" {% if kind == option %}selected{% endif %}>{{ option|admin_label }}</option>{% endfor %}
+  </select></label>
+  <label for="movement-search">Reason or source <input id="movement-search" name="q" type="text" value="{{ query }}" maxlength="100"></label>
+  <button type="submit">Search</button>
+  <button type="submit" name="format" value="csv">Export matching CSV</button>
+</form>
+<p class="muted">{{ movement_count }} matching movement{{ '' if movement_count == 1 else 's' }} · page {{ page }}</p>
 <div style="overflow-x:auto">
 <table><thead><tr><th>When</th><th>Type</th><th>Available change</th><th>Units</th><th>Order</th><th>Actor</th><th>Source</th><th>Reason</th></tr></thead>
 <tbody>{% for movement in movements %}<tr>
   <td>{{ movement.created_at|admin_date }}</td><td>{{ movement.kind|admin_label }}</td><td>{{ movement.delta }}</td>
   <td>{{ movement.units }}</td><td>{{ movement.order_id or '—' }}</td><td>{{ movement.actor_id or '—' }}</td><td>{{ movement.source }}</td><td>{{ movement.reason }}</td>
-</tr>{% endfor %}</tbody></table>
+  </tr>{% else %}<tr><td colspan="8" class="muted">No matching movements.</td></tr>{% endfor %}</tbody></table>
 </div>
+<p class="row">{% if page > 1 %}<a href="?{{ movement_params }}&amp;page={{ page - 1 }}">Previous</a>{% endif %}
+{% if page * 100 < movement_count %}<a href="?{{ movement_params }}&amp;page={{ page + 1 }}">Next</a>{% endif %}</p>
 {% endblock %}
