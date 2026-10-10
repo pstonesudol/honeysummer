@@ -381,6 +381,8 @@ def _row_actions(account, profile) -> list[tuple[str, str, str]]:
         actions.append(("revoke", "Sign out all sessions", "quiet"))
         if account.role != "admin":
             actions.append(("reset_mfa", "Reset authenticator", "quiet"))
+    if account.is_active:
+        actions.append(("password", "Send password reset", "quiet"))
     return actions
 
 
@@ -531,9 +533,21 @@ async def manage_access(request):
                     "Set up within 30 minutes:\n" + public_link(f"/admin/security/reset?kind=invite&token={token}"),
                     challenge=True,
                 )
+            elif action == "password":
+                if not user.is_active:
+                    return json({"detail": "Reactivate the account before sending a password reset."}, status=400)
+                token = issue_token(db, user, "reset")
+                queue_mail(
+                    db,
+                    user.email,
+                    "Reset your password",
+                    "An administrator sent you a password reset link. Use this single-use link within 30 minutes:\n"
+                    + public_link(f"/admin/security/reset?token={token}&kind=reset"),
+                    challenge=True,
+                )
             else:
                 return json({"detail": "Unknown access action."}, status=400)
-            if action != "reinvite":
+            if action not in {"reinvite", "password"}:
                 user.security_version += 1
             queue_mail(
                 db,

@@ -336,6 +336,23 @@ async def test_users_table_lists_and_filters_accounts():
 
 
 @pytest.mark.asyncio
+async def test_admin_can_send_password_reset_link(monkeypatch):
+    sent = []
+    monkeypatch.setattr(emails, "send_email", lambda **kwargs: sent.append(kwargs))
+    await admin_session()
+    target = await make_user(role="florist", email="resetme@example.com")
+    _, response = await access({"action": "password", "user_id": target})
+    assert response.status == 302
+    reset = next(mail for mail in sent if "Reset your password" in mail["subject"])
+    assert reset["to"] == "resetme@example.com"
+    token = re.search(r"token=([^\s&]+)", reset["body"]).group(1)
+    _, completed = await reset_token(token)
+    assert completed.status == 200
+    async with session_scope() as db:
+        assert verify_password((await db.get(User, target)).password_hash, "another-unique-garden-passphrase")
+
+
+@pytest.mark.asyncio
 async def test_admin_self_removal_forbidden_and_suspension_preserves_history():
     admin = await admin_session()
     florist = await make_user()
