@@ -9,6 +9,7 @@ from app.auth import hash_password
 from app.db import session_scope
 from app.models import FlowerListing, InventoryMovement, Inquiry, Order, OrderItem, OrderNotification, User, WeddingQuote
 from app.operations_report import operations_rows
+from app.reconcile import record_run
 from app.server import app
 
 
@@ -73,3 +74,6 @@ async def test_product_channel_and_waste_reports_keep_gross_and_stock_separate()
     assert attention.status == 200
     assert "Wedding quote #1" in attention.text and "Order #1" in attention.text
     assert "<td>2</td>" in attention.text
+    await record_run(["Order #1: check Stripe"], applied=False, full=False)
+    _, attention = await app.asgi_client.get("/admin/operations/attention")
+    assert "Order #1: check Stripe" in attention.text and "1 finding" in attention.text

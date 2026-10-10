@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import localFont from "next/font/local";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
+import { getSiteContent } from "@/lib/api";
 import "./globals.css";
 
 const gaian = localFont({
@@ -44,11 +45,12 @@ export const metadata: Metadata = {
     "Seasonal flowers, garden-inspired floral design, and florist wholesale in Mountain Top and Northeast Pennsylvania.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const content = await getSiteContent();
   return (
     <html
       lang="en"
@@ -62,7 +64,7 @@ export default function RootLayout({
         <div className="site-shell">
           <Header />
           <main id="main-content">{children}</main>
-          <Footer />
+           <Footer content={content} />
         </div>
       </body>
     </html>

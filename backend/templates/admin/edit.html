@@ -15,6 +15,12 @@
       action="{% if obj %}/admin/{{ admin.slug }}/{{ obj.id }}{% else %}/admin/{{ admin.slug }}/new{% endif %}"
       enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% if admin.slug == 'flowers' %}
+    <label for="gallery_image_id">Reuse a gallery image instead of uploading a new photo (optional)</label>
+    <select id="gallery_image_id" name="gallery_image_id"><option value="">Keep current photo / use upload</option>
+      {% for image in gallery_options %}<option value="{{ image.id }}">#{{ image.id }} · {{ image.caption or image.alt_text }}</option>{% endfor %}
+    </select>
+  {% endif %}
   <div class="grid">
     {% for row in rows %}
     <div class="{% if row.field.kind in ['textarea', 'readonly'] %}full{% endif %}">
@@ -94,6 +100,27 @@
 <p class="muted">No items recorded for this order.</p>
 {% endif %}
 {% endif %}
+{% if obj and admin.slug == 'orders' %}
+<h2>Payment refunds</h2>
+<p class="muted">Refunds change payment state only. No items are automatically returned to available stock; use the separate return action only when goods physically come back. An invoice-funded wedding or bouquet order needs individual invoice review in Stripe before refunding.</p>
+{% if refunds %}<div class="table-scroll"><table><thead><tr><th>Date (Eastern)</th><th>Amount</th><th>Status</th><th>Reference</th><th>Reason</th></tr></thead><tbody>
+{% for refund in refunds %}<tr><td>{{ refund.created_at|admin_date }}</td><td>${{ '%.2f'|format(refund.amount_cents / 100) }}</td><td>{{ refund.status|admin_label }}</td><td>{{ refund.reference }}</td><td>{{ refund.reason }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% if obj.status == 'paid' and obj.payment_method in ['cash', 'external', 'stripe_checkout'] and (refunds|selectattr('status', 'ne', 'succeeded')|list|length == 0) and (refunds|sum(attribute='amount_cents')) < (order_total * 100)|int %}
+<form method="post" action="/admin/orders/{{ obj.id }}/refund">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="refund_key" value="{{ refund_key }}">
+  <p class="muted">Recorded refunds: ${{ '%.2f'|format((refunds|sum(attribute='amount_cents')) / 100) }} of ${{ '%.2f'|format(order_total) }}. {% if obj.payment_method == 'stripe_checkout' %}This sends a Stripe refund to the original Checkout payment method.{% else %}First complete the cash/external refund outside this system, then record its reference here.{% endif %}</p>
+  <div class="grid"><div><label for="refund_amount">Amount (USD)</label><input id="refund_amount" type="number" name="amount" min="0.01" step="0.01" required></div>
+  <div><label for="refund_reason">Reason</label><input id="refund_reason" type="text" name="reason" maxlength="255" required></div>
+  {% if obj.payment_method != 'stripe_checkout' %}<div><label for="refund_reference">External refund reference</label><input id="refund_reference" type="text" name="reference" maxlength="255" required></div>
+  <div><label for="refund_confirmed"><input id="refund_confirmed" type="checkbox" name="confirmed" required> I have already returned this amount to the customer</label></div>{% endif %}</div>
+  <p><button type="submit">{{ 'Initiate Stripe refund' if obj.payment_method == 'stripe_checkout' else 'Record completed refund' }}</button></p>
+</form>
+{% elif obj.payment_method == 'stripe_invoice' %}<p class="error">Stripe invoice payments require invoice-level refund review; do not use a Checkout refund for these orders.</p>
+{% elif obj.status == 'refunded' and not refunds %}<p class="muted">This older refund has no payment journal here. Inspect its payment provider record before taking further action.</p>
+{% elif refunds and (refunds|selectattr('status', 'ne', 'succeeded')|list|length) %}<p class="error">A refund outcome is uncertain. Check Stripe before any further refund request.</p>{% endif %}
+{% endif %}
 {% if obj and admin.slug == 'flowers' %}
 <p><a href="/admin/flowers/{{ obj.id }}/inventory">View inventory history and adjust stock</a></p>
 <form method="post" action="/admin/flowers/{{ obj.id }}/duplicate">
@@ -108,6 +135,16 @@
 <p><a class="button" href="/admin/weddings/from-inquiry/{{ obj.id }}">Open wedding quote</a></p>
 {% endif %}
 {% if obj and admin.slug == 'inquiries' %}
+<h2>Correspondence history</h2>
+<p class="muted">Record an email already sent or received outside this system. This form does not send anything or import a mailbox. Do not record sensitive payment details.</p>
+<form method="post" action="/admin/inquiries/{{ obj.id }}/correspondence">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid"><div><label for="direction">Direction</label><select id="direction" name="direction"><option value="sent">Sent to customer</option><option value="received">Received from customer</option></select></div>
+  <div><label for="subject">Subject</label><input id="subject" name="subject" type="text" maxlength="200" required></div>
+  <div class="full"><label for="summary">Summary or email text</label><textarea id="summary" name="summary" maxlength="4000" rows="4" required></textarea></div></div>
+  <p><button type="submit">Record correspondence</button></p>
+</form>
+<ol>{% for entry in correspondence %}<li>{{ entry.occurred_at|admin_date }} · {{ entry.direction|admin_label }} · {{ entry.subject }} · operator #{{ entry.actor_id }}<pre>{{ entry.summary }}</pre></li>{% else %}<li>No correspondence recorded yet.</li>{% endfor %}</ol>
 <h2>Follow-up</h2>
 <p><a href="/admin/customers?email={{ obj.email|urlencode }}">View customer history</a></p>
 <form method="post" action="/admin/inquiries/{{ obj.id }}/follow-up">

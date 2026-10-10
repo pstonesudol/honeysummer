@@ -7,13 +7,13 @@ from sqlalchemy import select
 from ..auth import get_current_user
 from ..db import session_scope
 from ..models import FlowerListing
-from ..settings import get_settings
 
 bp = Blueprint("catalog", url_prefix="/api")
 
 
 def _listing_payload(listing: FlowerListing) -> dict:
-    base = get_settings().media_url.rstrip("/")
+    from ..media import public_media_url
+    base = public_media_url()
     return {
         "id": listing.id,
         "name": listing.name,

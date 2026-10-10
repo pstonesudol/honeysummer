@@ -36,9 +36,11 @@ function formatError(data: unknown): string {
 export function RetailShop({
   flowers,
   checkoutStatus = null,
+  pickupWindow = pickup.window,
 }: {
   flowers: FlowerListing[];
   checkoutStatus?: CheckoutStatus;
+  pickupWindow?: string;
 }) {
   const [cart, setCart] = useState<Cart>({});
   const [fulfillment, setFulfillment] = useState<Fulfillment>("pickup");
@@ -247,7 +249,7 @@ export function RetailShop({
                   <input
                     id="retail-pickup"
                     name="pickup_window"
-                    placeholder={pickup.window}
+                     placeholder={pickupWindow}
                   />
                 </div>
               )}

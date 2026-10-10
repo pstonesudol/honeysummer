@@ -1,8 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { getSiteContent } from "@/lib/api";
 
-export default function Home() {
+export default async function Home() {
+  const content = await getSiteContent();
   return (
     <>
       <section className="hero" aria-labelledby="hero-title">
@@ -20,8 +22,7 @@ export default function Home() {
             Flowers grown with the <em>seasons.</em>
           </h1>
           <p className="hero__lede">
-            Locally grown blooms and garden-inspired floral design for the
-            everyday, meaningful gatherings, and the florists who make magic.
+             {content.homeIntro || "Locally grown blooms and garden-inspired floral design for the everyday, meaningful gatherings, and the florists who make magic."}
           </p>
           <div className="button-row">
             <Link className="button button--light" href="/order-flowers">

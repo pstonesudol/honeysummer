@@ -81,6 +81,8 @@ class Announcement(Base):
     link_url: Mapped[str] = mapped_column(String(500), default="")
     link_label: Mapped[str] = mapped_column(String(80), default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    starts_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    ends_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -98,11 +100,23 @@ class GalleryImage(Base):
     alt_text: Mapped[str] = mapped_column(String(250), default="")
     caption: Mapped[str] = mapped_column(String(250), default="")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    focal_x: Mapped[int] = mapped_column(Integer, default=50)
+    focal_y: Mapped[int] = mapped_column(Integer, default=50)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     def __str__(self) -> str:
         return self.caption or self.alt_text or f"Gallery image {self.id}"
+
+
+class SiteContent(Base):
+    """Single owner-edited storefront content document."""
+    __tablename__ = "site_content"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    content: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class Inquiry(Base):
@@ -125,6 +139,20 @@ class Inquiry(Base):
 
     def __str__(self) -> str:
         return f"{self.kind} — {self.name}"
+
+
+class InquiryCorrespondence(Base):
+    """Owner-entered record of a conversation; this does not send email."""
+    __tablename__ = "inquiry_correspondence"
+    __table_args__ = (CheckConstraint("direction IN ('received', 'sent')", name="correspondence_direction_valid"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inquiry_id: Mapped[int] = mapped_column(ForeignKey("inquiries.id"), index=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    direction: Mapped[str] = mapped_column(String(12))
+    subject: Mapped[str] = mapped_column(String(200))
+    summary: Mapped[str] = mapped_column(Text)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class BouquetProposal(Base):
@@ -213,6 +241,7 @@ class FlowerListing(Base):
     quantity_available: Mapped[int] = mapped_column(Integer, default=0)
     sold_out: Mapped[bool] = mapped_column(Boolean, default=False)
     channel: Mapped[str] = mapped_column(String(10), default="wholesale")
+    season: Mapped[str] = mapped_column(String(20), default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     low_stock_threshold: Mapped[int] = mapped_column(Integer, default=5)
@@ -323,6 +352,34 @@ class OrderItem(Base):
 
     order: Mapped[Order] = relationship(back_populates="items")
     listing: Mapped[Optional[FlowerListing]] = relationship()
+
+
+class OrderRefund(Base):
+    """Payment-only refund journal; a return of goods is a separate movement."""
+    __tablename__ = "order_refunds"
+    __table_args__ = (CheckConstraint("amount_cents > 0", name="order_refund_amount_positive"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20))  # issuing | succeeded | review
+    reference: Mapped[str] = mapped_column(String(255), default="")
+    reason: Mapped[str] = mapped_column(String(255))
+    idempotency_key: Mapped[str] = mapped_column(String(36), unique=True)
+    actor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReconciliationRun(Base):
+    """Durable operator visibility for scheduled Stripe/stock checks."""
+    __tablename__ = "reconciliation_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    applied: Mapped[bool] = mapped_column(Boolean, default=False)
+    full: Mapped[bool] = mapped_column(Boolean, default=False)
+    findings: Mapped[list] = mapped_column(JSON, default=list)
+    finding_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class StripeEvent(Base):

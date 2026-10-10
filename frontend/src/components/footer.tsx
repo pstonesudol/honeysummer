@@ -1,7 +1,8 @@
 import Link from "next/link";
+import type { SiteContent } from "@/lib/api";
 import { BrandMark } from "./brand-mark";
 
-export function Footer() {
+export function Footer({ content = {} }: { content?: SiteContent }) {
   return (
     <footer className="site-footer" id="site-footer">
       <div className="site-footer__inner section-wrap">
@@ -20,7 +21,7 @@ export function Footer() {
             <h2>Connect</h2>
             <Link href="/contact">Contact &amp; FAQ</Link>
             <Link href="/wholesale">Florist wholesale</Link>
-            <span>Instagram coming soon</span>
+             {content.instagram ? <a href={content.instagram} target="_blank" rel="noopener noreferrer">Instagram</a> : <span>Instagram coming soon</span>}
           </div>
         </div>
       </div>

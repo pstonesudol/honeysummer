@@ -6,9 +6,16 @@
 <ul>{% for quote in quotes %}<li><a href="/admin/weddings/{{ quote.id }}">Wedding quote #{{ quote.id }}</a> · {{ quote.status|admin_label }}</li>{% else %}<li>None.</li>{% endfor %}</ul>
 <h2>Bouquet proposals awaiting review</h2>
 <ul>{% for proposal in proposals %}<li><a href="/admin/proposals/{{ proposal.id }}">Bouquet proposal #{{ proposal.id }}</a> · {{ proposal.status|admin_label }}</li>{% else %}<li>None.</li>{% endfor %}</ul>
+<h2>Unconfirmed refunds</h2>
+<ul>{% for refund in refunds %}<li><a href="/admin/orders/{{ refund.order_id }}">Order #{{ refund.order_id }}</a> · ${{ '%.2f'|format(refund.amount_cents / 100) }} · {{ refund.status|admin_label }} · check Stripe before retrying</li>{% else %}<li>None.</li>{% endfor %}</ul>
 <h2>Unsent confirmations</h2>
 <div class="table-scroll"><table><thead><tr><th>Order</th><th>Recipient</th><th>Attempts</th><th>Queued (Eastern)</th></tr></thead><tbody>
 {% for notice in notices %}<tr><td><a href="/admin/orders/{{ notice.order_id }}">Order #{{ notice.order_id }}</a></td><td>{{ notice.recipient|admin_label }}</td><td>{{ notice.attempts }}</td><td>{{ notice.created_at|admin_date }}</td></tr>
 {% else %}<tr><td colspan="4" class="muted">No unsent order confirmations.</td></tr>{% endfor %}
 </tbody></table></div>
+<h2>Recent reconciliation runs</h2>
+<p class="muted">A run with findings exits nonzero to support job alerts. A missing recent run may mean the job is not scheduled or crashed before it could save a result. Only the first 100 findings are stored per run.</p>
+{% for run in reconciliation_runs %}<details><summary>{{ run.created_at|admin_date }} · {{ 'Apply' if run.applied else 'Report' }} · {{ run.finding_count }} finding{{ '' if run.finding_count == 1 else 's' }}</summary>
+<ul>{% for finding in run.findings %}<li>{{ finding }}</li>{% else %}<li>No discrepancies recorded.</li>{% endfor %}</ul></details>
+{% else %}<p>No reconciliation runs recorded yet.</p>{% endfor %}
 {% endblock %}

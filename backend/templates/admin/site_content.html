@@ -1,0 +1,28 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Website text &amp; details</h1>
+<p class="muted">Only fields you fill in override the existing website copy. Blank fields keep the current wording. Content appears in the public API immediately and on cached pages within a few minutes. Save without HTML; links are plain text. {% if saved %}Last updated {{ updated_at|admin_date }}.{% endif %}</p>
+<form method="post" action="/admin/site-content">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <h2>Business and pickup</h2>
+  <div class="grid">
+    {% for key, label, limit in [('location','Location',160), ('serviceArea','Service area',500), ('email','Public email',254), ('phone','Public phone',40), ('instagram','Instagram URL',500), ('pickupLocation','Pickup location',300), ('pickupWindow','Pickup window',300), ('pickupNote','Pickup note',500), ('announcementFallback','Fallback announcement',200)] %}
+    <div><label for="{{ key }}">{{ label }}</label><input id="{{ key }}" name="{{ key }}" type="text" maxlength="{{ limit }}" value="{{ content[key] if key in content else '' }}"></div>
+    {% endfor %}
+  </div>
+  <h2>Page introductions</h2>
+  <div class="grid">
+    {% for key, label in [('homeIntro','Home'), ('aboutIntro','About'), ('weddingsIntro','Weddings'), ('orderIntro','Order flowers'), ('contactIntro','Contact'), ('wholesaleIntro','Wholesale')] %}
+    <div class="full"><label for="{{ key }}">{{ label }}</label><textarea id="{{ key }}" name="{{ key }}" rows="3" maxlength="2000">{{ content[key] if key in content else '' }}</textarea></div>
+    {% endfor %}
+  </div>
+  <h2>Contact-page FAQs</h2>
+  <p class="muted">Leave all question fields empty to keep the existing FAQs. Add up to eight question-and-answer pairs to replace them.</p>
+  {% for index in range(1, 9) %}{% set faq = content.faq[index - 1] if content.faq is defined and content.faq|length >= index else {} %}
+  <fieldset><legend>FAQ {{ index }}</legend>
+    <label for="faq_question_{{ index }}">Question</label><input id="faq_question_{{ index }}" name="faq_question_{{ index }}" type="text" maxlength="200" value="{{ faq.question or '' }}">
+    <label for="faq_answer_{{ index }}">Answer</label><textarea id="faq_answer_{{ index }}" name="faq_answer_{{ index }}" rows="2" maxlength="1000">{{ faq.answer or '' }}</textarea>
+  </fieldset>{% endfor %}
+  <p><button type="submit">Save website text</button> <a href="/api/site-content/">Preview published JSON</a></p>
+</form>
+{% endblock %}

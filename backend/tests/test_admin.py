@@ -615,6 +615,12 @@ async def test_inquiry_followup_and_customer_history():
         inquiry_id = inquiry.id
     await _login()
     token = await _csrf(f"/admin/inquiries/{inquiry_id}")
+    _, recorded = await app.asgi_client.post(f"/admin/inquiries/{inquiry_id}/correspondence", data=dict(
+        csrf_token=token, direction="received", subject="Wedding date", summary="Client confirmed October 12."))
+    assert recorded.status == 302
+    _, inquiry_page = await app.asgi_client.get(f"/admin/inquiries/{inquiry_id}")
+    assert inquiry_page.status == 200 and "Client confirmed October 12." in inquiry_page.text
+    token = await _csrf(f"/admin/inquiries/{inquiry_id}")
     _, saved = await app.asgi_client.post(f"/admin/inquiries/{inquiry_id}/follow-up", data=dict(
         csrf_token=token, stage="contacted", follow_up_date="2026-10-15", internal_notes="Send quote"))
     assert saved.status == 302
@@ -641,6 +647,14 @@ async def test_duplicate_listing_does_not_copy_stock_and_bulk_price_updates():
         await db.commit()
         flower_id = flower.id
     await _login()
+    token = await _csrf("/admin/flowers")
+    _, seasonal = await app.asgi_client.post("/admin/flowers/bulk-update", data=dict(
+        csrf_token=token, listing_ids=str(flower_id), action="season", value="fall"))
+    assert seasonal.status == 302
+    _, filtered = await app.asgi_client.get("/admin/flowers?season=fall")
+    assert filtered.status == 200 and "Anemone" in filtered.text
+    _, empty = await app.asgi_client.get("/admin/flowers?season=spring")
+    assert empty.status == 200 and "Anemone" not in empty.text
     token = await _csrf(f"/admin/flowers/{flower_id}")
     _, copied = await app.asgi_client.post(f"/admin/flowers/{flower_id}/duplicate", data={"csrf_token": token})
     assert copied.status == 302

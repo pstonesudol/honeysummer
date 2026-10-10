@@ -44,7 +44,22 @@ export type GalleryImage = {
   alt_text: string;
   caption: string;
   sort_order: number;
+  focal_x: number;
+  focal_y: number;
 };
+
+export type SiteContent = Partial<Record<
+  | "location" | "serviceArea" | "email" | "phone" | "instagram"
+  | "pickupLocation" | "pickupWindow" | "pickupNote"
+  | "announcementFallback" | "homeIntro" | "aboutIntro"
+  | "weddingsIntro" | "orderIntro" | "contactIntro" | "wholesaleIntro",
+  string
+>> & { faq?: { question: string; answer: string }[] };
+
+export async function getSiteContent(): Promise<SiteContent> {
+  const data = await apiGet<{ content: SiteContent }>("/api/site-content/", { content: {} });
+  return data.content ?? {};
+}
 
 export type FlowerListing = {
   id: number;

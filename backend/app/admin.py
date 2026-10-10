@@ -8,6 +8,7 @@ a small per-model registry.
 from __future__ import annotations
 
 import re
+import asyncio
 import csv
 import io
 import json as json_module
@@ -16,7 +17,6 @@ import uuid
 from dataclasses import dataclass, field as dataclass_field
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
@@ -38,15 +38,20 @@ from .models import (
     FloristProfile,
     GalleryImage,
     Inquiry,
+    InquiryCorrespondence,
     InventoryMovement,
     Order,
     OrderItem,
     OrderNotification,
+    OrderRefund,
+    ReconciliationRun,
+    SiteContent,
     User,
     WeddingInvoice,
     WeddingQuote,
 )
 from .settings import BASE_DIR, get_settings
+from .media import public_media_url, store_image
 
 bp = Blueprint("admin", url_prefix="/admin")
 
@@ -154,6 +159,8 @@ REGISTRY: list[ModelAdmin] = [
             _str_field("link_url", "Link URL"),
             _str_field("link_label", "Link label"),
             Field("active", "Active", "bool"),
+            Field("starts_on", "Show from (Eastern, optional)", "date"),
+            Field("ends_on", "Show through (Eastern, optional)", "date"),
         ],
         list_columns=[("Text", "text"), ("Active", "active"), ("Link label", "link_label")],
         order_by=["-created_at"],
@@ -168,6 +175,8 @@ REGISTRY: list[ModelAdmin] = [
             _str_field("alt_text", "Alt text"),
             _str_field("caption", "Caption"),
             Field("sort_order", "Sort order", "int"),
+            Field("focal_x", "Focal point X % (0–100)", "int"),
+            Field("focal_y", "Focal point Y % (0–100)", "int"),
             Field("active", "Active", "bool"),
         ],
         list_columns=[("Image", "image"), ("Caption", "caption"), ("Sort", "sort_order"), ("Active", "active")],
@@ -206,6 +215,8 @@ REGISTRY: list[ModelAdmin] = [
                 "select",
                 choices=(("retail", "Retail"), ("wholesale", "Wholesale"), ("both", "Both")),
             ),
+            Field("season", "Season", "select", choices=(("", "Not assigned"), ("spring", "Spring"),
+                ("summer", "Summer"), ("fall", "Fall"), ("winter", "Winter"), ("year_round", "Year-round"))),
             Field("active", "Active", "bool"),
             Field("sort_order", "Sort order", "int"),
             Field("low_stock_threshold", "Low stock alert at or below", "int"),
@@ -215,6 +226,7 @@ REGISTRY: list[ModelAdmin] = [
             ("Name", "name"),
             ("Variety", "variety"),
             ("Channel", "channel"),
+            ("Season", "season"),
             ("Price", "price"),
             ("Qty", "quantity_available"),
             ("Low at", "low_stock_threshold"),
@@ -393,7 +405,7 @@ def _page(request, template: str, status: int = 200, **context):
     context.setdefault("csrf_token", token)
     context.setdefault("admin", request.ctx.admin)
     context.setdefault("models", REGISTRY)
-    context.setdefault("media_url", get_settings().media_url.rstrip("/"))
+    context.setdefault("media_url", public_media_url())
     response = html(_env.get_template(template).render(**context), status=status)
     response.add_cookie(
         CSRF_COOKIE,
@@ -470,21 +482,12 @@ def _field_row(obj, field: Field) -> dict:
     elif field.kind == "decimal":
         input_type = "number"
         step = "0.01"
+    elif field.kind == "date":
+        input_type = "date"
     return {"field": field, "value": value, "input_type": input_type, "step": step}
 
 
-def _save_upload(upload, media_root: Path, subdir: str) -> str:
-    safe = re.sub(r"[^A-Za-z0-9._-]", "_", Path(upload.name).name) or "upload"
-    now = datetime.now(timezone.utc)
-    rel_dir = Path(subdir or "uploads") / f"{now:%Y}" / f"{now:%m}"
-    dest_dir = media_root / rel_dir
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}_{safe}"
-    (dest_dir / filename).write_bytes(upload.body)
-    return str(rel_dir / filename)
-
-
-def _apply_form(obj, admin: ModelAdmin, form, files, media_root: Path) -> None:
+async def _apply_form(obj, admin: ModelAdmin, form, files) -> None:
     for field in admin.fields:
         if field.readonly:
             continue
@@ -493,11 +496,16 @@ def _apply_form(obj, admin: ModelAdmin, form, files, media_root: Path) -> None:
         if field.kind == "file":
             upload = files.get(field.name)
             if upload and upload.name:
-                setattr(obj, field.name, _save_upload(upload, media_root, admin.subdir))
+                setattr(obj, field.name, await asyncio.to_thread(store_image, upload, admin.subdir or "uploads"))
             continue
         raw = form.get(field.name)
         if field.kind == "bool":
             setattr(obj, field.name, raw in ("on", "true", "1"))
+        elif field.kind == "date":
+            try:
+                setattr(obj, field.name, date.fromisoformat(raw) if raw else None)
+            except ValueError:
+                raise ValueError(f"Enter a valid {field.label.lower()} date.") from None
         elif field.kind == "int":
             try:
                 setattr(obj, field.name, int(raw or 0))
@@ -515,6 +523,8 @@ def _apply_form(obj, admin: ModelAdmin, form, files, media_root: Path) -> None:
 
 
 def _flower_delivery_fee_error(form) -> str | None:
+    if form.get("season", "") not in ("", "spring", "summer", "fall", "winter", "year_round"):
+        return "Choose a valid season."
     raw = form.get("delivery_fee")
     if raw is not None:
         try:
@@ -534,6 +544,54 @@ def _flower_delivery_fee_error(form) -> str | None:
         except (ValueError, TypeError):
             return "Low stock threshold must be a nonnegative whole number."
     return None
+
+
+def _announcement_error(form) -> str | None:
+    from urllib.parse import urlsplit
+    link = str(form.get("link_url", "")).strip()
+    if link:
+        parsed = urlsplit(link)
+        if not ((parsed.scheme in ("http", "https") and parsed.netloc) or
+                (link.startswith("/") and not link.startswith("//") and not parsed.scheme)):
+            return "Use a valid http(s) or site-relative announcement link."
+    try:
+        first = date.fromisoformat(str(form.get("starts_on"))) if form.get("starts_on") else None
+        last = date.fromisoformat(str(form.get("ends_on"))) if form.get("ends_on") else None
+    except ValueError:
+        return "Use valid YYYY-MM-DD announcement dates."
+    if first and last and last < first:
+        return "Announcement end date must be on or after its start date."
+    return None
+
+
+def _gallery_error(form) -> str | None:
+    if not str(form.get("alt_text", "")).strip():
+        return "Give this image descriptive alt text."
+    for field in ("focal_x", "focal_y"):
+        try:
+            value = int(str(form.get(field, "50")))
+        except ValueError:
+            return "Focal point coordinates must be whole numbers from 0 to 100."
+        if not 0 <= value <= 100:
+            return "Focal point coordinates must be from 0 to 100."
+    return None
+
+
+async def _selected_gallery_image(db, form, files, slug):
+    raw = str(form.get("gallery_image_id", "")).strip()
+    if slug != "flowers" or not raw:
+        return None
+    upload = files.get("photo")
+    if upload and upload.name:
+        raise ValueError("Choose an existing gallery photo or upload a new one, not both.")
+    try:
+        image_id = int(raw)
+    except ValueError:
+        raise ValueError("Choose a valid gallery image.") from None
+    image = await db.get(GalleryImage, image_id)
+    if not image or not image.image:
+        raise ValueError("That gallery image no longer exists.")
+    return image
 
 
 # --------------------------------------------------------------------------- #
@@ -655,6 +713,26 @@ async def dashboard(request):
                   booked_wedding_count=booked_wedding_count)
 
 
+@bp.post("/inquiries/<pk:int>/correspondence")
+async def record_inquiry_correspondence(request, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    direction = str(request.form.get("direction", "")).strip()
+    subject = str(request.form.get("subject", "")).strip()
+    summary = str(request.form.get("summary", "")).strip()
+    if direction not in ("sent", "received") or not 1 <= len(subject) <= 200 or not 1 <= len(summary) <= 4000:
+        return json({"detail": "Choose sent or received, a subject (up to 200), and a summary (up to 4,000)."}, status=400)
+    async with session_scope() as db:
+        if not await db.get(Inquiry, pk):
+            return json({"detail": "Inquiry not found."}, status=404)
+        db.add(InquiryCorrespondence(inquiry_id=pk, actor_id=request.ctx.admin.id,
+                                     direction=direction, subject=subject, summary=summary))
+        await db.commit()
+    return redirect(f"/admin/inquiries/{pk}")
+
+
 @bp.post("/inquiries/<pk:int>/follow-up")
 async def inquiry_follow_up(request, pk: int):
     if not request.ctx.admin:
@@ -691,6 +769,9 @@ async def model_list(request, slug: str):
         return redirect("/admin/login")
     query = request.args.get("q", "").strip()
     status_filter = request.args.get("status", "") if slug == "orders" else ""
+    season_filter = request.args.get("season", "") if slug == "flowers" else ""
+    if season_filter not in ("", "spring", "summer", "fall", "winter", "year_round"):
+        season_filter = ""
     if status_filter not in ("", "pending", "paid", "refunded", "cancelled", "expired"):
         status_filter = ""
     try:
@@ -713,6 +794,8 @@ async def model_list(request, slug: str):
             )
         if status_filter:
             statement = statement.where(Order.status == status_filter)
+        if season_filter:
+            statement = statement.where(FlowerListing.season == season_filter)
         total = await session.scalar(select(func.count()).select_from(statement.order_by(None).subquery()))
         rows = (await session.execute(statement.order_by(*_order_columns(admin.model, admin.order_by))
                                       .limit(page_size).offset((page_number - 1) * page_size))).scalars().all()
@@ -730,7 +813,7 @@ async def model_list(request, slug: str):
         display=display,
         query=query,
         page_number=page_number, pages=max(1, (total + page_size - 1) // page_size),
-        total=total, status_filter=status_filter,
+        total=total, status_filter=status_filter, season_filter=season_filter,
         booked_weddings=booked_weddings, booked_wedding_count=booked_wedding_count,
     )
 
@@ -743,7 +826,15 @@ async def model_new(request, slug: str):
     if not request.ctx.admin:
         return redirect("/admin/login")
     rows = [_field_row(None, f) for f in admin.fields]
-    return _page(request, "admin/edit.html", admin=admin, obj=None, rows=rows)
+    gallery_options = []
+    if slug == "gallery":
+        for row in rows:
+            if row["field"].name in ("focal_x", "focal_y"):
+                row["value"] = 50
+    if slug == "flowers":
+        async with session_scope() as db:
+            gallery_options = (await db.scalars(select(GalleryImage).order_by(GalleryImage.sort_order, GalleryImage.id))).all()
+    return _page(request, "admin/edit.html", admin=admin, obj=None, rows=rows, gallery_options=gallery_options)
 
 
 @bp.post("/<slug:str>/new")
@@ -757,9 +848,23 @@ async def model_create(request, slug: str):
         return json({"detail": "Invalid CSRF token."}, status=403)
     if slug == "flowers" and (error := _flower_delivery_fee_error(request.form)):
         return json({"detail": error}, status=400)
+    if slug == "announcements" and (error := _announcement_error(request.form)):
+        return json({"detail": error}, status=400)
+    if slug == "gallery" and (error := _gallery_error(request.form)):
+        return json({"detail": error}, status=400)
+    if slug == "gallery" and not request.files.get("image"):
+        return json({"detail": "Upload an image for the gallery."}, status=400)
     async with session_scope() as session:
         obj = admin.model()
-        _apply_form(obj, admin, request.form, request.files, get_settings().media_root)
+        try:
+            chosen_image = await _selected_gallery_image(session, request.form, request.files, slug)
+            await _apply_form(obj, admin, request.form, request.files)
+        except ValueError as exc:
+            return json({"detail": str(exc)}, status=400)
+        except Exception:
+            return json({"detail": "Image storage unavailable; nothing was saved."}, status=503)
+        if chosen_image:
+            obj.photo = chosen_image.image
         if slug == "flowers":
             from .orders import change_stock
 
@@ -804,17 +909,33 @@ async def model_edit(request, slug: str, pk: int):
     ]
     order_total = None
     order_proposal = None
+    refunds = []
+    correspondence = []
+    if slug == "inquiries":
+        async with session_scope() as db:
+            correspondence = (await db.scalars(select(InquiryCorrespondence)
+                .where(InquiryCorrespondence.inquiry_id == pk)
+                .order_by(InquiryCorrespondence.occurred_at.desc(), InquiryCorrespondence.id.desc())
+                .limit(100))).all()
     if slug == "orders":
         order_total = sum(
             (item.price_snapshot * item.quantity for item in obj.items), Decimal("0")
         ) + obj.delivery_fee
         async with session_scope() as db:
             order_proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.order_id == pk))
+            refunds = (await db.scalars(select(OrderRefund).where(OrderRefund.order_id == pk)
+                       .order_by(OrderRefund.id.desc()))).all()
         if order_proposal and order_proposal.history:
             order_total = Decimal(order_proposal.history[-1]["draft"]["total_cents"]) / 100
+    gallery_options = []
+    if slug == "flowers":
+        async with session_scope() as db:
+            gallery_options = (await db.scalars(select(GalleryImage).order_by(GalleryImage.sort_order, GalleryImage.id))).all()
     return _page(
         request, "admin/edit.html", admin=admin, obj=obj, rows=rows,
-        order_total=order_total, order_proposal=order_proposal,
+        order_total=order_total, order_proposal=order_proposal, refunds=refunds,
+        gallery_options=gallery_options, correspondence=correspondence,
+        refund_key=str(uuid.uuid4()),
         proposal_id=(await _proposal_for_inquiry(pk)) if slug == "inquiries" and obj.kind == "bouquet" else None,
     )
 
@@ -973,6 +1094,22 @@ async def wedding_refresh(request, quote_id: int, invoice_id: int):
     return redirect(f"/admin/weddings/{quote_id}")
 
 
+@bp.post("/orders/<pk:int>/refund")
+async def refund_order(request, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .refunds import issue_refund
+    try:
+        refund = await issue_refund(pk, request.form, request.ctx.admin.id)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    if refund.status != "succeeded":
+        return json({"detail": "Refund is not confirmed. Check Stripe before taking further action."}, status=409)
+    return redirect(f"/admin/orders/{pk}")
+
+
 @bp.post("/orders/<pk:int>/fulfillment")
 async def update_fulfillment(request, pk: int):
     if not request.ctx.admin:
@@ -1086,25 +1223,36 @@ async def sales_report(request):
         orders = (await db.scalars(statement.order_by(Order.created_at.desc(), Order.id.desc()))).all()
         proposal_ids = [order.id for order in orders]
         proposals = (await db.scalars(select(BouquetProposal).where(BouquetProposal.order_id.in_(proposal_ids)))).all() if proposal_ids else []
+        refunds = (await db.scalars(select(OrderRefund).where(OrderRefund.order_id.in_(proposal_ids),
+                                                    OrderRefund.status == "succeeded"))).all() if proposal_ids else []
     by_order = {proposal.order_id: proposal for proposal in proposals}
+    refunded_by_order: dict[int, int] = {}
+    for refund in refunds:
+        refunded_by_order[refund.order_id] = refunded_by_order.get(refund.order_id, 0) + refund.amount_cents
     rows = []
     for order in orders:
         proposal = by_order.get(order.id)
         total = (Decimal(proposal.history[-1]["draft"]["total_cents"]) / 100
                  if proposal and proposal.history else
                  sum((item.price_snapshot * item.quantity for item in order.items), Decimal("0")) + order.delivery_fee)
-        rows.append(dict(order=order, total=total))
+        recorded_cents = refunded_by_order.get(order.id)
+        refunded = (None if order.status == "refunded" and recorded_cents != int(total * 100)
+                    else Decimal(recorded_cents) / 100 if recorded_cents is not None else Decimal("0"))
+        rows.append(dict(order=order, total=total, refunded=refunded,
+                         net=total - refunded if refunded is not None else None))
     if request.args.get("format") == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(("Order", "Placed UTC", "Customer", "Channel", "Payment method", "Payment reference", "Status", "Total USD"))
+        writer.writerow(("Order", "Placed UTC", "Customer", "Channel", "Payment method", "Payment reference", "Status", "Original gross USD", "Recorded refunded USD", "Recorded net USD"))
         def safe(value):
             value = str(value or "")
             return "'" + value if value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")) else value
         for row in rows:
             order = row["order"]
             writer.writerow((order.order_reference, order.created_at.isoformat(), safe(order.customer_label),
-                             order.channel, order.payment_method, safe(order.payment_reference), order.status, f"{row['total']:.2f}"))
+                             order.channel, order.payment_method, safe(order.payment_reference), order.status,
+                             f"{row['total']:.2f}", f"{row['refunded']:.2f}" if row["refunded"] is not None else "unknown",
+                             f"{row['net']:.2f}" if row["net"] is not None else "unknown"))
         return text(output.getvalue(), content_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": "attachment; filename=honey-summer-sales.csv"})
     totals: dict[str, Decimal] = {}
@@ -1186,8 +1334,46 @@ async def operations_attention(request):
             .order_by(WeddingQuote.id.desc()).limit(200))).all()
         proposals = (await db.scalars(select(BouquetProposal).where(BouquetProposal.status.in_(("review", "issuing", "stock_review")))
             .order_by(BouquetProposal.id.desc()).limit(200))).all()
+        refunds = (await db.scalars(select(OrderRefund).where(OrderRefund.status.in_(("review", "issuing")))
+            .order_by(OrderRefund.id.desc()).limit(200))).all()
+        reconciliation_runs = (await db.scalars(select(ReconciliationRun)
+            .order_by(ReconciliationRun.id.desc()).limit(20))).all()
     return _page(request, "admin/operations_attention.html", notices=notices,
-                 quotes=quotes, proposals=proposals)
+                 quotes=quotes, proposals=proposals, refunds=refunds,
+                 reconciliation_runs=reconciliation_runs)
+
+
+@bp.get("/site-content")
+async def site_content_page(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        record = await db.get(SiteContent, 1)
+    return _page(request, "admin/site_content.html", content=record.content if record else {},
+                 saved=bool(record), updated_at=record.updated_at if record else None)
+
+
+@bp.post("/site-content")
+async def save_site_content(request):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .site_content import validate_content
+    try:
+        content = validate_content(request.form)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=400)
+    async with session_scope() as db:
+        record = await db.scalar(select(SiteContent).where(SiteContent.id == 1).with_for_update())
+        if not record:
+            record = SiteContent(id=1)
+            db.add(record)
+        record.content = content
+        record.updated_by = request.ctx.admin.id
+        record.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+    return redirect("/admin/site-content")
 
 
 @bp.get("/customers")
@@ -1379,11 +1565,23 @@ async def model_update(request, slug: str, pk: int):
         return json({"detail": "Use the inquiry follow-up form to update its stage."}, status=400)
     if slug == "flowers" and (error := _flower_delivery_fee_error(request.form)):
         return json({"detail": error}, status=400)
+    if slug == "announcements" and (error := _announcement_error(request.form)):
+        return json({"detail": error}, status=400)
+    if slug == "gallery" and (error := _gallery_error(request.form)):
+        return json({"detail": error}, status=400)
     async with session_scope() as session:
         obj = await session.get(admin.model, pk)
         if obj is None:
             return redirect(f"/admin/{slug}")
-        _apply_form(obj, admin, request.form, request.files, get_settings().media_root)
+        try:
+            chosen_image = await _selected_gallery_image(session, request.form, request.files, slug)
+            await _apply_form(obj, admin, request.form, request.files)
+        except ValueError as exc:
+            return json({"detail": str(exc)}, status=400)
+        except Exception:
+            return json({"detail": "Image storage unavailable; nothing was saved."}, status=503)
+        if chosen_image:
+            obj.photo = chosen_image.image
         await session.commit()
     return redirect(f"/admin/{slug}")
 
@@ -1564,7 +1762,7 @@ async def duplicate_flower(request, pk: int):
             color=original.color, photo=original.photo, stem_notes=original.stem_notes,
             price=original.price, delivery_fee=original.delivery_fee,
             delivery_fee_mode=original.delivery_fee_mode, unit=original.unit,
-            quantity_available=0, sold_out=original.sold_out, channel=original.channel,
+            quantity_available=0, sold_out=original.sold_out, channel=original.channel, season=original.season,
             active=False, sort_order=original.sort_order, low_stock_threshold=original.low_stock_threshold,
         )
         db.add(duplicate)
@@ -1594,13 +1792,15 @@ async def bulk_update_flowers(request):
         return json({"detail": "Choose active or inactive."}, status=400)
     if action == "channel" and value not in ("retail", "wholesale", "both"):
         return json({"detail": "Choose a valid channel."}, status=400)
+    if action == "season" and value not in ("spring", "summer", "fall", "winter", "year_round", ""):
+        return json({"detail": "Choose a valid season."}, status=400)
     if action == "price":
         from .manual_orders import _money
         try:
             value = _money(value)
         except ValueError as exc:
             return json({"detail": str(exc)}, status=400)
-    elif action not in ("active", "channel"):
+    elif action not in ("active", "channel", "season"):
         return json({"detail": "Choose an allowed bulk update."}, status=400)
     async with session_scope() as db:
         rows = (await db.scalars(select(FlowerListing).where(FlowerListing.id.in_(ids)).order_by(FlowerListing.id).with_for_update())).all()

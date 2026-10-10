@@ -5,7 +5,7 @@ import { CalendarHeart, Flower2, PackageCheck } from "lucide-react";
 
 import { InquiryForm } from "@/components/inquiry-form";
 import { RetailShop } from "@/components/retail-shop";
-import { getRetailFlowers } from "@/lib/api";
+import { getRetailFlowers, getSiteContent } from "@/lib/api";
 import { inquiryIntros } from "@/lib/inquiry-fields";
 import { pickup, site } from "@/lib/site";
 
@@ -38,9 +38,10 @@ export default async function OrderFlowersPage({
 }: {
   searchParams: Promise<{ checkout?: string }>;
 }) {
-  const [{ checkout }, flowers] = await Promise.all([
+  const [{ checkout }, flowers, content] = await Promise.all([
     searchParams,
     getRetailFlowers(),
+    getSiteContent(),
   ]);
   const checkoutStatus =
     checkout === "success" || checkout === "cancelled" ? checkout : null;
@@ -54,9 +55,7 @@ export default async function OrderFlowersPage({
             Flowers for your <em>table.</em>
           </h1>
           <p className="hero__lede">
-            Bouquets and arrangements gathered from whatever is at its peak
-            this week — locally grown, thoughtfully designed, and ready to
-            brighten an ordinary day.
+             {content.orderIntro || "Bouquets and arrangements gathered from whatever is at its peak this week — locally grown, thoughtfully designed, and ready to brighten an ordinary day."}
           </p>
           <div className="button-row">
             <Link className="button button--primary" href="#shop">
@@ -92,7 +91,7 @@ export default async function OrderFlowersPage({
             weather and changes week to week.
           </p>
         </div>
-        <RetailShop flowers={flowers} checkoutStatus={checkoutStatus} />
+         <RetailShop flowers={flowers} checkoutStatus={checkoutStatus} pickupWindow={content.pickupWindow || pickup.window} />
       </section>
 
       <section className="steps section-wrap" aria-label="How custom orders work">
@@ -123,10 +122,10 @@ export default async function OrderFlowersPage({
       <section className="cta-band section-wrap">
         <div>
           <p className="eyebrow">Good to know</p>
-          <h2>Pickup happens at the farm in {site.location.split(",")[0]}.</h2>
+           <h2>Pickup happens at the farm in {(content.location || site.location).split(",")[0]}.</h2>
         </div>
         <p className="cta-band__note">
-          {pickup.window} {pickup.note}
+           {content.pickupWindow || pickup.window} {content.pickupNote || pickup.note}
         </p>
       </section>
     </>

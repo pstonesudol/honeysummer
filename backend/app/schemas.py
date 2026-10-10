@@ -21,6 +21,8 @@ class GalleryImageOut(BaseModel):
     alt_text: str
     caption: str
     sort_order: int
+    focal_x: int
+    focal_y: int
 
 
 class InquiryOut(BaseModel):

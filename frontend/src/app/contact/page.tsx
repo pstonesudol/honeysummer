@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Camera, Mail, MapPin } from "lucide-react";
 
 import { InquiryForm } from "@/components/inquiry-form";
+import { getSiteContent } from "@/lib/api";
 import { inquiryIntros } from "@/lib/inquiry-fields";
 import { pickup, site } from "@/lib/site";
 
@@ -97,7 +98,8 @@ const faqs = [
   },
 ];
 
-export default function ContactPage() {
+export default async function ContactPage() {
+  const content = await getSiteContent();
   return (
     <>
       <section className="page-hero section-wrap" aria-labelledby="contact-title">
@@ -107,8 +109,7 @@ export default function ContactPage() {
             We would love to <em>hear from you.</em>
           </h1>
           <p className="hero__lede">
-            Questions about flowers, weddings, or wholesale? Send a note and
-            Isabella will reply within a few days.
+             {content.contactIntro || "Questions about flowers, weddings, or wholesale? Send a note and Isabella will reply within a few days."}
           </p>
         </div>
         <div className="page-hero__art">
@@ -129,17 +130,17 @@ export default function ContactPage() {
         <article className="contact-card">
           <Mail aria-hidden="true" size={20} strokeWidth={1.5} />
           <h2>Email</h2>
-          <a href={`mailto:${site.email}`}>{site.email}</a>
+           <a href={`mailto:${content.email || site.email}`}>{content.email || site.email}</a>
         </article>
         <article className="contact-card">
           <MapPin aria-hidden="true" size={20} strokeWidth={1.5} />
           <h2>Where we grow</h2>
-          <p>{pickup.location}</p>
+           <p>{content.pickupLocation || pickup.location}</p>
         </article>
         <article className="contact-card">
           <Camera aria-hidden="true" size={20} strokeWidth={1.5} />
           <h2>Follow along</h2>
-          <p>Instagram coming soon — we will link it here.</p>
+           <p>{content.instagram ? <a href={content.instagram} target="_blank" rel="noopener noreferrer">Instagram</a> : "Instagram coming soon — we will link it here."}</p>
         </article>
       </section>
 
@@ -158,7 +159,7 @@ export default function ContactPage() {
           <h2 id="faq-title">Frequently asked.</h2>
         </div>
         <div className="faq-list">
-          {faqs.map((faq) => (
+           {(content.faq?.length ? content.faq : faqs).map((faq) => (
             <details className="faq-item" key={faq.question}>
               <summary>{faq.question}</summary>
               <p>{faq.answer}</p>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BadgeCheck, Flower2, Truck } from "lucide-react";
 
 import { WholesaleShop } from "@/components/inquiry-form";
+import { getSiteContent } from "@/lib/api";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -45,7 +46,8 @@ const steps = [
   },
 ];
 
-export default function WholesalePage() {
+export default async function WholesalePage() {
+  const content = await getSiteContent();
   return (
     <>
       <section className="page-hero section-wrap" aria-labelledby="wholesale-title">
@@ -55,9 +57,7 @@ export default function WholesalePage() {
             Local flowers for your <em>studio.</em>
           </h1>
           <p className="hero__lede">
-            Fresh, seasonal stems for floral designers and event teams across{" "}
-            {site.serviceArea} Grown nearby, harvested at their peak, and
-            available to approved wholesale accounts.
+             {content.wholesaleIntro || <>Fresh, seasonal stems for floral designers and event teams across {content.serviceArea || site.serviceArea} Grown nearby, harvested at their peak, and available to approved wholesale accounts.</>}
           </p>
         </div>
         <div className="page-hero__art">

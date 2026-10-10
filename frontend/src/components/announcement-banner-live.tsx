@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 
 import type { Announcement } from "@/lib/api";
-import { site } from "@/lib/site";
 
 /**
  * Announcement banner that stays fresh without making its pages dynamic.
@@ -15,8 +14,10 @@ import { site } from "@/lib/site";
  */
 export function AnnouncementBannerLive({
   initial,
+  fallback,
 }: {
   initial: Announcement | null;
+  fallback: string;
 }) {
   const [announcement, setAnnouncement] = useState<Announcement | null>(initial);
 
@@ -54,7 +55,7 @@ export function AnnouncementBannerLive({
     };
   }, []);
 
-  const text = announcement?.text ?? site.announcementFallback;
+  const text = announcement?.text ?? fallback;
   const link = announcement?.link_url;
 
   return (

@@ -11,6 +11,9 @@
     body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); line-height:1.5; }
     header { background:var(--surface); border-bottom:1px solid var(--taupe); padding:0.75rem 1rem; }
     header nav { display:flex; flex-wrap:wrap; gap:0.3rem 0.7rem; align-items:center; max-width:1240px; margin:auto; }
+    .admin-menu { flex:1; min-width:0; }
+    .admin-menu summary { display:none; }
+    .admin-menu__links { display:flex; flex-wrap:wrap; gap:0.3rem 0.7rem; align-items:center; }
     header a { color:var(--ink); text-decoration:none; font-size:0.88rem; border-radius:8px; padding:0.25rem 0.4rem; }
     header a:hover { text-decoration:underline; }
     .brand { font-family:Georgia, serif; font-size:1.25rem; font-weight:700; margin-right:0.5rem; white-space:nowrap; }
@@ -50,13 +53,21 @@
     a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:3px solid #965576; outline-offset:2px; }
     @media print { header, .no-print, button { display:none !important; } body { background:white; color:black; } main { max-width:none; } }
     @media (min-width:640px){ .grid { grid-template-columns:1fr 1fr; } .grid .full { grid-column:1 / -1; } }
-    @media (max-width:680px){ main { padding:1rem; } header nav a:not(.brand) { padding:0.35rem; } th, td { white-space:nowrap; } }
+    @media (max-width:680px){
+      main { padding:1rem; } header nav a:not(.brand) { padding:0.35rem; } th, td { white-space:nowrap; }
+      .admin-menu { flex-basis:100%; }
+      .admin-menu summary { display:block; cursor:pointer; font-weight:600; padding:0.5rem; border:1px solid var(--taupe); border-radius:8px; }
+      .admin-menu__links { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.35rem; padding-top:0.5rem; }
+      .admin-menu__links a, .admin-menu__links form { min-width:0; }
+      .admin-menu__links form { margin-left:0 !important; }
+    }
   </style>
 </head>
 <body>
   {% if admin %}
    <header><nav aria-label="Admin navigation">
      <a class="brand" href="/admin/">Honey Summer <span class="muted">· studio</span></a>
+     <details class="admin-menu" open><summary>Menu</summary><div class="admin-menu__links">
     <a href="/admin/">Dashboard</a>
     {% for item in models %}<a href="/admin/{{ item.slug }}">{{ item.label }}</a>{% endfor %}
     <a href="/admin/proposals/">Bouquet proposals</a>
@@ -66,18 +77,27 @@
      <a href="/admin/reports/balances">Invoice balances</a>
      <a href="/admin/reports/operations">Products &amp; waste</a>
      <a href="/admin/operations/attention">Needs attention</a>
+     <a href="/admin/site-content">Site content</a>
     <a href="/admin/customers">Customers</a>
-    <form class="inline" method="post" action="/admin/logout" style="margin-left:auto">
+     <form class="inline" method="post" action="/admin/logout" style="margin-left:auto">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="button--ghost button--sm" type="submit">Sign out</button>
-    </form>
-   </nav></header>
+     </form>
+     </div></details>
+    </nav></header>
   {% endif %}
   <main>
     {% block content %}{% endblock %}
   </main>
   {% if admin %}
   <script>
+  const adminMenu = document.querySelector('.admin-menu');
+  if (adminMenu) {
+    const mobile = window.matchMedia('(max-width:680px)');
+    const updateMenu = () => { adminMenu.open = !mobile.matches; };
+    updateMenu();
+    mobile.addEventListener('change', updateMenu);
+  }
   let fieldErrorNumber = 0;
   function clearFieldError(form, field) {
     if (!field) return;

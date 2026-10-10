@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Flower2, Gift, Sparkles } from "lucide-react";
 
 import { Gallery } from "@/components/gallery";
+import { getSiteContent } from "@/lib/api";
 import { InquiryForm } from "@/components/inquiry-form";
 import { inquiryIntros } from "@/lib/inquiry-fields";
 import { site } from "@/lib/site";
@@ -43,7 +44,8 @@ const offerings = [
   },
 ];
 
-export default function WeddingsPage() {
+export default async function WeddingsPage() {
+  const content = await getSiteContent();
   return (
     <>
       <section className="page-hero section-wrap" aria-labelledby="weddings-title">
@@ -53,9 +55,7 @@ export default function WeddingsPage() {
             Flowers for the day you will <em>remember.</em>
           </h1>
           <p className="hero__lede">
-            Garden-inspired florals, grown close to home and designed around
-            your colors, your season, and the feeling you want your day to
-            have.
+             {content.weddingsIntro || "Garden-inspired florals, grown close to home and designed around your colors, your season, and the feeling you want your day to have."}
           </p>
         </div>
         <div className="page-hero__art">
@@ -101,10 +101,10 @@ export default function WeddingsPage() {
       <section className="season-note section-wrap" aria-labelledby="area-title">
         <div>
           <p className="eyebrow">Where we travel</p>
-          <h2 id="area-title">Based in {site.location}, designing nearby.</h2>
+           <h2 id="area-title">Based in {content.location || site.location}, designing nearby.</h2>
         </div>
         <p>
-          We serve {site.serviceArea} Travel beyond that is considered case by
+           We serve {content.serviceArea || site.serviceArea} Travel beyond that is considered case by
           case — just ask. Custom quotes are always welcome.
         </p>
       </section>

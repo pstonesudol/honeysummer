@@ -39,7 +39,8 @@ def _stripe_product_data(item: dict, settings) -> dict:
         product_data["description"] = description[:500]
 
     if item.get("photo"):
-        media_base = settings.media_url.rstrip("/")
+        from ..media import public_media_url
+        media_base = public_media_url()
         image_url = (
             f"{media_base}/{item['photo']}"
             if urlsplit(media_base).scheme in {"http", "https"}

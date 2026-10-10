@@ -17,6 +17,7 @@ dependencies = [
     "argon2-cffi>=25.1.0",
     "resend>=2.49.1",
     "python-multipart>=0.0.32",
+    "boto3>=1.40,<2",
 ]
 
 [tool.uv]

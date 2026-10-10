@@ -5,12 +5,13 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from uuid import uuid4
 
 from sqlalchemy import func, select
 
 from .db import session_scope
 from .emails import send_order_emails
-from .models import BouquetProposal, FlowerListing, InventoryMovement, Order, OrderItem, OrderNotification, StripeEvent
+from .models import BouquetProposal, FlowerListing, InventoryMovement, Order, OrderItem, OrderNotification, OrderRefund, StripeEvent
 from .orders import items_context, load_order, release_order, settle_order
 from .settings import get_settings
 
@@ -148,7 +149,9 @@ async def apply_checkout_event(event: dict) -> str:
     event_id = event.get("id")
     if event_type == "charge.refunded":
         intent = obj.get("payment_intent")
-        if not intent or obj.get("amount_refunded") != obj.get("amount") or obj.get("currency") != "usd":
+        amount_refunded, amount_paid = obj.get("amount_refunded"), obj.get("amount")
+        if (not intent or obj.get("currency") != "usd" or not isinstance(amount_paid, int)
+                or not isinstance(amount_refunded, int) or not 0 < amount_refunded <= amount_paid):
             return "review"
         async with session_scope() as db:
             order_id = await db.scalar(select(Order.id).where(Order.stripe_payment_intent_id == intent))
@@ -157,20 +160,40 @@ async def apply_checkout_event(event: dict) -> str:
             order = await load_order(db, order_id, for_update=True)
             if event_id and await db.scalar(select(StripeEvent.id).where(StripeEvent.event_id == event_id)):
                 return "ignored"
-            if order.status == "refunded":
-                return "ignored"
             proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.order_id == order_id))
             total = proposal.history[-1]["draft"]["total_cents"] if proposal and proposal.history else expected_cents(order)
-            if order.status != "paid" or obj.get("amount") != total:
+            if order.status not in ("paid", "refunded") or amount_paid != total:
                 return "review"
-            order.status = "refunded"
-            for item in order.items:
-                if item.listing_id is None:
-                    continue  # Custom services have no inventory journal.
-                db.add(InventoryMovement(
-                    listing_id=item.listing_id, order_id=order.id, kind="refund", delta=0,
-                    units=item.quantity, reason="Full refund; no automatic restock", source="stripe",
-                ))
+            refunds = (await db.scalars(select(OrderRefund).where(OrderRefund.order_id == order_id))).all()
+            recorded = sum(row.amount_cents for row in refunds if row.status == "succeeded")
+            if order.status == "refunded" and recorded == total and amount_refunded <= total:
+                if event_id:
+                    db.add(StripeEvent(event_id=event_id, order_id=order.id, event_type=event_type, outcome="ignored"))
+                    await db.commit()
+                return "ignored"
+            if recorded > amount_refunded or any(row.status == "review" for row in refunds):
+                return "review"
+            if issuing := next((row for row in refunds if row.status == "issuing"), None):
+                if recorded + issuing.amount_cents != amount_refunded:
+                    return "review"
+                issuing.status = "succeeded"
+            elif amount_refunded < total and recorded != amount_refunded:
+                # Unknown partial refunds need operator review rather than an
+                # invented allocation to a local refund request.
+                return "review"
+            elif recorded < amount_refunded:
+                db.add(OrderRefund(order_id=order_id, amount_cents=amount_refunded - recorded, status="succeeded",
+                                   reason="Full refund verified from Stripe webhook", reference=str(obj.get("id", "")),
+                                   idempotency_key=str(uuid4())))
+            if amount_refunded == total and order.status != "refunded":
+                order.status = "refunded"
+                for item in order.items:
+                    if item.listing_id is None:
+                        continue  # Custom services have no inventory journal.
+                    db.add(InventoryMovement(
+                        listing_id=item.listing_id, order_id=order.id, kind="refund", delta=0,
+                        units=item.quantity, reason="Full refund; no automatic restock", source="stripe",
+                    ))
             if event_id:
                 db.add(StripeEvent(event_id=event_id, order_id=order.id, event_type=event_type, outcome="applied"))
             await db.commit()

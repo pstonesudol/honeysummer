@@ -65,7 +65,7 @@ async def test_accepts_an_inspiration_photo(sent, monkeypatch, tmp_path):
     _, response = await app.asgi_client.post(
         "/api/inquiries/",
         data=_form(kind="wedding"),
-        files={"photo": ("inspo.jpg", b"image-bytes", "image/jpeg")},
+        files={"photo": ("inspo.jpg", b"\xff\xd8\xffimage-bytes", "image/jpeg")},
     )
 
     assert response.status == 201

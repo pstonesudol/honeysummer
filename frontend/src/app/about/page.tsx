@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Heart, Leaf, Scissors } from "lucide-react";
 
 import { site } from "@/lib/site";
+import { getSiteContent } from "@/lib/api";
 
 export const metadata: Metadata = {
   title: "Our Story",
@@ -29,7 +30,8 @@ const values = [
   },
 ];
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const content = await getSiteContent();
   return (
     <>
       <section className="page-hero section-wrap" aria-labelledby="about-title">
@@ -39,9 +41,7 @@ export default function AboutPage() {
             Grown slowly, gathered with <em>care.</em>
           </h1>
           <p className="hero__lede">
-            Honey Summer is a one-woman flower farm and design studio. We grow
-            specialty cut flowers in {site.location} and shape them into loose,
-            romantic designs for the people and celebrations around us.
+             {content.aboutIntro || <>Honey Summer is a one-woman flower farm and design studio. We grow specialty cut flowers in {content.location || site.location} and shape them into loose, romantic designs for the people and celebrations around us.</>}
           </p>
         </div>
         <div className="page-hero__art">

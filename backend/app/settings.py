@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@localhost:5432/honeysummer"
     media_root: Path = BASE_DIR / "media"
     media_url: str = "/media"
+    r2_endpoint_url: str = ""
+    r2_bucket: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_public_url: str = ""
 
     resend_api_key: str = ""
     default_from_email: str = "Honey Summer <hello@hellohoneysummer.com>"

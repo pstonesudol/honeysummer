@@ -47,6 +47,7 @@ export async function Gallery() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={image.image}
+              style={{ objectPosition: `${image.focal_x ?? 50}% ${image.focal_y ?? 50}%` }}
               alt={image.alt_text || image.caption || "Honey Summer floral design"}
               loading="lazy"
               decoding="async"
