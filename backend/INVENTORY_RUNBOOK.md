@@ -1,5 +1,7 @@
 # Inventory and Stripe operations
 
+Phase 6 implementation/local verification is complete. Production activation, scheduler/alert setup and deployed payment/inventory verification belong to **Phase 12**, tracked in [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md). The safety procedures below remain mandatory; this ownership change does not authorize live checkout.
+
 ## What the numbers mean
 
 The `/admin/flowers/<id>/inventory` page shows **available** (sellable now),

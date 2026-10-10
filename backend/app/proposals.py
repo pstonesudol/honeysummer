@@ -15,6 +15,7 @@ from .models import (
     BouquetProposal,
     FlowerListing,
     Inquiry,
+    InvoiceRefund,
     Order,
     OrderItem,
     OrderNotification,
@@ -278,7 +279,11 @@ async def apply_invoice_event(event: dict) -> str:
                 return "review"
             if proposal.order_id:
                 return "ignored"
-            if proposal.status not in ("sent", "review"):
+            if proposal.status not in ("sent", "review", "stock_review"):
+                return "review"
+            # A Stripe invoice remains paid after refunding. Never book refunded
+            # or uncertain payments when a later webhook/reconciliation retries.
+            if await db.scalar(select(InvoiceRefund.id).where(InvoiceRefund.proposal_id == proposal.id)):
                 return "review"
             inquiry = await db.get(Inquiry, proposal.inquiry_id)
             order = Order(

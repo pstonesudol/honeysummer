@@ -27,6 +27,7 @@ from app.models import (
     WeddingInvoice,
     WeddingQuote,
 )
+from app.proposals import apply_invoice_event
 from app.server import app
 from app.settings import get_settings
 from app.weddings import send_wedding_invoice
@@ -81,6 +82,73 @@ def stripe_payment(monkeypatch, *, total=1000, invoice_id="in_one", refunded=0):
 
     monkeypatch.setattr(stripe.Refund, "create", create)
     return calls
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("external", [False, True])
+async def test_stock_shortfall_can_be_refunded_without_booking_or_restocking(monkeypatch, external):
+    calls = stripe_payment(monkeypatch, refunded=1000 if external else 0)
+    async with session_scope() as db:
+        db.add(User(email="owner@example.com", password_hash="unused", is_admin=True))
+        inquiry = Inquiry(kind="bouquet", name="Buyer", email="buyer@example.com")
+        db.add(inquiry)
+        await db.flush()
+        db.add(
+            BouquetProposal(
+                inquiry_id=inquiry.id,
+                status="stock_review",
+                stripe_invoice_id="in_one",
+                history=[{"draft": {"total_cents": 1000}}],
+                activity=[],
+            )
+        )
+        await db.commit()
+    if external:
+        monkeypatch.setattr(
+            stripe.Refund,
+            "retrieve",
+            lambda _: stripe.StripeObject.construct_from(
+                dict(
+                    id="re_external",
+                    status="succeeded",
+                    amount=1000,
+                    currency="usd",
+                    payment_intent="pi_one",
+                    charge="ch_one",
+                    metadata={},
+                ),
+                "sk_test_mock",
+            ),
+        )
+        await import_external_invoice_refund("bouquet", 1, "re_external", 1)
+        await import_external_invoice_refund("bouquet", 1, "re_external", 1)
+        assert calls == []
+    else:
+        form = dict(refund_key=str(uuid4()), amount="10.00", reason="Unavailable flowers")
+        await issue_invoice_refund("bouquet", 1, form, 1)
+        await issue_invoice_refund("bouquet", 1, form, 1)
+        assert len(calls) == 1
+    event = dict(
+        type="invoice.paid",
+        data={
+            "object": dict(
+                id="in_one",
+                status="paid",
+                currency="usd",
+                total=1000,
+                amount_paid=1000,
+                amount_remaining=0,
+            )
+        },
+    )
+    assert await apply_invoice_event(event) == "review"
+    await close_fully_refunded_quote("bouquet", 1, 1)
+    async with session_scope() as db:
+        proposal = await db.get(BouquetProposal, 1)
+        assert proposal.status == "cancelled" and proposal.order_id is None
+        assert len((await db.scalars(select(InvoiceRefund))).all()) == 1
+        assert not (await db.scalars(select(Order))).all()
+        assert not (await db.scalars(select(OrderRefund))).all()
 
 
 @pytest.mark.asyncio

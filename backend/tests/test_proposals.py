@@ -1,3 +1,7 @@
+import hashlib
+import hmac
+import json
+import time
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -5,10 +9,22 @@ import pytest
 import stripe
 from sqlalchemy import select
 
+from app import emails
 from app.admin import CSRF_COOKIE, _proposal_form
 from app.auth import hash_password
 from app.db import session_scope
-from app.models import BouquetProposal, FlowerListing, Inquiry, InventoryMovement, Order, OrderItem, User
+from app.models import (
+    BouquetProposal,
+    FlowerListing,
+    Inquiry,
+    InventoryMovement,
+    Order,
+    OrderItem,
+    OrderNotification,
+    User,
+)
+from app.orders import change_stock
+from app.payments import reconcile
 from app.proposals import apply_invoice_event, send_invoice, update_sent_invoice, validate_draft
 from app.server import app
 from app.settings import get_settings
@@ -171,6 +187,15 @@ async def test_send_pay_and_duplicate_webhook_preserve_stock(monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_mock")
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_mock")
+    sent = []
+
+    def send_email(**kwargs):
+        if not sent:
+            sent.append("failed")
+            raise RuntimeError("Email unavailable")
+        sent.append(kwargs["to"])
+
+    monkeypatch.setattr(emails, "send_email", send_email)
     monkeypatch.setattr(stripe.Customer, "create", lambda **kw: SimpleNamespace(id="cus_1"))
     invoices, items = [], []
 
@@ -225,9 +250,31 @@ async def test_send_pay_and_duplicate_webhook_preserve_stock(monkeypatch):
             "object": dict(id="in_1", currency="usd", total=3825, amount_paid=3825, amount_remaining=0, status="paid")
         },
     )
-    assert await apply_invoice_event(event) == "applied"
+    body = json.dumps(event).encode()
+    timestamp = int(time.time())
+    signature = hmac.new(b"whsec_mock", f"{timestamp}.".encode() + body, hashlib.sha256).hexdigest()
+    _, rejected = await app.asgi_client.post(
+        "/api/stripe/webhook/", content=body, headers={"stripe-signature": f"t={timestamp},v1=invalid"}
+    )
+    assert rejected.status == 400
+    _, accepted = await app.asgi_client.post(
+        "/api/stripe/webhook/", content=body, headers={"stripe-signature": f"t={timestamp},v1={signature}"}
+    )
+    assert accepted.status == 200
     assert await apply_invoice_event(event) == "ignored"
+    monkeypatch.setattr(
+        stripe.Invoice,
+        "retrieve",
+        lambda _: stripe.StripeObject.construct_from(
+            event["data"]["object"],
+            "sk_test_mock",
+        ),
+    )
+    await reconcile(apply=True)
+    await reconcile(apply=True)
+    assert sent == ["failed", settings.inquiry_notification_email, "buyer@example.com"]
     async with session_scope() as db:
+        assert all(row.sent_at for row in (await db.scalars(select(OrderNotification))).all())
         assert (await db.get(FlowerListing, 1)).quantity_available == 1
         assert (await db.get(BouquetProposal, proposal_id)).status == "paid"
         assert len((await db.scalars(select(Order))).all()) == 1
@@ -240,7 +287,7 @@ async def test_send_pay_and_duplicate_webhook_preserve_stock(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_paid_with_insufficient_stock_requires_review_without_booking():
+async def test_paid_with_insufficient_stock_requires_review_without_booking(monkeypatch):
     async with session_scope() as db:
         listing = FlowerListing(name="Dahlias", price=Decimal("12.50"), quantity_available=1)
         inquiry = Inquiry(kind="bouquet", name="Buyer", email="buyer@example.com")
@@ -274,6 +321,68 @@ async def test_paid_with_insufficient_stock_requires_review_without_booking():
         assert (await db.get(BouquetProposal, 1)).status == "stock_review"
         assert (await db.get(FlowerListing, 1)).quantity_available == 1
         assert not (await db.scalars(select(Order))).all()
+        listing = await db.get(FlowerListing, 1)
+        await change_stock(db, listing, 2, kind="harvest", units=2, source="admin", reason="Physical harvest received")
+        await db.commit()
+
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", "sk_test_mock")
+    invoice = stripe.StripeObject.construct_from(
+        dict(id="in_2", currency="usd", total=3825, amount_paid=3825, amount_remaining=0, status="paid"),
+        "sk_test_mock",
+    )
+    monkeypatch.setattr(stripe.Invoice, "retrieve", lambda _: invoice)
+    assert any("paid invoice not booked" in finding for finding in await reconcile())
+    async with session_scope() as db:
+        assert (await db.get(BouquetProposal, 1)).order_id is None  # Dry-run is read-only.
+    await reconcile(apply=True)
+    await reconcile(apply=True)
+    assert await apply_invoice_event(dict(id="evt_short", type="invoice.paid", data={"object": invoice})) == "ignored"
+    async with session_scope() as db:
+        assert (await db.get(BouquetProposal, 1)).status == "paid"
+        assert (await db.get(FlowerListing, 1)).quantity_available == 1
+        assert len((await db.scalars(select(Order))).all()) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing", ["stripe_secret_key", "stripe_webhook_secret"])
+async def test_missing_invoice_credentials_leave_draft_untouched(monkeypatch, missing):
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", "sk_test_mock")
+    monkeypatch.setattr(get_settings(), "stripe_webhook_secret", "whsec_mock")
+    monkeypatch.setattr(get_settings(), missing, "")
+    async with session_scope() as db:
+        inquiry = Inquiry(kind="bouquet", name="Buyer", email="buyer@example.com")
+        db.add(inquiry)
+        await db.flush()
+        db.add(BouquetProposal(inquiry_id=inquiry.id, status="draft", draft=draft(), history=[]))
+        await db.commit()
+    monkeypatch.setattr(stripe.Customer, "create", lambda **kw: pytest.fail("Must not contact Stripe"))
+    with pytest.raises(ValueError, match="configured"):
+        await send_invoice(1)
+    async with session_scope() as db:
+        assert (await db.get(BouquetProposal, 1)).status == "draft"
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_invoice_send_blocks_second_send(monkeypatch):
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", "sk_test_mock")
+    monkeypatch.setattr(get_settings(), "stripe_webhook_secret", "whsec_mock")
+    async with session_scope() as db:
+        inquiry = Inquiry(kind="bouquet", name="Buyer", email="buyer@example.com")
+        db.add(inquiry)
+        await db.flush()
+        db.add(BouquetProposal(inquiry_id=inquiry.id, status="draft", draft=draft(), history=[]))
+        await db.commit()
+
+    def fail(**kwargs):
+        raise RuntimeError("Uncertain provider response")
+
+    monkeypatch.setattr(stripe.Customer, "create", fail)
+    with pytest.raises(RuntimeError):
+        await send_invoice(1)
+    with pytest.raises(ValueError, match="Only a draft"):
+        await send_invoice(1)
+    async with session_scope() as db:
+        assert (await db.get(BouquetProposal, 1)).status == "review"
 
 
 @pytest.mark.asyncio
@@ -341,3 +450,117 @@ async def test_revision_voids_only_open_invoice_and_preserves_snapshot(monkeypat
         assert proposal.stripe_invoice_id is None
         assert proposal.history[0]["invoice_id"] == "in_old"
         assert proposal.draft == snapshot
+
+
+@pytest.mark.asyncio
+async def test_resend_failure_then_payment_and_stale_events_do_not_unbook(monkeypatch):
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", "sk_test_mock")
+    async with session_scope() as db:
+        inquiry = Inquiry(kind="bouquet", name="Buyer", email="buyer@example.com")
+        db.add(inquiry)
+        await db.flush()
+        snapshot = draft()
+        db.add(
+            BouquetProposal(
+                inquiry_id=inquiry.id,
+                status="sent",
+                draft=snapshot,
+                history=[dict(version=1, draft=snapshot, invoice_id="in_sent")],
+                stripe_invoice_id="in_sent",
+            )
+        )
+        await db.commit()
+    calls = []
+    monkeypatch.setattr(stripe.Invoice, "retrieve", lambda _: SimpleNamespace(status="open"))
+    monkeypatch.setattr(stripe.Invoice, "send_invoice", lambda invoice_id: calls.append(invoice_id))
+    await update_sent_invoice(1, "resend")
+    assert calls == ["in_sent"]
+    assert (
+        await apply_invoice_event(
+            dict(
+                id="evt_fail",
+                type="invoice.payment_failed",
+                data={"object": {"id": "in_sent"}},
+            )
+        )
+        == "applied"
+    )
+    assert (
+        await apply_invoice_event(
+            dict(
+                id="evt_pay",
+                type="invoice.paid",
+                data={
+                    "object": dict(
+                        id="in_sent",
+                        currency="usd",
+                        total=3825,
+                        amount_paid=3825,
+                        amount_remaining=0,
+                        status="paid",
+                    )
+                },
+            )
+        )
+        == "applied"
+    )
+    assert (
+        await apply_invoice_event(
+            dict(
+                id="evt_stale_fail",
+                type="invoice.payment_failed",
+                data={"object": {"id": "in_sent"}},
+            )
+        )
+        == "applied"
+    )
+    assert (
+        await apply_invoice_event(
+            dict(
+                id="evt_stale_void",
+                type="invoice.voided",
+                data={"object": {"id": "in_sent"}},
+            )
+        )
+        == "review"
+    )
+    async with session_scope() as db:
+        assert (await db.get(BouquetProposal, 1)).status == "paid"
+        assert len((await db.scalars(select(Order))).all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_stock_review_page_guides_owner_and_exposes_verified_refunds():
+    async with session_scope() as db:
+        db.add(User(email="owner@example.com", password_hash=hash_password("password"), is_admin=True))
+        inquiry = Inquiry(kind="bouquet", name="Buyer", email="buyer@example.com")
+        db.add(inquiry)
+        await db.flush()
+        snapshot = draft()
+        db.add(
+            BouquetProposal(
+                inquiry_id=inquiry.id,
+                status="stock_review",
+                draft=snapshot,
+                history=[dict(version=1, draft=snapshot, invoice_id="in_short")],
+                stripe_invoice_id="in_short",
+            )
+        )
+        await db.commit()
+    await app.asgi_client.get("/admin/login")
+    token = app.asgi_client.cookies.get(CSRF_COOKIE)
+    await app.asgi_client.post(
+        "/admin/login",
+        data=dict(
+            email="owner@example.com",
+            password="password",
+            csrf_token=token,
+        ),
+    )
+    _, page = await app.asgi_client.get("/admin/proposals/1")
+    assert page.status == 200
+    assert "Resolve paid invoice stock shortfall" in page.text
+    assert "Initiate invoice payment refund" in page.text
+    assert "Import a refund already completed in Stripe" in page.text
+    assert "Send Stripe invoice" not in page.text
+    assert "Substitutions are not automatic" in page.text

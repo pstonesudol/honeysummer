@@ -96,6 +96,8 @@ website orders; record listed items in the admin inventory journal separately.
 
 ## Deployment
 
+Phase 12 owns production setup and deployed verification across all feature phases. Track launch evidence and open checks in [`backend/PRODUCTION_READINESS.md`](backend/PRODUCTION_READINESS.md); feature completion does not imply production acceptance. Phase 13 owns final approval and public cutover.
+
 - Frontend: Cloudflare Workers through the OpenNext adapter, preserving the same-origin API proxy and server-side auth support.
 - Backend and Postgres: Railway. Set the Railway service root directory to `/backend`; `backend/railway.json` supplies build, start (Alembic then Sanic), and health-check commands.
 

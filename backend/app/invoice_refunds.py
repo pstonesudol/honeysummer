@@ -50,7 +50,7 @@ async def close_fully_refunded_quote(kind: str, pk: int, actor_id: int) -> None:
         else:
             refunds = (await db.scalars(select(InvoiceRefund).where(InvoiceRefund.proposal_id == pk))).all()
             if (
-                not quote.order_id
+                not quote.history
                 or any(item.status != "succeeded" for item in refunds)
                 or sum(item.amount_cents for item in refunds) != quote.history[-1]["draft"]["total_cents"]
             ):
@@ -189,7 +189,12 @@ async def import_external_invoice_refund(kind: str, pk: int, refund_id: str, act
             invoice_id, total = invoice.stripe_invoice_id, invoice.amount_cents
         else:
             owner = await db.scalar(select(BouquetProposal).where(BouquetProposal.id == pk).with_for_update())
-            if not owner or not owner.order_id or not owner.history:
+            if (
+                not owner
+                or not owner.stripe_invoice_id
+                or not owner.history
+                or (not owner.order_id and owner.status not in ("stock_review", "review"))
+            ):
                 raise ValueError("Only a verified paid invoice can be reconciled.")
             invoice_id, total = owner.stripe_invoice_id, owner.history[-1]["draft"]["total_cents"]
         try:
@@ -304,14 +309,19 @@ async def issue_invoice_refund(kind: str, pk: int, form, actor_id: int) -> Invoi
             remote_id, paid_cents = invoice.stripe_invoice_id, invoice.amount_cents
         else:
             owner = await db.scalar(select(BouquetProposal).where(BouquetProposal.id == pk).with_for_update())
-            if not owner or not owner.stripe_invoice_id or not owner.order_id:
+            if (
+                not owner
+                or not owner.stripe_invoice_id
+                or not owner.history
+                or (not owner.order_id and owner.status not in ("stock_review", "review"))
+            ):
                 raise ValueError("Only a verified paid bouquet invoice can be refunded.")
             remote_id, paid_cents = owner.stripe_invoice_id, owner.history[-1]["draft"]["total_cents"]
         previous = (await db.scalars(select(InvoiceRefund).where(getattr(InvoiceRefund, source) == pk))).all()
         if any(item.status != "succeeded" for item in previous):
             raise ValueError("An earlier refund needs Stripe review. Do not retry it.")
         if owner.status not in (
-            ("deposit_paid", "installment_paid", "paid") if kind == "wedding" else ("paid",)
+            ("deposit_paid", "installment_paid", "paid") if kind == "wedding" else ("paid", "stock_review")
         ) and not (owner.status == "review" and previous and all(item.status == "succeeded" for item in previous)):
             raise ValueError("Review the invoice and quote state before refunding.")
         recorded = sum(item.amount_cents for item in previous)

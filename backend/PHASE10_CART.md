@@ -1,6 +1,6 @@
 # Phase 10 — global storefront carts
 
-Implemented locally October 10, 2026. This is not production Stripe approval.
+**Phase 10 complete: implementation and local verification, October 10, 2026.** Production setup and deployed Stripe acceptance belong to Phase 12's [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md), not an unfinished Phase 10 gate. This is not production Stripe approval.
 
 ## Shopping experience
 
@@ -32,7 +32,7 @@ Verified paid/fulfilled/refunded orders clear only the submitted quantities. Add
 
 Run `uv run alembic upgrade head` in the backend before deploying this frontend/backend pair. Revision `8a91c04eb672` adds a unique nullable checkout key and saved checkout URL; historical orders are unchanged. Do not downgrade after accepting active cart checkouts: that removes their recovery keys.
 
-Production still needs Phase 6 reconciliation activation and Phase 12 Stripe keys, signed webhook events, same-origin routing and actual hosted Checkout return verification. Browser purchase tests below used explicit local debug payment mode, **not** a real Stripe charge or production webhook.
+Phase 12 owns activation of the Phase 6 reconciliation tooling, Stripe keys, actual signed webhook delivery, same-origin routing and hosted Checkout return verification, consolidated in `PRODUCTION_READINESS.md`. These remain launch requirements, not Phase 10 feature-completion requirements. Browser purchase tests below used explicit local debug payment mode, **not** a real Stripe charge or production webhook.
 
 ## Verification recorded
 
