@@ -107,6 +107,13 @@ async def _user(request):
     return await get_current_user(request)
 
 
+async def _account_pending(uid: int) -> str:
+    """Return the decrypted in-progress authenticator key, if setup has started."""
+    async with session_scope() as db:
+        pending = await db.scalar(select(User.mfa_pending).where(User.id == uid))
+    return decrypt(pending) if pending else ""
+
+
 @bp.middleware("request")
 async def protect_forms(request):
     """All security forms, including login/recovery, require a cookie-bound token."""
@@ -139,6 +146,18 @@ async def accessible_errors(request, response):
                 error=detail,
                 user=await _user(request),
                 reauth_next=_safe_reauth_next(request.path) or "/admin/security/access",
+            )
+        viewer = await _user(request)
+        if viewer and request.path.rstrip("/") == "/admin/security/change":
+            # Keep self-service form errors on the form, with the chosen action still selected.
+            return _page(
+                request,
+                mode="account",
+                status=response.status,
+                error=detail,
+                user=viewer,
+                selected=str(request.form.get("action", "")),
+                pending=await _account_pending(viewer.id),
             )
         return _page(request, mode="done", status=response.status, error=detail)
 
@@ -312,9 +331,7 @@ async def account(request):
     user = await _user(request)
     if not user:
         return _page(request, mode="done", message="Sign in to manage your account.", status=401)
-    async with session_scope() as db:
-        pending = await db.scalar(select(User.mfa_pending).where(User.id == user.id))
-    return _page(request, mode="account", user=user, pending=decrypt(pending) if pending else "")
+    return _page(request, mode="account", user=user, pending=await _account_pending(user.id))
 
 
 @bp.post("/change")

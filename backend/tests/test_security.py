@@ -671,6 +671,29 @@ async def test_reauth_gate_renders_a_helpful_page_for_browsers():
 
 
 @pytest.mark.asyncio
+async def test_account_form_error_keeps_the_form_and_selected_action():
+    uid = await make_user()
+    app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
+    await app.asgi_client.get("/admin/security/")
+    _, response = await app.asgi_client.post(
+        "/admin/security/change",
+        data={
+            "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE),
+            "current_password": PASSWORD,
+            "action": "password",
+            "password": "new-unique-garden-passphrase",
+            "password_confirm": "different-garden-passphrase",
+        },
+        headers={"Accept": "text/html"},
+    )
+    assert response.status == 400
+    assert "did not match" in response.text
+    assert "data-account-form" in response.text
+    assert '<option value="password" selected>' in response.text
+    assert 'data-field="password"' in response.text
+
+
+@pytest.mark.asyncio
 async def test_privacy_deletion_retains_financial_records():
     uid = await make_user()
     app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
