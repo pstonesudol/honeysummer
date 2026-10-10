@@ -51,7 +51,7 @@ async def _schema():
 
 @pytest_asyncio.fixture(autouse=True)
 async def _complete_legacy_operator_login(request, monkeypatch):
-    """Existing operations tests complete actual MFA, not an auth bypass.
+    """Operations tests sign operators in directly; complete MFA only when one is enrolled.
 
     Security tests drive both steps themselves to exercise the preauth boundary.
     """
@@ -63,14 +63,18 @@ async def _complete_legacy_operator_login(request, monkeypatch):
         result = await original(url, *args, **kwargs)
         response = result[1]
         if url == "/admin/login" and response.status == 302:
-            await sanic_app.asgi_client.get("/admin/security/mfa")
-            async with session_scope() as db:
-                email = kwargs.get("data", {}).get("email", "")
-                user = await db.scalar(select(User).where(User.email == email))
-                secret = decrypt(user.mfa_secret or user.mfa_pending)
-            csrf = sanic_app.asgi_client.cookies.get(SECURITY_CSRF_COOKIE)
-            _, mfa = await original("/admin/security/mfa", data={"csrf_token": csrf, "code": pyotp.TOTP(secret).now()})
-            assert mfa.status in {200, 302}, mfa.text
+            location = response.headers.get("location", "")
+            if location.endswith("/admin/security/mfa"):
+                await sanic_app.asgi_client.get("/admin/security/mfa")
+                async with session_scope() as db:
+                    email = kwargs.get("data", {}).get("email", "")
+                    user = await db.scalar(select(User).where(User.email == email))
+                    secret = decrypt(user.mfa_secret or user.mfa_pending)
+                csrf = sanic_app.asgi_client.cookies.get(SECURITY_CSRF_COOKIE)
+                _, mfa = await original(
+                    "/admin/security/mfa", data={"csrf_token": csrf, "code": pyotp.TOTP(secret).now()}
+                )
+                assert mfa.status in {200, 302}, mfa.text
         return result
 
     monkeypatch.setattr(sanic_app.asgi_client, "post", post)

@@ -81,7 +81,7 @@ The header cart persists separate retail and account-scoped wholesale baskets. R
 
 ### Account security
 
-Owners and staff must enroll an authenticator at admin sign-in. `/admin/account` links to password, MFA, session and access management; wholesale includes self-service account/recovery links. Existing signed cookies are invalid after the Phase 11 migration. Configure `PUBLIC_ORIGIN` and a persistent `SECURITY_ENCRYPTION_KEY`, and schedule `python -m app.security_maintenance --apply` before launch. See [`backend/ACCOUNT_SECURITY.md`](backend/ACCOUNT_SECURITY.md) for permissions, migration, staff invitations, privacy review and audited owner recovery.
+Owners and staff can sign in with a password alone; an authenticator is optional and can be enrolled at `/admin/security/`. `/admin/account` links to password, MFA, session and access management; wholesale includes self-service account/recovery links. Existing signed cookies are invalid after the Phase 11 migration. Configure `PUBLIC_ORIGIN` and a persistent `SECURITY_ENCRYPTION_KEY`, and schedule `python -m app.security_maintenance --apply` before launch. See [`backend/ACCOUNT_SECURITY.md`](backend/ACCOUNT_SECURITY.md) for permissions, migration, staff invitations, privacy review and audited owner recovery.
 
 ### Delivery fees
 

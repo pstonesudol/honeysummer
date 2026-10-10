@@ -218,7 +218,7 @@ async def test_recovery_generic_responses_throttle_and_retry_visibility(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_admin_password_is_not_an_admin_session_until_mfa_enrolled():
+async def test_operator_password_signs_in_when_mfa_not_enrolled():
     uid = await make_user(role="owner")
     await app.asgi_client.get("/admin/login")
     _, password = await app.asgi_client.post(
@@ -229,26 +229,58 @@ async def test_admin_password_is_not_an_admin_session_until_mfa_enrolled():
             "password": PASSWORD,
         },
     )
-    assert password.status == 302 and not app.asgi_client.cookies.get(ADMIN_COOKIE)
-    _, blocked = await app.asgi_client.get("/admin/")
-    assert blocked.status == 302
-    await app.asgi_client.get("/admin/security/mfa")
-    async with session_scope() as db:
-        user = await db.get(User, uid)
-        secret = decrypt(user.mfa_pending)
-    _, complete = await app.asgi_client.post(
-        "/admin/security/mfa",
-        data={"csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE), "code": pyotp.TOTP(secret).now()},
-    )
-    assert complete.status == 200 and "Save your recovery codes" in complete.text
+    assert password.status == 302 and password.headers["location"].endswith("/admin/")
     assert app.asgi_client.cookies.get(ADMIN_COOKIE)
     _, dashboard = await app.asgi_client.get("/admin/")
     assert dashboard.status == 200
     async with session_scope() as db:
+        assert not (await db.get(User, uid)).mfa_secret
+
+
+@pytest.mark.asyncio
+async def test_enrolled_operator_still_requires_authenticator_after_password():
+    uid = await make_user(role="owner", mfa=True)
+    await app.asgi_client.get("/admin/login")
+    _, password = await app.asgi_client.post(
+        "/admin/login",
+        data={
+            "csrf_token": app.asgi_client.cookies.get(ADMIN_CSRF_COOKIE),
+            "email": "owner@example.com",
+            "password": PASSWORD,
+        },
+    )
+    assert password.status == 302 and password.headers["location"].endswith("/admin/security/mfa")
+    assert not app.asgi_client.cookies.get(ADMIN_COOKIE)
+    _, blocked = await app.asgi_client.get("/admin/")
+    assert blocked.status == 302
+    await app.asgi_client.get("/admin/security/mfa")
+    async with session_scope() as db:
+        secret = decrypt((await db.get(User, uid)).mfa_secret)
+    _, complete = await app.asgi_client.post(
+        "/admin/security/mfa",
+        data={"csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE), "code": pyotp.TOTP(secret).now()},
+    )
+    assert complete.status == 302 and app.asgi_client.cookies.get(ADMIN_COOKIE)
+    _, dashboard = await app.asgi_client.get("/admin/")
+    assert dashboard.status == 200
+    async with session_scope() as db:
+        assert not verify_mfa(await db.get(User, uid), pyotp.TOTP(secret).now())  # No timestep replay.
+
+
+@pytest.mark.asyncio
+async def test_operator_can_opt_into_mfa_from_account_security():
+    uid = await make_user(role="owner")
+    app.asgi_client.cookies.set(ADMIN_COOKIE, await create_session_token(uid, "admin"))
+    _, start = await change({"action": "mfa_start"})
+    assert start.status == 302
+    async with session_scope() as db:
+        secret = decrypt((await db.get(User, uid)).mfa_pending)
+    _, confirm = await change({"action": "mfa_confirm", "code": pyotp.TOTP(secret).now()})
+    assert confirm.status == 200 and "Save your recovery codes" in confirm.text
+    async with session_scope() as db:
         user = await db.get(User, uid)
-        assert not user.mfa_pending and len(user.recovery_codes) == 10
-        assert not verify_mfa(user, pyotp.TOTP(secret).now())  # No timestep replay.
-        codes = re.findall(r"<code>([a-f0-9]{16})</code>", complete.text)
+        assert user.mfa_secret and not user.mfa_pending and len(user.recovery_codes) == 10
+        codes = re.findall(r"<code>([a-f0-9]{16})</code>", confirm.text)
         assert verify_mfa(user, codes[0]) and not verify_mfa(user, codes[0])
 
 

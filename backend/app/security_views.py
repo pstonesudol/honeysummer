@@ -83,7 +83,7 @@ def _page(request, *, status=200, **context):
 
 async def _user(request):
     user = await session_user(request, "honeysummer_admin", "admin")
-    if user and user.role in {"owner", "staff"} and user.is_admin and user.mfa_secret:
+    if user and user.role in {"owner", "staff"} and user.is_admin:
         return user
     return await get_current_user(request)
 
@@ -113,7 +113,7 @@ async def accessible_errors(request, response):
 
 @bp.route("/mfa", methods=["GET", "POST"])
 async def admin_mfa(request):
-    """Mandatory operator MFA enrollment/sign-in; no admin session before proof."""
+    """Step-up authenticator check for operators who have MFA enabled; opting in is optional."""
     challenge = _preauth(request)
     if not challenge:
         return redirect("/admin/login")
@@ -126,39 +126,21 @@ async def admin_mfa(request):
             not user
             or not user.is_active
             or user.role not in {"owner", "staff"}
+            or not user.mfa_secret
             or user.security_version != challenge["version"]
         ):
             return redirect("/admin/login")
-        enrolling = not user.mfa_secret
-        codes = []
-        if enrolling and not user.mfa_pending:
-            user.mfa_pending = encrypt(pyotp.random_base32())
-            await db.commit()
-        secret = decrypt(user.mfa_pending) if enrolling else ""
-        uri = pyotp.TOTP(secret).provisioning_uri(user.email, issuer_name="Honey Summer") if secret else ""
         if request.method == "POST":
-            if enrolling:
-                user.mfa_secret = user.mfa_pending
             if not verify_mfa(user, str(request.form.get("code", ""))):
-                if enrolling:
-                    user.mfa_secret = ""
                 audit(db, request, "mfa_login", target=uid, outcome="failed")
                 await db.commit()
-                return _page(request, mode="mfa", secret=secret, uri=uri, error="Invalid code.", status=400)
-            if enrolling:
-                user.mfa_pending = ""
-                codes = [secrets.token_hex(8) for _ in range(10)]
-                user.recovery_codes = [token_digest(c) for c in codes]
-                user.security_version += 1
-                queue_mail(
-                    db, user.email, "MFA enabled", "Authenticator protection is enabled. Store recovery codes offline."
-                )
+                return _page(request, mode="mfa", error="Invalid code.", status=400)
             audit(db, request, "mfa_login", actor=uid, target=uid)
             version = user.security_version
             await db.commit()
         else:
-            return _page(request, mode="mfa", secret=secret, uri=uri)
-    response = _page(request, mode="codes", codes=codes) if codes else redirect("/admin/")
+            return _page(request, mode="mfa")
+    response = redirect("/admin/")
     response.delete_cookie(PREAUTH_COOKIE)
     response.add_cookie(
         "honeysummer_admin",
@@ -168,7 +150,6 @@ async def admin_mfa(request):
         secure=not get_settings().debug,
         samesite="Lax",
     )
-    await deliver_security_mail()
     return response
 
 
@@ -244,7 +225,7 @@ async def reset(request):
     return _page(
         request,
         mode="done",
-        message="Account updated. Sign in with your new credentials. MFA is still required for operators.",
+        message="Account updated. Sign in with your new credentials. Authenticator setup is optional for operators.",
     )
 
 
@@ -426,7 +407,7 @@ async def manage_access(request):
                 db,
                 email,
                 "Staff invitation",
-                "Set up your password within 30 minutes, then enroll MFA:\n"
+                "Set up your password within 30 minutes, then sign in. Authenticator setup is optional:\n"
                 + public_link(f"/admin/security/reset?kind=invite&token={token}"),
                 challenge=True,
             )

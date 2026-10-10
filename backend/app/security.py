@@ -270,6 +270,6 @@ def effective_role(user: User) -> str:
 
 
 def recent(request) -> bool:
-    """Sensitive changes require password and MFA reauthentication within 10 minutes."""
+    """Sensitive changes require password reauthentication (and MFA if enrolled) within 10 minutes."""
     row = getattr(request.ctx, "account_session", None)
     return bool(row and aware(row.reauthenticated_at) + timedelta(minutes=10) > datetime.now(UTC))

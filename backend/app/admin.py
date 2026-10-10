@@ -30,7 +30,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from .auth import revoke_session, session_user, verify_login_password
+from .auth import create_session_token, revoke_session, session_user, verify_login_password
 from .balance_report import invoice_balance_rows
 from .correspondence import parse_email
 from .db import session_scope
@@ -407,7 +407,7 @@ REGISTRY_BY_SLUG = {admin.slug: admin for admin in REGISTRY}
 async def get_current_admin(request) -> User | None:
     """Load the signed-in operator from the request, if any."""
     user = await session_user(request, ADMIN_COOKIE, "admin")
-    return user if user and user.is_admin and user.role in {"owner", "staff"} and user.mfa_secret else None
+    return user if user and user.is_admin and user.role in {"owner", "staff"} else None
 
 
 def _valid_csrf(request) -> bool:
@@ -748,11 +748,24 @@ async def login_submit(request):
         valid = bool(password_valid and user.is_admin and user.role in {"owner", "staff"})
         user_id = user.id if valid else None
         version = user.security_version if valid else 0
+        enrolled = bool(valid and user.mfa_secret)
         audit(session, request, "admin_password", target=user_id, outcome="success" if valid else "failed")
         await session.commit()
     if not valid:
         return _page(request, "admin/login.html", status=400, error="Invalid email or password.")
-    return begin_admin_mfa(user_id, version)
+    if enrolled:
+        return begin_admin_mfa(user_id, version)
+    # Operator MFA is opt-in: a password alone signs in when no authenticator is enrolled.
+    response = redirect("/admin/")
+    response.add_cookie(
+        ADMIN_COOKIE,
+        await create_session_token(user_id, "admin", expected_version=version),
+        max_age=ADMIN_SESSION_MAX_AGE,
+        httponly=True,
+        secure=not get_settings().debug,
+        samesite="Lax",
+    )
+    return response
 
 
 @bp.post("/logout")
