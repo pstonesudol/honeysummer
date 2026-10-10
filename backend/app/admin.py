@@ -400,6 +400,33 @@ REGISTRY: list[ModelAdmin] = [
 
 REGISTRY_BY_SLUG = {admin.slug: admin for admin in REGISTRY}
 
+_NAV_HREFS = (
+    "/admin/",
+    "/admin/proposals/",
+    "/admin/weddings/",
+    "/admin/inventory/stock",
+    "/admin/orders/preparation",
+    "/admin/reports/sales",
+    "/admin/reports/balances",
+    "/admin/reports/operations",
+    "/admin/operations/attention",
+    "/admin/site-content",
+    "/admin/customers",
+    "/admin/activity",
+    "/admin/account",
+) + tuple(f"/admin/{entry.slug}" for entry in REGISTRY)
+
+
+def _active_href(path: str) -> str:
+    """Return the most specific admin navigation href for the current request path."""
+    path = path.split("?", 1)[0].rstrip("/")
+    best = ""
+    for href in _NAV_HREFS:
+        base = href.rstrip("/")
+        if (path == base or path.startswith(base + "/")) and len(base) > len(best.rstrip("/")):
+            best = href
+    return best
+
 
 # --------------------------------------------------------------------------- #
 # Session + CSRF
@@ -533,6 +560,7 @@ def _page(request, template: str, status: int = 200, **context):
     context.setdefault("admin", request.ctx.admin)
     context.setdefault("operator", request.ctx.admin)
     context.setdefault("models", REGISTRY)
+    context.setdefault("active_href", _active_href(request.path))
     context.setdefault("media_url", public_media_url())
     response = html(_env.get_template(template).render(**context), status=status)
     response.add_cookie(

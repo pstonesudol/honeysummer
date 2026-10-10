@@ -9,14 +9,21 @@
     * { box-sizing: border-box; }
     [hidden] { display:none !important; }
     body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); line-height:1.5; }
-    header { background:var(--surface); border-bottom:1px solid var(--taupe); padding:0.75rem 1rem; }
-    header nav { display:flex; flex-wrap:wrap; gap:0.3rem 0.7rem; align-items:center; max-width:1240px; margin:auto; }
+    header { background:var(--surface); border-bottom:1px solid var(--taupe); padding:0.85rem 1rem; }
+    header nav { display:flex; flex-wrap:wrap; gap:0.4rem 0.7rem; align-items:center; max-width:1240px; margin:auto; }
     .admin-menu { flex:1; min-width:0; }
     .admin-menu summary { display:none; }
-    .admin-menu__links { display:flex; flex-wrap:wrap; gap:0.3rem 0.7rem; align-items:center; }
-    header a { color:var(--ink); text-decoration:none; font-size:0.88rem; border-radius:8px; padding:0.25rem 0.4rem; }
-    header a:hover { text-decoration:underline; }
-    .brand { font-family:Georgia, serif; font-size:1.25rem; font-weight:700; margin-right:0.5rem; white-space:nowrap; }
+    .admin-menu__links { display:flex; flex-wrap:wrap; gap:0.2rem 0.7rem; align-items:center; }
+    header a { color:var(--ink); text-decoration:none; font-size:0.9rem; border-radius:10px; padding:0.4rem 0.55rem; transition:background-color .15s ease, color .15s ease; }
+    .admin-menu__links a:hover { background:#ede2d3; }
+    .admin-menu__links a.is-active { background:var(--accent); color:#3f2b25; font-weight:600; }
+    .admin-menu__links a.is-active:hover { background:#cf9fa3; }
+    .brand { display:block; font-family:Georgia, serif; font-size:1.25rem; font-weight:700; line-height:1.15; margin-right:0.5rem; padding:0.2rem 0.2rem; }
+    .brand__sub { display:block; font-family:ui-sans-serif, system-ui, sans-serif; font-size:0.68rem; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:#9a857a; margin-top:0.15rem; }
+    .nav-group { display:contents; }
+    .nav-group__label { display:none; }
+    .nav-group--footer { display:contents; }
+    .nav-group--footer form { display:inline; }
     main { max-width:1240px; margin:0 auto; padding:1.5rem; }
     h1, h2 { font-family:Georgia, serif; letter-spacing:-0.02em; }
     h1 { font-size:clamp(1.65rem, 3vw, 2.4rem); margin:0.5rem 0 1rem; }
@@ -55,14 +62,18 @@
     .skip-link:focus { top:1rem; }
     button:disabled { cursor:not-allowed; opacity:0.6; }
     @media (min-width:1100px) {
-      body:has(.admin-menu) header { position:fixed; inset:0 auto 0 0; width:235px; overflow-y:auto; border-right:1px solid var(--taupe); border-bottom:0; }
+      body:has(.admin-menu) header { position:fixed; inset:0 auto 0 0; width:250px; overflow-y:auto; border-right:1px solid var(--taupe); border-bottom:0; padding:1.25rem 1rem; }
       header nav, .admin-menu__links { flex-direction:column; align-items:stretch; }
-      .brand { margin-bottom:0.8rem; }
+      .brand { margin:0 0 1rem; padding:0 0.2rem 1rem; border-bottom:1px solid var(--taupe); font-size:1.2rem; }
       .admin-menu { width:100%; }
-      .admin-menu__links a { padding:0.45rem 0.6rem; }
-      .admin-menu__links a:hover { background:#ede2d3; }
-      .admin-menu__links form { margin:1rem 0 0 !important; }
-      body:has(.admin-menu) main { margin-left:235px; max-width:1400px; }
+      .nav-group { display:flex; flex-direction:column; gap:0.05rem; }
+      .nav-group + .nav-group { margin-top:0.5rem; }
+      .nav-group__label { display:block; font:600 0.66rem/1.4 ui-sans-serif, system-ui, sans-serif; letter-spacing:0.15em; text-transform:uppercase; color:#a08c81; padding:0.25rem 0.6rem 0.15rem; }
+      .admin-menu__links a { padding:0.42rem 0.7rem; }
+      .nav-group--footer { display:flex; flex-direction:column; gap:0.05rem; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--taupe); }
+      .nav-group--footer form { display:block; margin:0.5rem 0 0; }
+      .nav-group--footer button { width:100%; }
+      body:has(.admin-menu) main { margin-left:250px; max-width:1400px; }
     }
     @media (max-width:680px) { button, .button, .admin-menu__links a { min-height:44px; } .card { flex-wrap:wrap; } }
     @media print { body:has(.admin-menu) main { margin-left:0; } }
@@ -74,39 +85,58 @@
       .admin-menu summary { display:block; cursor:pointer; font-weight:600; padding:0.5rem; border:1px solid var(--taupe); border-radius:8px; }
       .admin-menu__links { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.35rem; padding-top:0.5rem; }
       .admin-menu__links a, .admin-menu__links form { min-width:0; }
-      .admin-menu__links form { margin-left:0 !important; }
+      .nav-group--footer { display:flex; flex-direction:column; gap:0.35rem; grid-column:1 / -1; }
     }
   </style>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
+  {% macro navlink(href, label) -%}
+  <a href="{{ href }}"{% if active_href|default('') == href %} class="is-active" aria-current="page"{% endif %}>{{ label }}</a>
+  {%- endmacro %}
   {% if admin %}
    <header><nav aria-label="Admin navigation">
-     <a class="brand" href="/admin/">Honey Summer <span class="muted">· studio</span></a>
+     <a class="brand" href="/admin/"><span>Honey Summer</span><span class="brand__sub">· studio</span></a>
      <details class="admin-menu" open><summary>Menu</summary><div class="admin-menu__links">
      {% if operator and operator.role == 'staff' %}
-     <a href="/admin/orders">Orders</a>
-     <a href="/admin/orders/preparation">Daily preparation</a>
+     <div class="nav-group">
+       <span class="nav-group__label">Operations</span>
+       {{ navlink('/admin/orders', 'Orders') }}
+       {{ navlink('/admin/orders/preparation', 'Daily preparation') }}
+     </div>
      {% else %}
-     <a href="/admin/">Dashboard</a>
-    {% for item in models %}<a href="/admin/{{ item.slug }}">{{ item.label }}</a>{% endfor %}
-    <a href="/admin/proposals/">Bouquet proposals</a>
-    <a href="/admin/weddings/">Wedding quotes</a>
-     <a href="/admin/inventory/stock">Shop-wide stock</a>
-     <a href="/admin/orders/preparation">Daily preparation</a>
-     <a href="/admin/reports/sales">Sales ledger</a>
-     <a href="/admin/reports/balances">Invoice balances</a>
-     <a href="/admin/reports/operations">Products &amp; waste</a>
-     <a href="/admin/operations/attention">Needs attention</a>
-     <a href="/admin/site-content">Site content</a>
-     <a href="/admin/customers">Customers</a>
-      <a href="/admin/activity">Activity</a>
-      {% endif %}
-     <a href="/admin/account">Account settings</a>
-     <form class="inline" method="post" action="/admin/logout" style="margin-left:auto">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="button--ghost button--sm" type="submit">Sign out</button>
-     </form>
+     <div class="nav-group">
+       {{ navlink('/admin/', 'Dashboard') }}
+     </div>
+     <div class="nav-group">
+       <span class="nav-group__label">Catalogue</span>
+       {% for item in models %}{{ navlink('/admin/' ~ item.slug, item.label) }}{% endfor %}
+     </div>
+     <div class="nav-group">
+       <span class="nav-group__label">Sales &amp; operations</span>
+       {{ navlink('/admin/proposals/', 'Bouquet proposals') }}
+       {{ navlink('/admin/weddings/', 'Wedding quotes') }}
+       {{ navlink('/admin/orders/preparation', 'Daily preparation') }}
+       {{ navlink('/admin/inventory/stock', 'Shop-wide stock') }}
+       {{ navlink('/admin/reports/sales', 'Sales ledger') }}
+       {{ navlink('/admin/reports/balances', 'Invoice balances') }}
+       {{ navlink('/admin/reports/operations', 'Products & waste') }}
+       {{ navlink('/admin/operations/attention', 'Needs attention') }}
+     </div>
+     <div class="nav-group">
+       <span class="nav-group__label">Content &amp; people</span>
+       {{ navlink('/admin/site-content', 'Site content') }}
+       {{ navlink('/admin/customers', 'Customers') }}
+       {{ navlink('/admin/activity', 'Activity') }}
+     </div>
+     {% endif %}
+     <div class="nav-group nav-group--footer">
+       {{ navlink('/admin/account', 'Account settings') }}
+       <form class="inline" method="post" action="/admin/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="button--ghost button--sm" type="submit">Sign out</button>
+       </form>
+     </div>
      </div></details>
     </nav></header>
   {% endif %}

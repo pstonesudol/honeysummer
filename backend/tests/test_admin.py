@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import select
 
 from app import emails
-from app.admin import CSRF_COOKIE
+from app.admin import CSRF_COOKIE, _active_href
 from app.auth import hash_password
 from app.db import session_scope
 from app.models import (
@@ -78,6 +78,34 @@ async def test_admin_can_log_in_and_see_the_dashboard():
     _, dashboard = await app.asgi_client.get("/admin/")
     assert dashboard.status == 200
     assert "Dashboard" in dashboard.text
+
+
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        ("/admin/", "/admin/"),
+        ("/admin/orders", "/admin/orders"),
+        ("/admin/orders/12", "/admin/orders"),
+        ("/admin/orders/manual/new", "/admin/orders"),
+        ("/admin/orders/preparation", "/admin/orders/preparation"),
+        ("/admin/proposals/3", "/admin/proposals/"),
+        ("/admin/reports/balances", "/admin/reports/balances"),
+        ("/admin/flowers?season=fall", "/admin/flowers"),
+        ("/admin/nope", "/admin/"),
+    ],
+)
+def test_active_href_picks_most_specific_nav(path, expected):
+    assert _active_href(path) == expected
+
+
+@pytest.mark.asyncio
+async def test_sidebar_marks_the_current_section_active():
+    await _make_admin()
+    await _login()
+
+    _, orders = await app.asgi_client.get("/admin/orders")
+    assert orders.status == 200
+    assert 'href="/admin/orders" class="is-active" aria-current="page"' in orders.text
 
 
 @pytest.mark.asyncio
