@@ -1,22 +1,24 @@
 {% extends "admin/base.html" %}
 {% block content %}
 <h1>Invoice balances</h1>
-<p class="muted">A read-only view of locally recorded proposals and wedding quotes, not a Stripe reconciliation or a paid-sales ledger. Open invoices count only invoices recorded as sent; review/issuing amounts are not assumed collectible. Verify payment in Stripe before following up with a customer.</p>
+<p class="muted">A read-only view of locally recorded proposals and wedding quotes, not a live Stripe reconciliation or a paid-sales ledger. Recorded refunds are separate from verified gross receipts; the remaining contract balance is based on original quote terms and MUST be reviewed after a refund, not automatically charged. Open invoices count only invoices recorded as sent; review/issuing amounts are not assumed collectible.</p>
 <div class="grid">
   <div class="card">Remaining on active quotes <strong>${{ '%.2f'|format(totals.remaining_cents / 100) }}</strong></div>
   <div class="card">Recorded open invoices <strong>${{ '%.2f'|format(totals.open_cents / 100) }}</strong></div>
   <div class="card">Verified partial payments <strong>${{ '%.2f'|format(totals.verified_paid_cents / 100) }}</strong></div>
+  <div class="card">Recorded invoice refunds <strong>${{ '%.2f'|format(totals.refunded_cents / 100) }}</strong></div>
 </div>
 <p><a href="/admin/reports/balances?format=csv" class="button button--ghost">Export CSV</a> <a href="/admin/reports/sales">Paid-order sales ledger</a></p>
-<div class="table-scroll"><table><thead><tr><th>Quote</th><th>Customer</th><th>Status</th><th>Verified paid</th><th>Remaining</th><th>Open invoice</th><th>Due (Eastern)</th></tr></thead><tbody>
+<div class="table-scroll"><table><thead><tr><th>Quote</th><th>Customer</th><th>Status</th><th>Verified paid</th><th>Refunded</th><th>Remaining before revision</th><th>Open invoice</th><th>Due (Eastern)</th></tr></thead><tbody>
 {% for row in rows %}<tr>
 <td><a href="{{ row.url }}">{{ row.kind }} #{{ row.id }} · {{ row.title }}</a></td>
 <td>{{ row.customer }}</td>
 <td><span class="status-badge status-badge--{{ 'attention' if row.needs_review or row.overdue else 'neutral' }}">{{ 'Needs Stripe review' if row.needs_review else 'Overdue in local records' if row.overdue else row.status|admin_label }}</span></td>
 <td>${{ '%.2f'|format(row.verified_paid_cents / 100) }}</td>
+<td>${{ '%.2f'|format(row.refunded_cents / 100) }}</td>
 <td>${{ '%.2f'|format(row.balance_cents / 100) }}</td>
 <td>${{ '%.2f'|format(row.open_cents / 100) }}</td>
 <td>{{ row.due|admin_date if row.due else 'Not yet invoiced / 7-day default' }}</td>
-</tr>{% else %}<tr><td colspan="7" class="muted">No locally recorded active invoice balances.</td></tr>{% endfor %}
+</tr>{% else %}<tr><td colspan="8" class="muted">No locally recorded active invoice balances.</td></tr>{% endfor %}
 </tbody></table></div>
 {% endblock %}

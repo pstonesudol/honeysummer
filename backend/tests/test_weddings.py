@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+from decimal import Decimal
 
 import pytest
 import stripe
@@ -8,12 +10,12 @@ from sqlalchemy import select
 from app.admin import CSRF_COOKIE, _admin_date, _admin_label
 from app.auth import hash_password
 from app.db import session_scope
-from app.models import Inquiry, Order, OrderItem, User, WeddingInvoice, WeddingQuote
+from app.models import Inquiry, InvoiceRefund, Order, OrderItem, User, WeddingInvoice, WeddingQuote
 from app.server import app
 from app.settings import get_settings
 from app.weddings import (apply_wedding_invoice_event, approve_wedding_schedule, due_timestamp,
-                          eastern_today, run_wedding_schedule, send_wedding_invoice,
-                          validate_installments, validate_quote, validate_schedule)
+                           eastern_today, run_wedding_schedule, send_wedding_invoice, attach_reviewed_wedding_invoice,
+                           agree_revised_wedding, revise_wedding_invoice, validate_installments, validate_quote, validate_schedule)
 
 
 def form(mode="deposit", deposit="30.00"):
@@ -52,6 +54,119 @@ def test_quote_validation_and_schedule():
             validate_quote(form(deposit=amount))
 
 
+@pytest.mark.asyncio
+async def test_partially_refunded_wedding_requires_customer_agreement_before_new_invoice(monkeypatch):
+    from app import payments
+    async def deliver(_):
+        return None
+    monkeypatch.setattr(payments, "deliver_notifications", deliver)
+    mock_stripe(monkeypatch, {"in_amended": 4000})
+    draft, _, _ = validate_quote(form())
+    async with session_scope() as db:
+        owner = User(email="owner@example.com", password_hash="unused", is_admin=True)
+        inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        db.add_all([owner, inquiry])
+        await db.flush()
+        quote = WeddingQuote(inquiry_id=inquiry.id, status="review", payment_mode="deposit",
+            deposit_cents=3000, draft=draft, snapshot=draft, activity=[])
+        db.add(quote)
+        await db.flush()
+        old = WeddingInvoice(quote_id=quote.id, step="deposit", status="paid", amount_cents=3000,
+                             stripe_invoice_id="in_deposit")
+        db.add(old)
+        await db.flush()
+        db.add(InvoiceRefund(wedding_invoice_id=old.id, amount_cents=1000,
+            payment_intent_id="pi_old", stripe_refund_id="re_old", status="succeeded",
+            reason="Price change", idempotency_key=str(uuid4()), actor_id=owner.id))
+        await db.commit()
+        quote_id, old_id = quote.id, old.id
+    with pytest.raises(ValueError):
+        await send_wedding_invoice(quote_id, "balance")
+    revised = {**form(mode="full"), "amendment_due_date": (eastern_today() + timedelta(days=14)).isoformat(),
+               "acceptance_reference": "Client accepted by email Oct 10", "customer_accepted": "on"}
+    with pytest.raises(ValueError, match="written acceptance"):
+        await agree_revised_wedding(quote_id, {**revised, "customer_accepted": ""}, actor_id=1)
+    with pytest.raises(ValueError, match=r"at least \$0.50 due"):
+        await agree_revised_wedding(quote_id, {**revised, "price_1": "5.00", "price_2": "9.99"}, actor_id=1)
+    await app.asgi_client.get("/admin/login")
+    csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
+    _, anonymous = await app.asgi_client.post(f"/admin/weddings/{quote_id}/amend", data=revised)
+    assert anonymous.status == 302
+    async with session_scope() as db:
+        owner = await db.get(User, 1)
+        owner.password_hash = hash_password("password")
+        await db.commit()
+    await app.asgi_client.post("/admin/login", data=dict(
+        email="owner@example.com", password="password", csrf_token=csrf))
+    _, detail = await app.asgi_client.get(f"/admin/weddings/{quote_id}")
+    assert detail.status == 200 and "Save revised agreement (do not send yet)" in detail.text
+    _, forbidden = await app.asgi_client.post(f"/admin/weddings/{quote_id}/amend", data=revised)
+    assert forbidden.status == 403
+    csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
+    _, invalid = await app.asgi_client.post(f"/admin/weddings/{quote_id}/amend", data={
+        **revised, "customer_accepted": "", "csrf_token": csrf})
+    assert invalid.status == 409 and invalid.json["field"] == "acceptance_reference"
+    _, saved = await app.asgi_client.post(f"/admin/weddings/{quote_id}/amend", data={
+        **revised, "csrf_token": csrf})
+    assert saved.status == 302
+    with pytest.raises(ValueError, match="partially refunded"):
+        await agree_revised_wedding(quote_id, revised, actor_id=1)
+    async with session_scope() as db:
+        quote = await db.get(WeddingQuote, quote_id)
+        assert quote.snapshot == draft
+        assert quote.status == "amendment_ready"
+        assert quote.amendments[-1]["retained_paid_cents"] == 2000
+        assert quote.amendments[-1]["amount_cents"] == 4000
+        from app.admin import _booked_weddings
+        booked, count = await _booked_weddings(db, limit=10)
+        assert count == 1 and booked[0]["balance_cents"] == 4000
+    assert await send_wedding_invoice(quote_id, "amended") == "in_amended"
+    async with session_scope() as db:
+        from app.balance_report import invoice_balance_rows
+        rows = await invoice_balance_rows(db)
+        assert rows[0]["balance_cents"] == 4000
+        assert rows[0]["open_cents"] == 4000
+        assert rows[0]["refunded_cents"] == 1000
+    assert await apply_wedding_invoice_event(paid("in_amended", 4000, "evt_amended")) == "applied"
+    assert await apply_wedding_invoice_event(paid("in_amended", 4000, "evt_amended")) == "ignored"
+    async with session_scope() as db:
+        quote = await db.get(WeddingQuote, quote_id)
+        order = await db.get(Order, quote.order_id)
+        assert quote.status == "paid" and order.status == "paid"
+        assert sum(item.price_snapshot * item.quantity for item in (
+            await db.scalars(select(OrderItem).where(OrderItem.order_id == order.id))).all()) == Decimal("60.00")
+        assert (await db.get(WeddingInvoice, old_id)).status == "paid"
+
+
+@pytest.mark.asyncio
+async def test_amended_wedding_remains_visible_if_old_gross_reaches_old_total():
+    from app.admin import _booked_weddings
+    from app.balance_report import invoice_balance_rows
+    draft, _, _ = validate_quote(form())
+    old_draft = {**draft, "total_cents": 3000}
+    async with session_scope() as db:
+        owner = User(email="owner@example.com", password_hash="unused", is_admin=True)
+        inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        db.add_all([owner, inquiry])
+        await db.flush()
+        quote = WeddingQuote(inquiry_id=inquiry.id, status="amendment_ready", payment_mode="deposit",
+            draft=old_draft, snapshot=old_draft, amendments=[{
+                "draft": draft, "retained_paid_cents": 2000, "amount_cents": 4000}], activity=[])
+        db.add(quote)
+        await db.flush()
+        old = WeddingInvoice(quote_id=quote.id, step="deposit", status="paid", amount_cents=3000)
+        db.add(old)
+        await db.flush()
+        db.add(InvoiceRefund(wedding_invoice_id=old.id, amount_cents=1000, status="succeeded",
+            payment_intent_id="pi_old", stripe_refund_id="re_old",
+            reason="Adjustment", idempotency_key=str(uuid4()), actor_id=owner.id))
+        await db.flush()
+        booked, count = await _booked_weddings(db, limit=10)
+        assert count == 1 and booked[0]["balance_cents"] == 4000
+        balances = await invoice_balance_rows(db)
+        assert len(balances) == 1 and balances[0]["balance_cents"] == 4000
+
+
 def test_admin_payment_labels_and_eastern_dates_are_display_only():
     assert _admin_label("part_01") == "Installment 1"
     assert _admin_label("installment_paid") == "Installment paid · balance due"
@@ -85,9 +200,197 @@ async def test_wedding_admin_renders_installment_labels_not_storage_keys():
     _, page = await app.asgi_client.get(f"/admin/weddings/{quote.id}")
     assert page.status == 200
     assert 'Payment & booking <span class="status-badge status-badge--success">Paid</span>' in page.text
-    assert 'Installment 1 · $30.00 · <span class="status-badge status-badge--success">Paid</span>' in page.text
-    assert 'Installment 2 · $30.00 · <span class="status-badge status-badge--success">Paid</span>' in page.text
+    assert 'Installment 1 · revision 1 · $30.00 · <span class="status-badge status-badge--success">Paid</span>' in page.text
+    assert 'Installment 2 · revision 1 · $30.00 · <span class="status-badge status-badge--success">Paid</span>' in page.text
     assert "part_01" not in page.text and "part_02" not in page.text
+
+
+@pytest.mark.asyncio
+async def test_void_open_wedding_invoice_keeps_history_and_uses_fresh_stripe_keys(monkeypatch):
+    mock_stripe(monkeypatch, {"in_full_1": 6000, "in_full_2": 6500})
+    create_keys = []
+    def create(**kwargs):
+        create_keys.append(kwargs["idempotency_key"])
+        return SimpleNamespace(id=f"in_full_{len(create_keys)}")
+    monkeypatch.setattr(stripe.Invoice, "create", create)
+    monkeypatch.setattr(stripe.Invoice, "retrieve", lambda invoice_id: SimpleNamespace(
+        id=invoice_id, status="open", currency="usd", total=6000))
+    void_calls = []
+    monkeypatch.setattr(stripe.Invoice, "void_invoice", lambda invoice_id, **kwargs: (
+        void_calls.append(kwargs["idempotency_key"]) or SimpleNamespace(id=invoice_id, status="void")))
+    draft, mode, deposit = validate_quote(form(mode="full"))
+    async with session_scope() as db:
+        inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        db.add(inquiry)
+        await db.flush()
+        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot={}, payment_mode=mode,
+                             deposit_cents=deposit, activity=[])
+        db.add(quote)
+        await db.commit()
+        quote_id = quote.id
+    assert await send_wedding_invoice(quote_id, "full") == "in_full_1"
+    async with session_scope() as db:
+        first = await db.scalar(select(WeddingInvoice))
+        first_id = first.id
+    with pytest.raises(ValueError, match="cannot be sent"):
+        # The already-sent quote also prevents another send.
+        await send_wedding_invoice(quote_id, "full")
+    await revise_wedding_invoice(quote_id, first_id, actor_id=1)
+    with pytest.raises(ValueError, match="Reconcile the current payment state"):
+        await revise_wedding_invoice(quote_id, first_id, actor_id=1)
+    async with session_scope() as db:
+        quote = await db.get(WeddingQuote, quote_id)
+        assert quote.status == "draft" and quote.order_id is None
+        quote.draft = {**quote.draft, "total_cents": 6500,
+                       "lines": [*quote.draft["lines"], dict(name="Additional flowers", quantity=1, unit_cents=500)]}
+        await db.commit()
+    assert await send_wedding_invoice(quote_id, "full") == "in_full_2"
+    assert create_keys == [f"wedding-{quote_id}-full-v1-invoice", f"wedding-{quote_id}-full-v2-invoice"]
+    assert void_calls == [f"wedding-{quote_id}-void-{first_id}"]
+    assert await apply_wedding_invoice_event(paid("in_full_1", 6000, "late_voided_payment")) == "review"
+    async with session_scope() as db:
+        rows = (await db.scalars(select(WeddingInvoice).order_by(WeddingInvoice.revision))).all()
+        assert [(row.revision, row.status, row.amount_cents) for row in rows] == [
+            (1, "void", 6000), (2, "sent", 6500)]
+
+
+@pytest.mark.asyncio
+async def test_void_failure_requires_review_and_never_reissues(monkeypatch):
+    mock_stripe(monkeypatch, {"in_full": 6000})
+    monkeypatch.setattr(stripe.Invoice, "retrieve", lambda invoice_id: SimpleNamespace(
+        id=invoice_id, status="open", currency="usd", total=6000))
+    def ambiguous(*args, **kwargs):
+        raise RuntimeError("connection dropped after request")
+    monkeypatch.setattr(stripe.Invoice, "void_invoice", ambiguous)
+    draft, mode, deposit = validate_quote(form(mode="full"))
+    async with session_scope() as db:
+        inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        db.add(inquiry)
+        await db.flush()
+        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot={}, payment_mode=mode,
+                             deposit_cents=deposit, activity=[])
+        db.add(quote)
+        await db.commit()
+        quote_id = quote.id
+    await send_wedding_invoice(quote_id, "full")
+    async with session_scope() as db:
+        invoice_id = (await db.scalar(select(WeddingInvoice.id)))
+    with pytest.raises(ValueError, match="uncertain"):
+        await revise_wedding_invoice(quote_id, invoice_id, actor_id=1)
+    async with session_scope() as db:
+        assert (await db.get(WeddingQuote, quote_id)).status == "review"
+        assert (await db.get(WeddingInvoice, invoice_id)).status == "review"
+    with pytest.raises(ValueError):
+        await send_wedding_invoice(quote_id, "full")
+    # Recovery reads Stripe first; an open invoice resumes without resending.
+    await revise_wedding_invoice(quote_id, invoice_id, actor_id=1)
+    async with session_scope() as db:
+        assert (await db.get(WeddingQuote, quote_id)).status == "sent"
+        assert (await db.get(WeddingInvoice, invoice_id)).status == "sent"
+
+
+@pytest.mark.asyncio
+async def test_stripe_void_webhook_can_reopen_only_after_verified_remote_void(monkeypatch):
+    mock_stripe(monkeypatch, {"in_deposit": 3000})
+    draft, mode, deposit = validate_quote(form())
+    async with session_scope() as db:
+        inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        db.add(inquiry)
+        await db.flush()
+        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot={}, payment_mode=mode,
+                             deposit_cents=deposit, activity=[])
+        db.add(quote)
+        await db.commit()
+        quote_id = quote.id
+    await send_wedding_invoice(quote_id, "deposit")
+    async with session_scope() as db:
+        row = await db.scalar(select(WeddingInvoice))
+        row_id = row.id
+    event = dict(id="evt_void", type="invoice.voided", data={"object": {"id": "in_deposit"}})
+    assert await apply_wedding_invoice_event(event) == "applied"
+    monkeypatch.setattr(stripe.Invoice, "retrieve", lambda invoice_id: SimpleNamespace(
+        id=invoice_id, status="void", currency="usd", total=3000))
+    await revise_wedding_invoice(quote_id, row_id, actor_id=1)
+    async with session_scope() as db:
+        assert (await db.get(WeddingQuote, quote_id)).status == "draft"
+        assert (await db.get(WeddingInvoice, row_id)).status == "void"
+
+
+@pytest.mark.asyncio
+async def test_attach_uncertain_invoice_checks_remote_identity_and_never_sends(monkeypatch):
+    mock_stripe(monkeypatch, {})
+    draft, mode, deposit = validate_quote(form())
+    async with session_scope() as db:
+        inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        db.add(inquiry)
+        await db.flush()
+        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot=draft, payment_mode=mode,
+                             deposit_cents=deposit, status="review", activity=[])
+        db.add(quote)
+        await db.flush()
+        row = WeddingInvoice(quote_id=quote.id, step="deposit", status="review", amount_cents=3000)
+        db.add(row)
+        await db.commit()
+        quote_id, row_id = quote.id, row.id
+    class Remote(dict):
+        def __getattr__(self, key):
+            return self[key]
+    metadata = dict(wedding_quote_id=str(quote_id), step="deposit", revision="1")
+    remote = Remote(id="in_found", status="open", currency="usd", total=3000, amount_paid=0,
+                    metadata=metadata, customer="cus_found", hosted_invoice_url="https://stripe.test/in_found")
+    monkeypatch.setattr(stripe.Invoice, "retrieve", lambda invoice_id: remote)
+    remote["amount_paid"] = 100
+    with pytest.raises(ValueError, match="payment details"):
+        await attach_reviewed_wedding_invoice(quote_id, row_id, "in_found", actor_id=1)
+    remote["amount_paid"] = 0
+    remote["metadata"] = {**metadata, "revision": "2"}
+    with pytest.raises(ValueError, match="exact quote"):
+        await attach_reviewed_wedding_invoice(quote_id, row_id, "in_found", actor_id=1)
+    remote["metadata"] = metadata
+    await attach_reviewed_wedding_invoice(quote_id, row_id, "in_found", actor_id=1)
+    async with session_scope() as db:
+        assert (await db.get(WeddingQuote, quote_id)).status == "sent"
+        assert (await db.get(WeddingInvoice, row_id)).stripe_invoice_id == "in_found"
+    with pytest.raises(ValueError, match="Only an uncertain"):
+        await attach_reviewed_wedding_invoice(quote_id, row_id, "in_found", actor_id=1)
+
+
+@pytest.mark.asyncio
+async def test_attach_verified_paid_invoice_books_exactly_once(monkeypatch):
+    mock_stripe(monkeypatch, {})
+    from app import payments
+    async def deliver(_):
+        return None
+    monkeypatch.setattr(payments, "deliver_notifications", deliver)
+    draft, mode, deposit = validate_quote(form(mode="full"))
+    async with session_scope() as db:
+        inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        db.add(inquiry)
+        await db.flush()
+        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot=draft, payment_mode=mode,
+                             deposit_cents=deposit, status="review", activity=[])
+        db.add(quote)
+        await db.flush()
+        row = WeddingInvoice(quote_id=quote.id, step="full", status="review", amount_cents=6000)
+        db.add(row)
+        await db.commit()
+        quote_id, row_id = quote.id, row.id
+    class Remote(dict):
+        def __getattr__(self, key):
+            return self[key]
+    remote = Remote(id="in_paid_lost", status="paid", currency="usd", total=6000,
+        amount_paid=6000, amount_remaining=0, paid_out_of_band=False,
+        metadata=dict(wedding_quote_id=str(quote_id), step="full", revision="1"),
+        customer="cus_found", hosted_invoice_url="https://stripe.test/in_paid_lost")
+    monkeypatch.setattr(stripe.Invoice, "retrieve", lambda _: remote)
+    await attach_reviewed_wedding_invoice(quote_id, row_id, "in_paid_lost", actor_id=1)
+    async with session_scope() as db:
+        quote = await db.get(WeddingQuote, quote_id)
+        assert quote.status == "paid" and quote.order_id is not None
+        assert (await db.get(WeddingInvoice, row_id)).status == "paid"
+        assert len((await db.scalars(select(Order))).all()) == 1
+    with pytest.raises(ValueError):
+        await attach_reviewed_wedding_invoice(quote_id, row_id, "in_paid_lost", actor_id=1)
 
 
 def test_dynamic_quote_lines_can_exceed_the_old_fixed_limit():

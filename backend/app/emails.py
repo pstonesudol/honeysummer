@@ -90,7 +90,7 @@ def _acknowledgement_body(inquiry: Inquiry) -> str:
     )
 
 
-def send_inquiry_emails(inquiry: Inquiry) -> None:
+def send_inquiry_emails(inquiry: Inquiry) -> dict:
     """Notify the farm and acknowledge the sender.
 
     Email failures are logged rather than raised so a transient mail problem
@@ -98,20 +98,18 @@ def send_inquiry_emails(inquiry: Inquiry) -> None:
     """
     settings = get_settings()
     subject = f"Honey Summer — {KIND_LABELS.get(inquiry.kind, inquiry.kind)}"
-    try:
-        send_email(
-            subject=subject,
-            body=_notification_body(inquiry),
-            to=settings.inquiry_notification_email,
-            reply_to=inquiry.email,
-        )
-        send_email(
-            subject="We received your note — Honey Summer",
-            body=_acknowledgement_body(inquiry),
-            to=inquiry.email,
-        )
-    except Exception:  # pragma: no cover - defensive
-        logger.exception("Unable to send inquiry emails for inquiry %s", inquiry.id)
+    outcomes = {}
+    for recipient, params in (("farm", dict(subject=subject, body=_notification_body(inquiry),
+                                            to=settings.inquiry_notification_email, reply_to=inquiry.email)),
+                              ("customer", dict(subject="We received your note — Honey Summer",
+                                                body=_acknowledgement_body(inquiry), to=inquiry.email))):
+        try:
+            send_email(**params)
+            outcomes[recipient] = "accepted" if settings.resend_api_key else "logged locally"
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("Unable to send %s inquiry email for inquiry %s", recipient, inquiry.id)
+            outcomes[recipient] = "failed"
+    return outcomes
 
 
 def send_signup_notification(*, business_name: str, email: str, contact_name: str = "") -> None:

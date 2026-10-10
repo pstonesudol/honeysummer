@@ -8,9 +8,9 @@ from sanic.response import json as json_response
 
 from ..db import session_scope
 from ..emails import send_inquiry_emails
-from ..models import Inquiry
+from ..models import Inquiry, InquiryCorrespondence
 from ..schemas import InquiryOut
-from ..media import public_media_url, store_image
+from ..media import store_private_image
 
 bp = Blueprint("inquiries", url_prefix="/api")
 
@@ -59,7 +59,7 @@ async def create_inquiry(request):
         return json_response(errors, status=400)
 
     try:
-        photo_path = await asyncio.to_thread(store_image, upload, "inquiries") if upload and upload.name else ""
+        photo_path = await asyncio.to_thread(store_private_image, upload) if upload and upload.name else ""
     except ValueError as exc:
         return json_response({"photo": [str(exc)]}, status=400)
     except Exception:
@@ -79,9 +79,17 @@ async def create_inquiry(request):
         await session.commit()
         await session.refresh(inquiry)
 
-    send_inquiry_emails(inquiry)
+    outcomes = await asyncio.to_thread(send_inquiry_emails, inquiry)
+    async with session_scope() as session:
+        current = await session.get(Inquiry, inquiry.id)
+        current.email_delivery = outcomes
+        if outcomes["customer"] == "accepted":
+            session.add(InquiryCorrespondence(inquiry_id=inquiry.id, actor_id=None,
+                direction="sent", subject="We received your note — Honey Summer",
+                summary="Automatic inquiry acknowledgement accepted by email provider; delivery is not confirmed."))
+        await session.commit()
 
     payload = InquiryOut.model_validate(inquiry).model_dump(mode="json")
     if inquiry.photo:
-        payload["photo"] = f"{public_media_url()}/{inquiry.photo}"
+        payload["photo"] = "Received privately; visible only to the shop owner."
     return json_response(payload, status=201)

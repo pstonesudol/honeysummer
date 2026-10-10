@@ -74,3 +74,19 @@ def test_r2_upload_requires_complete_config_and_writes_object(monkeypatch, tmp_p
     settings.r2_public_url = ""
     with pytest.raises(ValueError, match="incomplete"):
         media.store_image(SimpleNamespace(body=b"\xff\xd8\xfftest", name="photo.jpg"), "flowers")
+
+
+def test_private_inquiry_upload_is_not_public_and_requires_private_bucket(monkeypatch, tmp_path):
+    settings = SimpleNamespace(private_media_root=tmp_path / "private", media_root=tmp_path / "public",
+        r2_endpoint_url="", r2_bucket="", r2_private_bucket="", r2_access_key_id="",
+        r2_secret_access_key="", r2_public_url="", media_url="/media")
+    monkeypatch.setattr(media, "get_settings", lambda: settings)
+    key = media.store_private_image(SimpleNamespace(body=b"\xff\xd8\xfftest", name="photo.jpg"))
+    assert media.read_private_image(key) == (b"\xff\xd8\xfftest", "image/jpeg")
+    assert not settings.media_root.exists()
+    with pytest.raises(ValueError):
+        media.read_private_image("../secrets.jpg")
+    settings.r2_endpoint_url = "https://account.r2.cloudflarestorage.com"
+    settings.r2_bucket = "public"
+    with pytest.raises(ValueError, match="Private R2"):
+        media.store_private_image(SimpleNamespace(body=b"\xff\xd8\xfftest", name="photo.jpg"))

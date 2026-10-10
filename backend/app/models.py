@@ -131,6 +131,7 @@ class Inquiry(Base):
     message: Mapped[str] = mapped_column(Text, default="")
     details: Mapped[dict] = mapped_column(JSON, default=dict)
     photo: Mapped[str] = mapped_column(String(255), default="")
+    email_delivery: Mapped[dict] = mapped_column(JSON, default=dict)
     handled: Mapped[bool] = mapped_column(Boolean, default=False)
     stage: Mapped[str] = mapped_column(String(20), default="new")
     follow_up_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
@@ -148,7 +149,7 @@ class InquiryCorrespondence(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     inquiry_id: Mapped[int] = mapped_column(ForeignKey("inquiries.id"), index=True)
-    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    actor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     direction: Mapped[str] = mapped_column(String(12))
     subject: Mapped[str] = mapped_column(String(200))
     summary: Mapped[str] = mapped_column(Text)
@@ -189,6 +190,8 @@ class WeddingQuote(Base):
     payment_mode: Mapped[str] = mapped_column(String(20), default="full")
     deposit_cents: Mapped[int] = mapped_column(Integer, default=0)
     installments: Mapped[list] = mapped_column(JSON, default=list)
+    amendments: Mapped[list] = mapped_column(JSON, default=list)
+    amendment_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     initial_send_mode: Mapped[str] = mapped_column(String(12), default="manual")
     initial_send_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     initial_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
@@ -203,11 +206,12 @@ class WeddingQuote(Base):
 
 class WeddingInvoice(Base):
     __tablename__ = "wedding_invoices"
-    __table_args__ = (UniqueConstraint("quote_id", "step", name="uq_wedding_invoice_step"),)
+    __table_args__ = (UniqueConstraint("quote_id", "step", "revision", name="uq_wedding_invoice_revision"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     quote_id: Mapped[int] = mapped_column(ForeignKey("wedding_quotes.id"), index=True)
     step: Mapped[str] = mapped_column(String(10))  # full | deposit | balance
+    revision: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(20), default="issuing")
     amount_cents: Mapped[int] = mapped_column(Integer)
     stripe_invoice_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
@@ -367,6 +371,27 @@ class OrderRefund(Base):
     reason: Mapped[str] = mapped_column(String(255))
     idempotency_key: Mapped[str] = mapped_column(String(36), unique=True)
     actor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class InvoiceRefund(Base):
+    """A refund of one verified Stripe invoice payment, not of a quote total."""
+    __tablename__ = "invoice_refunds"
+    __table_args__ = (
+        CheckConstraint("amount_cents > 0", name="invoice_refund_amount_positive"),
+        CheckConstraint("(wedding_invoice_id IS NULL) != (proposal_id IS NULL)", name="invoice_refund_single_source"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    wedding_invoice_id: Mapped[Optional[int]] = mapped_column(ForeignKey("wedding_invoices.id"), nullable=True, index=True)
+    proposal_id: Mapped[Optional[int]] = mapped_column(ForeignKey("bouquet_proposals.id"), nullable=True, index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    payment_intent_id: Mapped[str] = mapped_column(String(255))
+    stripe_refund_id: Mapped[str] = mapped_column(String(255), default="")
+    status: Mapped[str] = mapped_column(String(20))  # issuing | succeeded | review
+    reason: Mapped[str] = mapped_column(String(255))
+    idempotency_key: Mapped[str] = mapped_column(String(36), unique=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

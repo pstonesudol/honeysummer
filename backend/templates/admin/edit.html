@@ -135,6 +135,8 @@
 <p><a class="button" href="/admin/weddings/from-inquiry/{{ obj.id }}">Open wedding quote</a></p>
 {% endif %}
 {% if obj and admin.slug == 'inquiries' %}
+{% if obj.email_delivery %}<p class="muted">Inquiry email submission: farm {{ obj.email_delivery.farm or 'unknown' }} · customer {{ obj.email_delivery.customer or 'unknown' }}. Provider acceptance is not proof of delivery.</p>{% endif %}
+{% if obj.photo %}<h2>Inspiration photo</h2><p><a href="/admin/inquiries/{{ obj.id }}/photo" target="_blank" rel="noopener noreferrer">View customer photo (admin only)</a></p>{% endif %}
 <h2>Correspondence history</h2>
 <p class="muted">Record an email already sent or received outside this system. This form does not send anything or import a mailbox. Do not record sensitive payment details.</p>
 <form method="post" action="/admin/inquiries/{{ obj.id }}/correspondence">
@@ -144,7 +146,7 @@
   <div class="full"><label for="summary">Summary or email text</label><textarea id="summary" name="summary" maxlength="4000" rows="4" required></textarea></div></div>
   <p><button type="submit">Record correspondence</button></p>
 </form>
-<ol>{% for entry in correspondence %}<li>{{ entry.occurred_at|admin_date }} · {{ entry.direction|admin_label }} · {{ entry.subject }} · operator #{{ entry.actor_id }}<pre>{{ entry.summary }}</pre></li>{% else %}<li>No correspondence recorded yet.</li>{% endfor %}</ol>
+<ol>{% for entry in correspondence %}<li>{{ entry.occurred_at|admin_date }} · {{ entry.direction|admin_label }} · {{ entry.subject }} · {{ 'operator #' ~ entry.actor_id if entry.actor_id else 'system email' }}<pre>{{ entry.summary }}</pre></li>{% else %}<li>No correspondence recorded yet.</li>{% endfor %}</ol>
 <h2>Follow-up</h2>
 <p><a href="/admin/customers?email={{ obj.email|urlencode }}">View customer history</a></p>
 <form method="post" action="/admin/inquiries/{{ obj.id }}/follow-up">

@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import Blueprint
-from sanic.response import html, json, redirect, text
+from sanic.response import html, json, raw, redirect, text
 from sqlalchemy import func, inspect as sa_inspect, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
@@ -39,6 +39,7 @@ from .models import (
     GalleryImage,
     Inquiry,
     InquiryCorrespondence,
+    InvoiceRefund,
     InventoryMovement,
     Order,
     OrderItem,
@@ -77,6 +78,8 @@ def _admin_label(value) -> str:
         "installments": "Installments", "deposit_paid": "Deposit paid · balance due",
         "installment_paid": "Installment paid · balance due",
         "balance_sent": "Balance invoice sent", "installment_sent": "Installment invoice sent",
+        "amended": "Revised balance", "amendment_ready": "Revised balance ready",
+        "amendment_sent": "Revised balance sent",
         "sent": "Invoice sent", "issuing": "Sending invoice", "review": "Needs review",
         "scheduled": "Scheduled", "void": "Voided", "stripe_invoice": "Stripe invoice",
         "external": "External payment", "market_sale": "Market sale",
@@ -655,14 +658,25 @@ async def _booked_weddings(db, *, limit: int) -> tuple[list[dict], int]:
         .join(Inquiry, Inquiry.id == WeddingQuote.inquiry_id)
         .where(WeddingQuote.order_id.is_(None), WeddingQuote.payment_mode.in_(("deposit", "installments")),
                WeddingQuote.status.in_(("deposit_paid", "balance_sent", "installment_paid",
-                                       "installment_sent", "issuing", "review")))
+                                        "installment_sent", "amendment_ready", "amendment_sent", "issuing", "review")))
         .order_by(WeddingQuote.id.desc()))).all()
+    refund_totals = (await db.execute(select(WeddingInvoice.quote_id, func.sum(InvoiceRefund.amount_cents))
+        .join(InvoiceRefund, InvoiceRefund.wedding_invoice_id == WeddingInvoice.id)
+        .where(InvoiceRefund.status == "succeeded")
+        .group_by(WeddingInvoice.quote_id))).all()
+    refunds_by_quote = dict(refund_totals)
     booked = []
     for quote, inquiry, paid_cents, paid_count in rows:
         total = (quote.snapshot or {}).get("total_cents", 0)
-        if not 0 < paid_cents < total:
+        refunded = refunds_by_quote.get(quote.id, 0)
+        amended = quote.amendments[-1] if quote.status in ("amendment_ready", "amendment_sent") and quote.amendments else None
+        if paid_cents <= refunded or (not amended and not 0 < paid_cents < total):
             continue
-        if quote.payment_mode == "deposit":
+        if amended:
+            next_label = "Revised balance"
+            next_due = quote.amendment_due_date
+            next_send = None
+        elif quote.payment_mode == "deposit":
             next_label = "Balance"
             next_due = quote.balance_due_date
             next_send = quote.balance_send_date if quote.balance_send_mode == "automatic" else None
@@ -672,8 +686,9 @@ async def _booked_weddings(db, *, limit: int) -> tuple[list[dict], int]:
             next_label = f"Installment {paid_count + 1} of {len(parts)}" if part else "Review plan"
             next_due = date.fromisoformat(part["due_date"]) if part else None
             next_send = date.fromisoformat(part["send_date"]) if part and part["send_mode"] == "automatic" else None
-        booked.append(dict(quote=quote, inquiry=inquiry, paid_cents=paid_cents,
-                           balance_cents=total - paid_cents, next_label=next_label,
+        balance = amended["amount_cents"] if amended else total - paid_cents
+        booked.append(dict(quote=quote, inquiry=inquiry, paid_cents=paid_cents, refunded_cents=refunded,
+                           balance_cents=balance, next_label=next_label,
                            next_due=next_due, next_send=next_send))
     return booked[:limit], len(booked)
 
@@ -711,6 +726,26 @@ async def dashboard(request):
                  pending_florists=pending_florists, low_stock=low_stock, today=today,
                   due_inquiries=due_inquiries, booked_weddings=booked_weddings,
                   booked_wedding_count=booked_wedding_count)
+
+
+@bp.get("/inquiries/<pk:int>/photo")
+async def inquiry_private_photo(request, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    async with session_scope() as db:
+        inquiry = await db.get(Inquiry, pk)
+        key = inquiry.photo if inquiry else ""
+    if not key:
+        return json({"detail": "Photo not found."}, status=404)
+    from .media import read_private_image
+    try:
+        content, content_type = await asyncio.to_thread(read_private_image, key)
+    except (FileNotFoundError, ValueError):
+        return json({"detail": "Private photo unavailable. Check storage before retrying."}, status=404)
+    except Exception:
+        return json({"detail": "Private photo storage unavailable."}, status=503)
+    return raw(content, content_type=content_type, headers={"Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline"})
 
 
 @bp.post("/inquiries/<pk:int>/correspondence")
@@ -999,13 +1034,21 @@ async def wedding_detail(request, quote_id: int):
         quote = await db.get(WeddingQuote, quote_id)
         inquiry = await db.get(Inquiry, quote.inquiry_id) if quote else None
         invoices = (await db.scalars(select(WeddingInvoice).where(WeddingInvoice.quote_id == quote_id).order_by(WeddingInvoice.id))).all() if quote else []
+        invoice_refunds = (await db.scalars(select(InvoiceRefund).where(
+            InvoiceRefund.wedding_invoice_id.in_([invoice.id for invoice in invoices])
+        ).order_by(InvoiceRefund.id))).all() if invoices else []
         from .weddings import next_installment_index
         next_part_index = await next_installment_index(db, quote) if quote and quote.status == "installment_paid" else None
     if not quote:
         return json({"detail": "Quote not found."}, status=404)
+    latest_amendment = (quote.amendments or [])[-1] if quote.amendments else None
     return _page(request, "admin/wedding.html", quote=quote, inquiry=inquiry, invoices=invoices,
-                 draft=quote.draft if quote.status == "draft" else quote.snapshot,
-                 next_part_index=next_part_index)
+                  draft=quote.draft if quote.status == "draft" else
+                        latest_amendment["draft"] if latest_amendment else quote.snapshot,
+                  next_part_index=next_part_index,
+                  latest_amendment=latest_amendment,
+                  refunds_by_invoice={row.id: [entry for entry in invoice_refunds if entry.wedding_invoice_id == row.id] for row in invoices},
+                  refund_keys={row.id: str(uuid.uuid4()) for row in invoices})
 
 
 @bp.post("/weddings/<quote_id:int>/save")
@@ -1039,6 +1082,21 @@ async def wedding_save(request, quote_id: int):
         for name, value in schedule.items():
             setattr(quote, name, value)
         await db.commit()
+    return redirect(f"/admin/weddings/{quote_id}")
+
+
+@bp.post("/weddings/<quote_id:int>/amend")
+async def wedding_amend(request, quote_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .weddings import agree_revised_wedding
+    from .form_errors import FieldValidationError
+    try:
+        await agree_revised_wedding(quote_id, request.form, actor_id=request.ctx.admin.id)
+    except ValueError as exc:
+        return json({"detail": str(exc), **({"field": exc.field} if isinstance(exc, FieldValidationError) else {})}, status=409)
     return redirect(f"/admin/weddings/{quote_id}")
 
 
@@ -1092,6 +1150,95 @@ async def wedding_refresh(request, quote_id: int, invoice_id: int):
     if result == "review":
         return json({"detail": "Invoice requires payment review in Stripe."}, status=409)
     return redirect(f"/admin/weddings/{quote_id}")
+
+
+@bp.post("/weddings/<quote_id:int>/revise/<invoice_id:int>")
+async def wedding_revise_invoice(request, quote_id: int, invoice_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .weddings import revise_wedding_invoice
+    try:
+        await revise_wedding_invoice(quote_id, invoice_id, actor_id=request.ctx.admin.id)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    return redirect(f"/admin/weddings/{quote_id}")
+
+
+@bp.post("/weddings/<quote_id:int>/attach/<invoice_id:int>")
+async def wedding_attach_reviewed_invoice(request, quote_id: int, invoice_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .weddings import attach_reviewed_wedding_invoice
+    try:
+        await attach_reviewed_wedding_invoice(quote_id, invoice_id,
+            str(request.form.get("stripe_invoice_id", "")), actor_id=request.ctx.admin.id)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    return redirect(f"/admin/weddings/{quote_id}")
+
+
+@bp.post("/invoice-refunds/<kind:str>/<pk:int>")
+async def refund_invoice_payment(request, kind: str, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .invoice_refunds import issue_invoice_refund
+    try:
+        refund = await issue_invoice_refund(kind, pk, request.form, request.ctx.admin.id)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    if refund.status != "succeeded":
+        return json({"detail": "Refund is not confirmed. Review Stripe before taking further action."}, status=409)
+    if kind == "wedding":
+        async with session_scope() as db:
+            quote_id = await db.scalar(select(WeddingInvoice.quote_id).where(WeddingInvoice.id == pk))
+        return redirect(f"/admin/weddings/{quote_id}")
+    return redirect(f"/admin/proposals/{pk}")
+
+
+@bp.post("/invoice-refunds/<refund_id:int>/refresh")
+async def refresh_invoice_refund(request, refund_id: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .invoice_refunds import reconcile_invoice_refund
+    async with session_scope() as db:
+        refund = await db.get(InvoiceRefund, refund_id)
+        if not refund:
+            return json({"detail": "Refund not found."}, status=404)
+        if refund.wedding_invoice_id:
+            quote_id = await db.scalar(select(WeddingInvoice.quote_id).where(
+                WeddingInvoice.id == refund.wedding_invoice_id))
+            destination = f"/admin/weddings/{quote_id}"
+        else:
+            destination = f"/admin/proposals/{refund.proposal_id}"
+    try:
+        status = await reconcile_invoice_refund(refund_id)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    if status == "review":
+        return json({"detail": "Stripe has not confirmed this refund. Check Stripe before another request."}, status=409)
+    return redirect(destination)
+
+
+@bp.post("/invoice-refunds/<kind:str>/<pk:int>/close")
+async def close_refunded_quote(request, kind: str, pk: int):
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    from .invoice_refunds import close_fully_refunded_quote
+    try:
+        await close_fully_refunded_quote(kind, pk, request.ctx.admin.id)
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    return redirect(f"/admin/{'weddings' if kind == 'wedding' else 'proposals'}/{pk}")
 
 
 @bp.post("/orders/<pk:int>/refund")
@@ -1270,19 +1417,20 @@ async def invoice_balances(request):
     async with session_scope() as db:
         rows = await invoice_balance_rows(db)
     totals = dict(remaining_cents=sum(row["balance_cents"] for row in rows),
-                  open_cents=sum(row["open_cents"] for row in rows),
-                  verified_paid_cents=sum(row["verified_paid_cents"] for row in rows))
+                   open_cents=sum(row["open_cents"] for row in rows),
+                   verified_paid_cents=sum(row["verified_paid_cents"] for row in rows),
+                   refunded_cents=sum(row["refunded_cents"] for row in rows))
     if request.args.get("format") == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(("Type", "Reference", "Customer", "Title", "Status", "Verified paid USD",
+        writer.writerow(("Type", "Reference", "Customer", "Title", "Status", "Verified paid USD", "Recorded refunded USD",
                          "Remaining USD", "Open invoice USD", "Estimated due Eastern", "Needs review"))
         def safe(value):
             value = str(value or "")
             return "'" + value if value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")) else value
         for row in rows:
             writer.writerow((row["kind"], row["id"], safe(row["customer"]), safe(row["title"]), row["status"],
-                             f"{row['verified_paid_cents'] / 100:.2f}", f"{row['balance_cents'] / 100:.2f}",
+                             f"{row['verified_paid_cents'] / 100:.2f}", f"{row['refunded_cents'] / 100:.2f}", f"{row['balance_cents'] / 100:.2f}",
                              f"{row['open_cents'] / 100:.2f}", row["due"] or "", row["needs_review"]))
         return text(output.getvalue(), content_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": "attachment; filename=honey-summer-invoice-balances.csv"})
@@ -1336,11 +1484,20 @@ async def operations_attention(request):
             .order_by(BouquetProposal.id.desc()).limit(200))).all()
         refunds = (await db.scalars(select(OrderRefund).where(OrderRefund.status.in_(("review", "issuing")))
             .order_by(OrderRefund.id.desc()).limit(200))).all()
+        invoice_refunds = (await db.scalars(select(InvoiceRefund).where(InvoiceRefund.status.in_(("review", "issuing")))
+            .order_by(InvoiceRefund.id.desc()).limit(200))).all()
+        invoice_quote_ids = dict((await db.execute(select(WeddingInvoice.id, WeddingInvoice.quote_id).where(
+            WeddingInvoice.id.in_([row.wedding_invoice_id for row in invoice_refunds if row.wedding_invoice_id is not None])))).all())
         reconciliation_runs = (await db.scalars(select(ReconciliationRun)
             .order_by(ReconciliationRun.id.desc()).limit(20))).all()
+        failed_inquiry_mail = (await db.scalars(select(Inquiry).where(
+            or_(Inquiry.email_delivery["farm"].as_string() == "failed",
+                Inquiry.email_delivery["customer"].as_string() == "failed")
+        ).order_by(Inquiry.id.desc()).limit(100))).all()
     return _page(request, "admin/operations_attention.html", notices=notices,
-                 quotes=quotes, proposals=proposals, refunds=refunds,
-                 reconciliation_runs=reconciliation_runs)
+                  quotes=quotes, proposals=proposals, refunds=refunds,
+                  invoice_refunds=invoice_refunds, invoice_quote_ids=invoice_quote_ids,
+                  reconciliation_runs=reconciliation_runs, failed_inquiry_mail=failed_inquiry_mail)
 
 
 @bp.get("/site-content")
@@ -1349,8 +1506,12 @@ async def site_content_page(request):
         return redirect("/admin/login")
     async with session_scope() as db:
         record = await db.get(SiteContent, 1)
+    from urllib.parse import urlsplit
+    checkout = urlsplit(get_settings().retail_checkout_success_url)
+    storefront_base = f"{checkout.scheme}://{checkout.netloc}" if checkout.scheme in ("http", "https") else ""
     return _page(request, "admin/site_content.html", content=record.content if record else {},
-                 saved=bool(record), updated_at=record.updated_at if record else None)
+                 saved=bool(record), updated_at=record.updated_at if record else None,
+                 storefront_base=storefront_base)
 
 
 @bp.post("/site-content")
@@ -1484,9 +1645,12 @@ async def proposal_detail(request, proposal_id: int):
     async with session_scope() as db:
         proposal = await db.get(BouquetProposal, proposal_id)
         inquiry = await db.get(Inquiry, proposal.inquiry_id) if proposal else None
+        invoice_refunds = (await db.scalars(select(InvoiceRefund).where(
+            InvoiceRefund.proposal_id == proposal_id).order_by(InvoiceRefund.id))).all() if proposal else []
     if not proposal:
         return json({"detail": "Proposal not found."}, status=404)
-    return _page(request, "admin/proposal.html", proposal=proposal, inquiry=inquiry, draft=proposal.draft, error=None)
+    return _page(request, "admin/proposal.html", proposal=proposal, inquiry=inquiry, draft=proposal.draft,
+                 invoice_refunds=invoice_refunds, refund_key=str(uuid.uuid4()), error=None)
 
 
 @bp.post("/proposals/<proposal_id:int>/save")

@@ -60,7 +60,7 @@ async def test_creates_inquiry_and_sends_two_emails(sent):
 async def test_accepts_an_inspiration_photo(sent, monkeypatch, tmp_path):
     from app.settings import get_settings
 
-    monkeypatch.setattr(get_settings(), "media_root", tmp_path)
+    monkeypatch.setattr(get_settings(), "private_media_root", tmp_path)
 
     _, response = await app.asgi_client.post(
         "/api/inquiries/",
@@ -72,7 +72,54 @@ async def test_accepts_an_inspiration_photo(sent, monkeypatch, tmp_path):
     async with session_scope() as session:
         inquiry = (await session.execute(select(Inquiry))).scalar_one()
     assert inquiry.photo.startswith("inquiries/")
-    assert response.json["photo"].endswith(inquiry.photo)
+    assert response.json["photo"] == "Received privately; visible only to the shop owner."
+    assert (tmp_path / inquiry.photo).exists()
+    _, anonymous = await app.asgi_client.get(f"/admin/inquiries/{inquiry.id}/photo")
+    assert anonymous.status == 302
+    from app.auth import hash_password
+    from app.admin import CSRF_COOKIE
+    from app.models import User
+    async with session_scope() as session:
+        session.add(User(email="owner@example.com", password_hash=hash_password("password"), is_admin=True))
+        await session.commit()
+    await app.asgi_client.get("/admin/login")
+    token = app.asgi_client.cookies.get(CSRF_COOKIE)
+    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=token))
+    _, photo = await app.asgi_client.get(f"/admin/inquiries/{inquiry.id}/photo")
+    assert photo.status == 200 and photo.body == b"\xff\xd8\xffimage-bytes"
+    assert photo.headers["cache-control"] == "private, no-store"
+
+
+@pytest.mark.asyncio
+async def test_inquiry_email_failure_is_visible_and_other_message_still_attempted(monkeypatch):
+    from app import emails
+    from app.admin import CSRF_COOKIE
+    from app.auth import hash_password
+    from app.models import InquiryCorrespondence, User
+    from app.settings import get_settings
+    sent = []
+    def send(**kwargs):
+        sent.append(kwargs["to"])
+        if kwargs["to"] == "hello@hellohoneysummer.com":
+            raise RuntimeError("mail provider unavailable")
+    monkeypatch.setattr(emails, "send_email", send)
+    monkeypatch.setattr(get_settings(), "resend_api_key", "test-key")
+    _, response = await app.asgi_client.post("/api/inquiries/", data=_form())
+    assert response.status == 201
+    assert sent == ["hello@hellohoneysummer.com", "jamie@example.com"]
+    async with session_scope() as db:
+        inquiry = (await db.scalars(select(Inquiry))).one()
+        assert inquiry.email_delivery == {"farm": "failed", "customer": "accepted"}
+        entries = (await db.scalars(select(InquiryCorrespondence))).all()
+        assert len(entries) == 1 and entries[0].actor_id is None
+        db.add(User(email="owner@example.com", password_hash=hash_password("password"), is_admin=True))
+        await db.commit()
+    await app.asgi_client.get("/admin/login")
+    token = app.asgi_client.cookies.get(CSRF_COOKIE)
+    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=token))
+    _, attention = await app.asgi_client.get("/admin/operations/attention")
+    assert attention.status == 200 and "Failed inquiry emails" in attention.text
+    assert "farm: failed" in attention.text and "customer: accepted" in attention.text
 
 
 @pytest.mark.asyncio

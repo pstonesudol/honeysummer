@@ -10,6 +10,7 @@ htmlcov/
 .openchamber/
 backend/staticfiles/
 backend/media/
+backend/private_media/
 backend/db.sqlite3
 frontend/node_modules/
 /node_modules/

@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from .db import session_scope
 from .form_errors import FieldValidationError
-from .models import Inquiry, Order, OrderItem, OrderNotification, StripeEvent, WeddingInvoice, WeddingQuote
+from .models import Inquiry, InvoiceRefund, Order, OrderItem, OrderNotification, StripeEvent, WeddingInvoice, WeddingQuote
 from .proposals import cents
 from .settings import get_settings
 
@@ -253,11 +253,64 @@ async def approve_wedding_schedule(quote_id: int) -> None:
 
 async def next_installment_index(db, quote: WeddingQuote) -> int | None:
     rows = (await db.scalars(select(WeddingInvoice).where(
-        WeddingInvoice.quote_id == quote.id, WeddingInvoice.step.like("part_%")
+        WeddingInvoice.quote_id == quote.id, WeddingInvoice.step.like("part_%"), WeddingInvoice.status != "void"
     ).order_by(WeddingInvoice.id))).all()
     if any(row.status != "paid" or row.step != installment_step(index) for index, row in enumerate(rows)):
         return None
     return len(rows) if len(rows) < len(quote.installments or []) else None
+
+
+async def agree_revised_wedding(quote_id: int, form, *, actor_id: int) -> None:
+    """Freeze a new itemized agreement, crediting only verified payments net of refunds."""
+    class RevisedForm:
+        def get(self, key, default=None):
+            return "full" if key == "payment_mode" else form.get(key, default)
+
+        def keys(self):
+            return form.keys()
+
+    draft, _, _ = validate_quote(RevisedForm())
+    reference = str(form.get("acceptance_reference", "")).strip()
+    if not 1 <= len(reference) <= 255 or str(form.get("customer_accepted", "")) != "on":
+        raise FieldValidationError("Record the customer's written acceptance and confirm it.", "acceptance_reference")
+    try:
+        due = date.fromisoformat(str(form.get("amendment_due_date", "")))
+    except ValueError:
+        raise FieldValidationError("Choose a valid due date for the revised invoice.", "amendment_due_date") from None
+    if due < eastern_today():
+        raise FieldValidationError("The revised invoice due date cannot be in the past.", "amendment_due_date")
+    async with session_scope() as db:
+        quote = await db.scalar(select(WeddingQuote).where(WeddingQuote.id == quote_id).with_for_update())
+        if not quote or quote.status != "review" or quote.order_id or quote.payment_mode not in ("deposit", "installments"):
+            raise ValueError("Only a partially refunded, unpaid wedding in review can be amended.")
+        invoices = (await db.scalars(select(WeddingInvoice).where(WeddingInvoice.quote_id == quote_id))).all()
+        if not invoices or any(invoice.status not in ("paid", "void") for invoice in invoices):
+            raise ValueError("Resolve outstanding or uncertain Stripe invoices before changing the agreement.")
+        paid = [invoice for invoice in invoices if invoice.status == "paid"]
+        if not paid:
+            raise ValueError("No verified paid invoice exists to credit.")
+        refunds = (await db.scalars(select(InvoiceRefund).where(
+            InvoiceRefund.wedding_invoice_id.in_([invoice.id for invoice in paid])))).all()
+        if not refunds or any(item.status != "succeeded" for item in refunds):
+            raise ValueError("A confirmed partial refund is required; uncertain refunds need Stripe review.")
+        gross = sum(invoice.amount_cents for invoice in paid)
+        refunded = sum(item.amount_cents for item in refunds)
+        retained = gross - refunded
+        if not 0 < retained < gross:
+            raise ValueError("There is no retained partial payment. Close a fully refunded wedding instead.")
+        remainder = draft["total_cents"] - retained
+        if remainder < 50:
+            raise FieldValidationError("Revised itemized total must leave at least $0.50 due after retained payments.", "line_ids")
+        quote.amendments = [*(quote.amendments or []), dict(version=len(quote.amendments or []) + 1,
+            draft=draft, retained_paid_cents=retained, refunded_cents=refunded,
+            amount_cents=remainder, acceptance_reference=reference, actor_id=actor_id,
+            agreed_at=datetime.now(timezone.utc).isoformat(), due_date=due.isoformat())]
+        quote.amendment_due_date = due
+        quote.status = "amendment_ready"
+        quote.activity = [*(quote.activity or []), dict(action="revised agreement accepted",
+            actor=actor_id, at=datetime.now(timezone.utc).isoformat(),
+            remaining_cents=remainder, version=len(quote.amendments))]
+        await db.commit()
 
 
 async def run_wedding_schedule(*, apply: bool = False, today: date | None = None) -> list[str]:
@@ -314,14 +367,28 @@ async def send_wedding_invoice(quote_id: int, step: str, *, scheduled: bool = Fa
     if not settings.stripe_secret_key or not settings.stripe_webhook_secret:
         raise ValueError("Stripe invoices and a signed webhook must be configured first.")
     part_index = int(step[5:]) - 1 if step.startswith("part_") and step[5:].isdigit() else None
-    if step not in ("full", "deposit", "balance") and (part_index is None or part_index < 0 or step != installment_step(part_index)):
+    if step not in ("full", "deposit", "balance", "amended") and (part_index is None or part_index < 0 or step != installment_step(part_index)):
         raise ValueError("Unknown invoice step.")
     stripe.api_key = settings.stripe_secret_key
     async with session_scope() as db:
         quote = await db.scalar(select(WeddingQuote).where(WeddingQuote.id == quote_id).with_for_update())
         if not quote:
             raise ValueError("This invoice cannot be sent in the current state.")
-        if part_index is not None:
+        if step == "amended":
+            if quote.status != "amendment_ready" or not quote.amendments or quote.order_id or scheduled:
+                raise ValueError("A customer-accepted revised agreement is required before sending.")
+            earlier = (await db.scalars(select(WeddingInvoice).where(WeddingInvoice.quote_id == quote_id))).all()
+            if any(row.status not in ("paid", "void") for row in earlier):
+                raise ValueError("An earlier invoice is still payable or uncertain. Review it in Stripe first.")
+            paid_rows = [row for row in earlier if row.status == "paid"]
+            refund_rows = (await db.scalars(select(InvoiceRefund).where(
+                InvoiceRefund.wedding_invoice_id.in_([row.id for row in paid_rows])))).all()
+            if any(refund.status != "succeeded" for refund in refund_rows) or (
+                    sum(row.amount_cents for row in paid_rows) - sum(refund.amount_cents for refund in refund_rows)
+                    != quote.amendments[-1]["retained_paid_cents"]):
+                raise ValueError("Verified retained payments changed. Review the customer agreement before sending.")
+            send_mode, send_date, due_date = "manual", None, quote.amendment_due_date
+        elif part_index is not None:
             if quote.payment_mode != "installments" or part_index >= len(quote.installments or []):
                 raise ValueError("This installment does not exist.")
             if part_index == 0:
@@ -350,29 +417,38 @@ async def send_wedding_invoice(quote_id: int, step: str, *, scheduled: bool = Fa
         inquiry = await db.get(Inquiry, quote.inquiry_id)
         if not quote.draft or "total_cents" not in quote.draft or not inquiry or inquiry.kind != "wedding":
             raise ValueError("Complete the wedding quote before sending.")
-        snapshot = quote.snapshot if step == "balance" or (part_index is not None and part_index > 0) else quote.draft
-        amount = (quote.installments[part_index]["amount_cents"] if part_index is not None else
+        previous = (await db.scalars(select(WeddingInvoice).where(
+            WeddingInvoice.quote_id == quote_id, WeddingInvoice.step == step
+        ).order_by(WeddingInvoice.revision.desc()))).all()
+        if previous and previous[0].status != "void":
+            raise ValueError("An earlier invoice for this payment is still outstanding or needs review.")
+        revision = previous[0].revision + 1 if previous else 1
+        snapshot = (quote.amendments[-1]["draft"] if step == "amended" else
+                    quote.snapshot if step == "balance" or (part_index is not None and part_index > 0) else quote.draft)
+        amount = (quote.amendments[-1]["amount_cents"] if step == "amended" else
+                  quote.installments[part_index]["amount_cents"] if part_index is not None else
                   snapshot["total_cents"] - quote.deposit_cents if step == "balance" else
                   quote.deposit_cents if step == "deposit" else snapshot["total_cents"])
-        row = WeddingInvoice(quote_id=quote_id, step=step, status="issuing", amount_cents=amount)
+        row = WeddingInvoice(quote_id=quote_id, step=step, revision=revision, status="issuing", amount_cents=amount)
         db.add(row)
-        if step != "balance" and part_index in (None, 0):
+        if step not in ("balance", "amended") and part_index in (None, 0):
             quote.snapshot = quote.draft
         quote.status = "issuing"
         await db.commit()
         email, name, customer_id = inquiry.email, inquiry.name, quote.stripe_customer_id
-    key = f"wedding-{quote_id}-{step}"
+    key = f"wedding-{quote_id}-{step}-v{revision}"
     try:
         customer = await asyncio.to_thread(stripe.Customer.retrieve, customer_id) if customer_id else await asyncio.to_thread(
             stripe.Customer.create, email=email, name=name, idempotency_key=f"{key}-customer")
-        payment_label = f"Installment {part_index + 1} of {len(quote.installments)}" if part_index is not None else step.capitalize()
+        payment_label = f"Installment {part_index + 1} of {len(quote.installments)}" if part_index is not None else "Revised balance" if step == "amended" else step.capitalize()
         memo = (f"{snapshot['title']}\nQuote total: ${snapshot['total_cents'] / 100:.2f}; "
                 f"{payment_label}: ${amount / 100:.2f}\nEvent: {snapshot['location']}")
         if len(memo) > 500:
             memo = memo[:497] + "..."
         invoice = await asyncio.to_thread(stripe.Invoice.create, customer=customer.id,
             collection_method="send_invoice", **({"due_date": due_timestamp(due_date)} if due_date else {"days_until_due": 7}), auto_advance=False,
-            pending_invoice_items_behavior="exclude", metadata={"wedding_quote_id": str(quote_id), "step": step},
+            pending_invoice_items_behavior="exclude", metadata={"wedding_quote_id": str(quote_id),
+                                                                  "step": step, "revision": str(revision)},
             description=memo,
             idempotency_key=f"{key}-invoice")
         for index, line in enumerate(snapshot["lines"]):
@@ -391,6 +467,11 @@ async def send_wedding_invoice(quote_id: int, step: str, *, scheduled: bool = Fa
             details.append(("Payment plan", "; ".join(
                 f"{index + 1}. ${part['amount_cents'] / 100:.2f} due {part['due_date']}"
                 for index, part in enumerate(quote.installments))))
+        if step == "amended":
+            details.append(("Revised agreement", f"Prior verified receipts less refunds: "
+                f"${quote.amendments[-1]['retained_paid_cents'] / 100:.2f}; "
+                f"remaining due: ${amount / 100:.2f}. Acceptance: "
+                f"{quote.amendments[-1]['acceptance_reference']}"))
         for label, value in details:
             for index in range(0, len(value), 300):
                 await asyncio.to_thread(stripe.InvoiceItem.create, customer=customer.id, invoice=invoice.id,
@@ -406,7 +487,9 @@ async def send_wedding_invoice(quote_id: int, step: str, *, scheduled: bool = Fa
         invoice = await asyncio.to_thread(stripe.Invoice.send_invoice, invoice.id, idempotency_key=f"{key}-send")
     except Exception:
         async with session_scope() as db:
-            row = await db.scalar(select(WeddingInvoice).where(WeddingInvoice.quote_id == quote_id, WeddingInvoice.step == step))
+            row = await db.scalar(select(WeddingInvoice).where(
+                WeddingInvoice.quote_id == quote_id, WeddingInvoice.step == step,
+                WeddingInvoice.revision == revision))
             if row and row.status == "issuing":
                 row.status = "review"
                 quote = await db.get(WeddingQuote, quote_id)
@@ -414,16 +497,148 @@ async def send_wedding_invoice(quote_id: int, step: str, *, scheduled: bool = Fa
                 await db.commit()
         raise
     async with session_scope() as db:
-        row = await db.scalar(select(WeddingInvoice).where(WeddingInvoice.quote_id == quote_id, WeddingInvoice.step == step).with_for_update())
+        row = await db.scalar(select(WeddingInvoice).where(
+            WeddingInvoice.quote_id == quote_id, WeddingInvoice.step == step,
+            WeddingInvoice.revision == revision).with_for_update())
         quote = await db.get(WeddingQuote, quote_id)
         row.stripe_invoice_id = invoice.id
         row.hosted_url = invoice.hosted_invoice_url or ""
         row.status = "sent"
         quote.stripe_customer_id = customer.id
-        quote.status = "balance_sent" if step == "balance" else "installment_sent" if part_index is not None and part_index > 0 else "sent"
+        quote.status = "amendment_sent" if step == "amended" else "balance_sent" if step == "balance" else "installment_sent" if part_index is not None and part_index > 0 else "sent"
         quote.activity = [*(quote.activity or []), dict(action=f"{step} invoice sent", invoice_id=invoice.id, at=datetime.now(timezone.utc).isoformat())]
         await db.commit()
     return invoice.id
+
+
+async def revise_wedding_invoice(quote_id: int, invoice_id: int, *, actor_id: int) -> None:
+    """Void a known, still-open Stripe invoice; preserve its row before reissuing."""
+    import stripe
+    if not get_settings().stripe_secret_key:
+        raise ValueError("Stripe is not configured.")
+    stripe.api_key = get_settings().stripe_secret_key
+    async with session_scope() as db:
+        quote = await db.scalar(select(WeddingQuote).where(WeddingQuote.id == quote_id).with_for_update())
+        row = await db.scalar(select(WeddingInvoice).where(
+            WeddingInvoice.id == invoice_id, WeddingInvoice.quote_id == quote_id).with_for_update())
+        if not quote or not row or not row.stripe_invoice_id or row.status not in ("sent", "void", "review"):
+            raise ValueError("Only a known sent or verified void invoice can be revised. Investigate uncertain sends in Stripe first.")
+        if quote.order_id or quote.status not in ("sent", "balance_sent", "installment_sent", "amendment_sent", "void", "deposit_paid", "review"):
+            raise ValueError("Reconcile the current payment state before revising this invoice.")
+        active = (await db.scalars(select(WeddingInvoice).where(
+            WeddingInvoice.quote_id == quote_id, WeddingInvoice.status == "sent"))).all()
+        if (row.status == "sent" and (len(active) != 1 or active[0].id != row.id)) or (row.status != "sent" and active):
+            raise ValueError("More than one invoice is outstanding; review in Stripe.")
+        if row.status in ("void", "review"):
+            latest = await db.scalar(select(WeddingInvoice.id).where(
+                WeddingInvoice.quote_id == quote_id, WeddingInvoice.step == row.step
+            ).order_by(WeddingInvoice.revision.desc()))
+            if latest != row.id:
+                raise ValueError("A newer invoice already exists for this payment.")
+        try:
+            remote = await asyncio.to_thread(stripe.Invoice.retrieve, row.stripe_invoice_id)
+        except Exception:
+            raise ValueError("Could not verify the invoice in Stripe. Nothing was voided; retry only after checking Stripe.") from None
+        if remote.id != row.stripe_invoice_id or remote.currency != "usd" or remote.total != row.amount_cents:
+            raise ValueError("Stripe does not confirm this invoice at the agreed amount. Reconcile first.")
+        if row.status == "review" and remote.status == "open":
+            row.status = "sent"
+            quote.status = ("amendment_sent" if row.step == "amended" else "balance_sent" if row.step == "balance" else
+                            "installment_sent" if row.step.startswith("part_") and row.step != "part_01" else "sent")
+            quote.activity = [*(quote.activity or []), dict(action="reviewed invoice still open",
+                invoice_id=row.stripe_invoice_id, actor=actor_id,
+                at=datetime.now(timezone.utc).isoformat())]
+            await db.commit()
+            return
+        if row.status == "void":
+            if remote.status != "void":
+                raise ValueError("Stripe does not confirm this invoice was voided. Reconcile first.")
+        elif row.status == "review":
+            if remote.status != "void":
+                raise ValueError("Stripe invoice is not confirmed void or open. Reconcile payment before proceeding.")
+        else:
+            if remote.status != "open":
+                raise ValueError("Stripe does not confirm this invoice is open. Reconcile first.")
+            try:
+                voided = await asyncio.to_thread(stripe.Invoice.void_invoice, row.stripe_invoice_id,
+                                                 idempotency_key=f"wedding-{quote_id}-void-{invoice_id}")
+                if voided.id != row.stripe_invoice_id or voided.status != "void":
+                    raise RuntimeError("Stripe did not confirm the void")
+            except Exception:
+                row.status = "review"
+                quote.status = "review"
+                await db.commit()
+                raise ValueError("The Stripe void outcome is uncertain. Review Stripe; do not send another invoice.") from None
+        row.status = "void"
+        quote.status = ("review" if row.step == "amended" else "deposit_paid" if row.step == "balance" else
+                        "installment_paid" if row.step.startswith("part_") and row.step != "part_01" else "draft")
+        quote.activity = [*(quote.activity or []), dict(action="invoice voided for revision",
+            invoice_id=row.stripe_invoice_id, invoice_row_id=row.id, actor=actor_id,
+            at=datetime.now(timezone.utc).isoformat())]
+        await db.commit()
+
+
+async def attach_reviewed_wedding_invoice(quote_id: int, invoice_id: int, remote_id: str, *, actor_id: int) -> None:
+    """Recover the exact original Stripe invoice, including a verified paid one."""
+    import stripe
+    remote_id = remote_id.strip()
+    if not remote_id.startswith("in_") or len(remote_id) > 255 or not get_settings().stripe_secret_key:
+        raise ValueError("Enter a Stripe invoice ID and configure Stripe first.")
+    stripe.api_key = get_settings().stripe_secret_key
+    async with session_scope() as db:
+        quote = await db.scalar(select(WeddingQuote).where(WeddingQuote.id == quote_id).with_for_update())
+        row = await db.scalar(select(WeddingInvoice).where(
+            WeddingInvoice.id == invoice_id, WeddingInvoice.quote_id == quote_id).with_for_update())
+        if not quote or not row or quote.status != "review" or row.status != "review" or row.stripe_invoice_id:
+            raise ValueError("Only an uncertain invoice without a saved Stripe ID can be attached.")
+        if await db.scalar(select(WeddingInvoice.id).where(WeddingInvoice.stripe_invoice_id == remote_id)):
+            raise ValueError("This Stripe invoice is already attached to a wedding payment.")
+        from .models import BouquetProposal
+        if await db.scalar(select(BouquetProposal.id).where(BouquetProposal.stripe_invoice_id == remote_id)):
+            raise ValueError("This Stripe invoice already belongs to a bouquet proposal.")
+        try:
+            remote = await asyncio.to_thread(stripe.Invoice.retrieve, remote_id)
+        except Exception:
+            raise ValueError("Could not verify the invoice in Stripe. No payment state changed.") from None
+        metadata = remote.get("metadata") or {}
+        if (remote.id != remote_id or remote.status not in ("open", "paid", "void") or remote.currency != "usd"
+                or remote.total != row.amount_cents
+                or metadata.get("wedding_quote_id") != str(quote_id)
+                or metadata.get("step") != row.step
+                or metadata.get("revision", "1") != str(row.revision)):
+            raise ValueError("Stripe does not confirm an invoice for this exact quote, step, revision and amount. Review manually.")
+        if (remote.status == "paid" and (remote.amount_paid != row.amount_cents
+                or remote.amount_remaining != 0 or remote.get("paid_out_of_band"))) or (
+                remote.status in ("open", "void") and remote.amount_paid != 0):
+            raise ValueError("Invoice payment details do not match. Review Stripe manually.")
+        row.stripe_invoice_id = remote.id
+        row.hosted_url = remote.get("hosted_invoice_url") or ""
+        row.status = "void" if remote.status == "void" else "sent"
+        quote.stripe_customer_id = remote.customer
+        quote.status = ("review" if row.step == "amended" else "deposit_paid" if row.step == "balance" else
+                        "review" if row.step.startswith("part_") and row.step != "part_01" else "void") if remote.status == "void" else (
+                        "amendment_sent" if row.step == "amended" else "balance_sent" if row.step == "balance" else
+                        "installment_sent" if row.step.startswith("part_") and row.step != "part_01" else "sent")
+        quote.activity = [*(quote.activity or []), dict(action="reviewed invoice attached",
+            invoice_id=remote_id, invoice_row_id=invoice_id, actor=actor_id,
+            stripe_status=remote.status,
+            at=datetime.now(timezone.utc).isoformat())]
+        await db.commit()
+    if remote.status == "paid":
+        event = dict(id=f"wedding-recover-{remote_id}-paid", type="invoice.paid", data={"object": dict(
+            id=remote.id, currency=remote.currency, total=remote.total,
+            amount_paid=remote.amount_paid, amount_remaining=remote.amount_remaining,
+            status=remote.status, paid_out_of_band=False)})
+        outcome = await apply_wedding_invoice_event(event)
+        if outcome not in ("applied", "ignored"):
+            async with session_scope() as db:
+                quote = await db.scalar(select(WeddingQuote).where(WeddingQuote.id == quote_id).with_for_update())
+                row = await db.get(WeddingInvoice, invoice_id)
+                if row.status == "sent":
+                    row.status = "review"
+                    quote.status = "review"
+                    await db.commit()
+            raise ValueError("Stripe reports payment, but local booking needs review. Do not send a new invoice.")
 
 
 async def apply_wedding_invoice_event(event: dict) -> str:
@@ -465,11 +680,29 @@ async def apply_wedding_invoice_event(event: dict) -> str:
             else:
                 if (row.step == "balance" and quote.status != "balance_sent") or (
                     row.step == "full" and quote.status != "sent") or (
+                    row.step == "amended" and quote.status != "amendment_sent") or (
                     part_index is not None and part_index != len(quote.installments) - 1):
                     return "review"
+                if row.step == "amended":
+                    if not quote.amendments:
+                        return "review"
+                    previous = (await db.scalars(select(WeddingInvoice).where(
+                        WeddingInvoice.quote_id == quote.id, WeddingInvoice.status == "paid",
+                        WeddingInvoice.id != row.id))).all()
+                    if not previous:
+                        return "review"
+                    refunds = (await db.scalars(select(InvoiceRefund).where(
+                        InvoiceRefund.wedding_invoice_id.in_([invoice.id for invoice in previous])))).all()
+                    if any(item.status != "succeeded" for item in refunds):
+                        return "review"
+                    retained = sum(invoice.amount_cents for invoice in previous) - sum(item.amount_cents for item in refunds)
+                    amendment = quote.amendments[-1]
+                    if (retained != amendment["retained_paid_cents"] or
+                            row.amount_cents + retained != amendment["draft"]["total_cents"]):
+                        return "review"
                 inquiry = await db.get(Inquiry, quote.inquiry_id)
                 inquiry.stage = "booked"
-                snapshot = quote.snapshot
+                snapshot = quote.amendments[-1]["draft"] if row.step == "amended" else quote.snapshot
                 order = Order(customer_name=inquiry.name, customer_email=inquiry.email, customer_phone=inquiry.phone,
                               channel="retail", status="paid", payment_method="stripe_invoice",
                               payment_reference=invoice_id, fulfillment="delivery", delivery_address=snapshot["location"],
@@ -491,7 +724,7 @@ async def apply_wedding_invoice_event(event: dict) -> str:
             if row.status != "sent":
                 return "review"
             row.status = "void"
-            quote.status = "deposit_paid" if row.step == "balance" else "review" if row.step.startswith("part_") and row.step != "part_01" else "void"
+            quote.status = "review" if row.step == "amended" else "deposit_paid" if row.step == "balance" else "review" if row.step.startswith("part_") and row.step != "part_01" else "void"
         elif kind == "invoice.payment_failed":
             pass  # Outstanding invoice remains payable; do not mark booked/paid.
         else:
