@@ -30,13 +30,13 @@ table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;bord
 <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 <label for="code">Authenticator or recovery code</label><input id="code" name="code" autocomplete="one-time-code" required>
 <button>Verify and sign in</button></form>
-<p>Lost your authenticator? Use an unused recovery code or contact the owner. Password recovery does not remove MFA.</p>
+<p>Lost your authenticator? Use an unused recovery code or contact an admin. Password recovery does not remove MFA.</p>
 {% elif mode == 'codes' %}
 <h2>Save your recovery codes</h2><p>Shown only once. Keep offline in a safe place. Each code can be used once instead of an authenticator code.</p>
 <ul>{% for code in codes %}<li><code>{{ code }}</code></li>{% endfor %}</ul>
 {% elif mode == 'account' %}
 <p>{{ user.email }} · {{ user.role }} · {{ 'MFA enabled' if user.mfa_secret else 'MFA not enabled' }}</p>
-{% if user.role == 'owner' %}<p><a href="/admin/security/access">Manage accounts, security events and privacy requests</a></p>{% endif %}
+{% if user.role == 'admin' %}<p><a href="/admin/security/access">Manage accounts, security events and privacy requests</a></p>{% endif %}
 {% if pending %}<p>Authenticator setup key: <code>{{ pending }}</code>. Add it to your authenticator before confirming.</p>{% endif %}
 <form method="post" action="/admin/security/change">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -60,7 +60,7 @@ table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;bord
 <h2>Access management</h2><p>Staff can read and fulfill orders only. Florist approval does not activate a suspended account. Changes revoke existing sessions. You cannot change your own role here.</p>
 <form method="get"><label for="q">Find accounts by email (up to 200 matching accounts)</label><input id="q" name="q" type="search" maxlength="254"><button>Find accounts</button></form>
 <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<label for="action">Action</label><select id="action" name="action">{% for action in ['invite','reinvite','approve','deny','suspend','reactivate','revoke','reset_mfa','staff','owner'] %}<option>{{ action }}</option>{% endfor %}</select>
+<label for="action">Action</label><select id="action" name="action">{% for action in ['invite','reinvite','approve','deny','suspend','reactivate','revoke','reset_mfa','staff','admin'] %}<option>{{ action }}</option>{% endfor %}</select>
 <label for="user_id">Target account (except new invitation)</label><select id="user_id" name="user_id">{% for account in users %}<option value="{{ account.id }}">{{ account.id }} · {{ account.email }} · {{ account.role }} · {{ 'active' if account.is_active else 'inactive' }}</option>{% endfor %}</select>
 <label for="email">Email for new staff invitation</label><input id="email" name="email" type="email">
 <label for="reason">Recorded reason</label><textarea id="reason" name="reason" required maxlength="2000"></textarea><button>Confirm access change</button></form>

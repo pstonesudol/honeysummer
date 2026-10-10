@@ -14,15 +14,15 @@ from .security_models import SecurityEvent
 
 
 async def recover(email: str, password: str, reason: str) -> None:
-    """Recover an existing owner only; never promote an arbitrary account."""
+    """Recover an existing admin only; never promote an arbitrary account."""
     if password_error(password) or not reason.strip():
         raise ValueError(password_error(password) or "An identity-review reason is required.")
     async with session_scope() as db:
         user = await db.scalar(
-            select(User).where(User.email == email.lower().strip(), User.role == "owner").with_for_update()
+            select(User).where(User.email == email.lower().strip(), User.role == "admin").with_for_update()
         )
         if not user:
-            raise ValueError("Existing owner not found; no account was changed.")
+            raise ValueError("Existing admin not found; no account was changed.")
         user.password_hash = hash_password(password)
         user.security_version += 1
         user.is_active = True
@@ -32,7 +32,7 @@ async def recover(email: str, password: str, reason: str) -> None:
         db.add(
             SecurityEvent(
                 target_id=user.id,
-                action="owner_break_glass",
+                action="admin_break_glass",
                 outcome="success",
                 context="trusted-local-cli",
                 reason=reason[:2000],
@@ -41,8 +41,8 @@ async def recover(email: str, password: str, reason: str) -> None:
         queue_mail(
             db,
             user.email,
-            "Owner recovery",
-            "Offline owner recovery was performed. All sessions were revoked. "
+            "Admin recovery",
+            "Offline admin recovery was performed. All sessions were revoked. "
             "Enroll a new authenticator at next sign-in.",
         )
         await db.commit()
@@ -58,17 +58,17 @@ async def _run(email, password, reason):
 
 def main() -> None:
     """Require interactive confirmation; never put a recovery password in arguments."""
-    parser = argparse.ArgumentParser(description="Audited last-owner MFA recovery")
+    parser = argparse.ArgumentParser(description="Audited last-admin MFA recovery")
     parser.add_argument("--email", required=True)
     parser.add_argument("--reason", required=True)
     args = parser.parse_args()
-    if input(f"Identity verified? Type the owner email ({args.email}) to confirm: ") != args.email:
+    if input(f"Identity verified? Type the admin email ({args.email}) to confirm: ") != args.email:
         raise SystemExit("Recovery cancelled.")
-    password = getpass.getpass("New owner password: ")
+    password = getpass.getpass("New admin password: ")
     if password != getpass.getpass("Confirm password: "):
         raise SystemExit("Passwords did not match.")
     asyncio.run(_run(args.email, password, args.reason))
-    print("Owner recovered; authenticator enrollment is required at next sign-in.")
+    print("Admin recovered; authenticator enrollment is required at next sign-in.")
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ async def _run(email: str, password: str) -> None:
             session.add(user)
         user.password_hash = hash_password(password)
         user.is_admin = True
-        user.role = "owner"
+        user.role = "admin"
         user.is_active = True
         user.security_version = (user.security_version or 0) + 1
         await session.commit()

@@ -1,4 +1,4 @@
-"""Accessible server-rendered account, recovery, MFA and owner access workflows."""
+"""Accessible server-rendered account, recovery, MFA and admin access workflows."""
 
 import json as json_module
 import secrets
@@ -83,7 +83,7 @@ def _page(request, *, status=200, **context):
 
 async def _user(request):
     user = await session_user(request, "honeysummer_admin", "admin")
-    if user and user.role in {"owner", "staff"} and user.is_admin:
+    if user and user.role in {"admin", "staff"} and user.is_admin:
         return user
     return await get_current_user(request)
 
@@ -125,7 +125,7 @@ async def admin_mfa(request):
         if (
             not user
             or not user.is_active
-            or user.role not in {"owner", "staff"}
+            or user.role not in {"admin", "staff"}
             or not user.mfa_secret
             or user.security_version != challenge["version"]
         ):
@@ -314,7 +314,7 @@ async def account_change(request):
                 setattr(profile, field, value)
         elif action in {"export", "deletion"}:
             db.add(PrivacyRequest(user_id=user.id, kind=action))
-            message = "Request recorded for owner review. Financial records are retained as required."
+            message = "Request recorded for admin review. Financial records are retained as required."
         elif action == "mfa_start":
             if user.mfa_secret:
                 return json({"detail": "MFA is already enabled."}, status=400)
@@ -352,10 +352,10 @@ async def account_change(request):
 
 @bp.get("/access")
 async def access(request):
-    """Owner-only account/audit/outbox/privacy workspace with bounded filters."""
+    """Admin-only account/audit/outbox/privacy workspace with bounded filters."""
     user = await _user(request)
-    if not user or user.role != "owner":
-        return json({"detail": "Owner permission required."}, status=403)
+    if not user or user.role != "admin":
+        return json({"detail": "Admin permission required."}, status=403)
     async with session_scope() as db:
         user_query = select(User).order_by(User.id.desc()).limit(200)
         search = str(request.args.get("q", "")).strip()[:254]
@@ -374,10 +374,10 @@ async def access(request):
 
 @bp.post("/access")
 async def manage_access(request):
-    """Owner-mediated lifecycle; serialized owner rows guard the last-owner invariant."""
+    """Admin-mediated lifecycle; serialized admin rows guard the last-admin invariant."""
     actor = await _user(request)
-    if not actor or actor.role != "owner" or not recent(request):
-        return json({"detail": "Recently authenticated owner required."}, status=403)
+    if not actor or actor.role != "admin" or not recent(request):
+        return json({"detail": "Recently authenticated admin required."}, status=403)
     if not await throttle(request, "access", str(actor.id), limit=30):
         return json({"detail": "Please try again later."}, status=429)
     action = str(request.form.get("action", ""))
@@ -385,10 +385,10 @@ async def manage_access(request):
     if not reason or len(reason) > 2000:
         return json({"detail": "A reason of up to 2000 characters is required."}, status=400)
     async with session_scope() as db:
-        owners = (await db.scalars(select(User).where(User.role == "owner").order_by(User.id).with_for_update())).all()
-        current_actor = next((u for u in owners if u.id == actor.id), None)
+        admins = (await db.scalars(select(User).where(User.role == "admin").order_by(User.id).with_for_update())).all()
+        current_actor = next((u for u in admins if u.id == actor.id), None)
         if not current_actor or not current_actor.is_active or current_actor.security_version != actor.security_version:
-            return json({"detail": "Owner session revoked. Sign in again."}, status=403)
+            return json({"detail": "Admin session revoked. Sign in again."}, status=403)
         if action == "invite":
             email = str(request.form.get("email", "")).strip().lower()
             if not valid_email(email) or await db.scalar(select(User.id).where(User.email == email)):
@@ -419,9 +419,9 @@ async def manage_access(request):
             user = await db.scalar(select(User).where(User.id == uid).with_for_update())
             if not user or user.id == actor.id:
                 return json({"detail": "Cannot change your own access here."}, status=400)
-            active_owners = [u for u in owners if u.is_active]
-            if user.role == "owner" and user.is_active and len(active_owners) <= 1 and action in {"suspend", "staff"}:
-                return json({"detail": "The last active owner must be retained."}, status=400)
+            active_admins = [u for u in admins if u.is_active]
+            if user.role == "admin" and user.is_active and len(active_admins) <= 1 and action in {"suspend", "staff"}:
+                return json({"detail": "The last active admin must be retained."}, status=400)
             profile = await db.scalar(select(FloristProfile).where(FloristProfile.user_id == user.id))
             if action in {"approve", "deny"}:
                 if not profile:
@@ -433,7 +433,7 @@ async def manage_access(request):
                 profile.decision_reason = reason
             elif action in {"suspend", "reactivate"}:
                 user.is_active = action == "reactivate"
-            elif action in {"staff", "owner"}:
+            elif action in {"staff", "admin"}:
                 if user.role == "florist":
                     return json({"detail": "Invite a separate staff account; never promote a florist."}, status=400)
                 user.role = action
@@ -441,8 +441,8 @@ async def manage_access(request):
             elif action == "revoke":
                 pass
             elif action == "reset_mfa":
-                if user.role == "owner":
-                    return json({"detail": "Owner MFA recovery requires the documented offline procedure."}, status=400)
+                if user.role == "admin":
+                    return json({"detail": "Admin MFA recovery requires the documented offline procedure."}, status=400)
                 user.mfa_secret = user.mfa_pending = ""
                 user.mfa_last_step = 0
                 user.recovery_codes = []
@@ -480,10 +480,10 @@ async def manage_access(request):
 
 @bp.route("/privacy/<pk:int>", methods=["GET", "POST"])
 async def review_privacy(request, pk: int):
-    """Owner-reviewed requests never erase financial or audit records."""
+    """Admin-reviewed requests never erase financial or audit records."""
     actor = await _user(request)
-    if not actor or actor.role != "owner" or (request.method == "POST" and not recent(request)):
-        return json({"detail": "Recently authenticated owner required."}, status=403)
+    if not actor or actor.role != "admin" or (request.method == "POST" and not recent(request)):
+        return json({"detail": "Recently authenticated admin required."}, status=403)
     async with session_scope() as db:
         item = await db.scalar(select(PrivacyRequest).where(PrivacyRequest.id == pk).with_for_update())
         if not item:

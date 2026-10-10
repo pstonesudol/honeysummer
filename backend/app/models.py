@@ -34,7 +34,7 @@ def utcnow() -> datetime:
 
 def initial_account_role(context) -> str:
     """Preserve trusted legacy operator creation; invitations explicitly set staff."""
-    return "owner" if context.get_current_parameters().get("is_admin") else "florist"
+    return "admin" if context.get_current_parameters().get("is_admin") else "florist"
 
 
 class User(Base):

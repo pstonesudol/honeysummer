@@ -55,11 +55,11 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
 
 ## F. Deployed account security — Phase 11
 
-- [ ] F1 — Source-phase implementation, permission matrix, local adversarial tests/security review and owner recovery/break-glass instructions completed first.
+- [ ] F1 — Source-phase implementation, permission matrix, local adversarial tests/security review and admin recovery/break-glass instructions completed first.
 - [ ] F2 — Real proxy preserves Secure/HttpOnly/SameSite cookie flags/scope, CSRF/Origin/CORS protections and trusted forwarding/IP handling.
-- [ ] F3 — Roles/approval/active state, revocation across workers, session rotation and idle/absolute expiry verified for anonymous/florist/staff/owner access.
-- [ ] F4 — Rate limits, enumeration resistance, single-use/expired/replayed reset/invite tokens, reauthentication, owner/staff MFA and recovery verified against deployment.
-- [ ] F5 — Redacted audit events, security/privilege/mail alerts, privacy/retention/export handling and owner incident response exercised.
+- [ ] F3 — Roles/approval/active state, revocation across workers, session rotation and idle/absolute expiry verified for anonymous/florist/staff/admin access.
+- [ ] F4 — Rate limits, enumeration resistance, single-use/expired/replayed reset/invite tokens, reauthentication, admin/staff MFA and recovery verified against deployment.
+- [ ] F5 — Redacted audit events, security/privilege/mail alerts, privacy/retention/export handling and admin incident response exercised.
 
 ## G. Operations and launch handoff — all phases
 

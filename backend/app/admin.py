@@ -434,7 +434,7 @@ def _active_href(path: str) -> str:
 async def get_current_admin(request) -> User | None:
     """Load the signed-in operator from the request, if any."""
     user = await session_user(request, ADMIN_COOKIE, "admin")
-    return user if user and user.is_admin and user.role in {"owner", "staff"} else None
+    return user if user and user.is_admin and user.role in {"admin", "staff"} else None
 
 
 def _valid_csrf(request) -> bool:
@@ -461,7 +461,7 @@ async def load_admin(request):
         if request.method == "POST" and re.fullmatch(r"/admin/orders/\d+/fulfillment", path):
             allowed = True
         if not allowed:
-            return json({"detail": "Owner permission required."}, status=403)
+            return json({"detail": "Admin permission required."}, status=403)
     if user and request.method == "POST" and request.path not in {"/admin/logout", "/admin/login"}:
         if not recent(request):
             return json({"detail": "Reauthenticate in Account security before making changes."}, status=403)
@@ -773,7 +773,7 @@ async def login_submit(request):
     async with session_scope() as session:
         user = await session.scalar(select(User).where(User.email == email))
         password_valid = verify_login_password(user, password)
-        valid = bool(password_valid and user.is_admin and user.role in {"owner", "staff"})
+        valid = bool(password_valid and user.is_admin and user.role in {"admin", "staff"})
         user_id = user.id if valid else None
         version = user.security_version if valid else 0
         enrolled = bool(valid and user.mfa_secret)
@@ -2482,7 +2482,7 @@ async def model_delete(request, slug: str, pk: int):
     if slug == "orders":
         return json({"detail": "Order history cannot be deleted."}, status=409)
     if slug == "florists":
-        return json({"detail": "Use owner-reviewed account suspension/deletion in Account security."}, status=409)
+        return json({"detail": "Use admin-reviewed account suspension/deletion in Account security."}, status=409)
     async with session_scope() as session:
         obj = await session.get(admin.model, pk)
         if obj is None:

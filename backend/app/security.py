@@ -265,7 +265,7 @@ def verify_mfa(user: User, code: str) -> bool:
 
 
 def effective_role(user: User) -> str:
-    """Legacy operators migrate to owner; is_admin never promotes a florist."""
+    """Legacy operators migrate to admin; is_admin never promotes a florist."""
     return user.role
 
 

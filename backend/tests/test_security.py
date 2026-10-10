@@ -14,10 +14,10 @@ from sqlalchemy import func, select, update
 from app import emails
 from app.admin import ADMIN_COOKIE
 from app.admin import CSRF_COOKIE as ADMIN_CSRF_COOKIE
+from app.admin_recovery import recover
 from app.auth import COOKIE_NAME, create_session_token, hash_password, token_digest, verify_password
 from app.db import session_scope
 from app.models import FloristProfile, Order, User
-from app.owner_recovery import recover
 from app.security import (
     context_hash,
     decrypt,
@@ -67,7 +67,7 @@ async def form_post(path, data=None):
     )
 
 
-async def owner_session(role="owner"):
+async def admin_session(role="admin"):
     uid = await make_user(role=role, mfa=True)
     app.asgi_client.cookies.set(ADMIN_COOKIE, await create_session_token(uid, "admin"))
     return uid
@@ -106,7 +106,7 @@ async def access(data):
     await app.asgi_client.get("/admin/security/access")
     return await app.asgi_client.post(
         "/admin/security/access",
-        data={"csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE), "reason": "Verified by owner", **data},
+        data={"csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE), "reason": "Verified by admin", **data},
     )
 
 
@@ -219,13 +219,13 @@ async def test_recovery_generic_responses_throttle_and_retry_visibility(monkeypa
 
 @pytest.mark.asyncio
 async def test_operator_password_signs_in_when_mfa_not_enrolled():
-    uid = await make_user(role="owner")
+    uid = await make_user(role="admin")
     await app.asgi_client.get("/admin/login")
     _, password = await app.asgi_client.post(
         "/admin/login",
         data={
             "csrf_token": app.asgi_client.cookies.get(ADMIN_CSRF_COOKIE),
-            "email": "owner@example.com",
+            "email": "admin@example.com",
             "password": PASSWORD,
         },
     )
@@ -239,13 +239,13 @@ async def test_operator_password_signs_in_when_mfa_not_enrolled():
 
 @pytest.mark.asyncio
 async def test_enrolled_operator_still_requires_authenticator_after_password():
-    uid = await make_user(role="owner", mfa=True)
+    uid = await make_user(role="admin", mfa=True)
     await app.asgi_client.get("/admin/login")
     _, password = await app.asgi_client.post(
         "/admin/login",
         data={
             "csrf_token": app.asgi_client.cookies.get(ADMIN_CSRF_COOKIE),
-            "email": "owner@example.com",
+            "email": "admin@example.com",
             "password": PASSWORD,
         },
     )
@@ -269,7 +269,7 @@ async def test_enrolled_operator_still_requires_authenticator_after_password():
 
 @pytest.mark.asyncio
 async def test_operator_can_opt_into_mfa_from_account_security():
-    uid = await make_user(role="owner")
+    uid = await make_user(role="admin")
     app.asgi_client.cookies.set(ADMIN_COOKIE, await create_session_token(uid, "admin"))
     _, start = await change({"action": "mfa_start"})
     assert start.status == 302
@@ -286,7 +286,7 @@ async def test_operator_can_opt_into_mfa_from_account_security():
 
 @pytest.mark.asyncio
 async def test_password_reset_does_not_remove_operator_mfa():
-    uid = await make_user(role="owner", mfa=True)
+    uid = await make_user(role="admin", mfa=True)
     _, response = await reset_token(await token_for(uid))
     assert response.status == 200
     async with session_scope() as db:
@@ -295,7 +295,7 @@ async def test_password_reset_does_not_remove_operator_mfa():
 
 @pytest.mark.asyncio
 async def test_invite_activation_reuse_and_staff_least_privilege():
-    await owner_session()
+    await admin_session()
     _, invite = await access({"action": "invite", "email": "staff@example.com"})
     assert invite.status == 302
     # Invitation body is cleared after acceptance, so capture the independently issued challenge here.
@@ -319,19 +319,19 @@ async def test_invite_activation_reuse_and_staff_least_privilege():
         assert response.status == 403, path
     _, orders = await app.asgi_client.get("/admin/orders")
     assert orders.status == 200
-    _, promote = await access({"action": "owner", "user_id": uid})
+    _, promote = await access({"action": "admin", "user_id": uid})
     assert promote.status == 403
 
 
 @pytest.mark.asyncio
-async def test_owner_self_removal_forbidden_and_suspension_preserves_history():
-    owner = await owner_session()
+async def test_admin_self_removal_forbidden_and_suspension_preserves_history():
+    admin = await admin_session()
     florist = await make_user()
     cookie = await create_session_token(florist)
     async with session_scope() as db:
         db.add(Order(customer_id=florist, status="paid"))
         await db.commit()
-    _, self_suspend = await access({"action": "suspend", "user_id": owner})
+    _, self_suspend = await access({"action": "suspend", "user_id": admin})
     assert self_suspend.status == 400
     _, suspend = await access({"action": "suspend", "user_id": florist})
     assert suspend.status == 302
@@ -406,7 +406,7 @@ async def test_login_rate_limit_and_generic_failures():
 
 @pytest.mark.asyncio
 async def test_recent_reauth_gate_and_session_version_race():
-    uid = await owner_session()
+    uid = await admin_session()
     async with session_scope() as db:
         await db.execute(update(AccountSession).values(reauthenticated_at=datetime.now(UTC) - timedelta(minutes=11)))
         await db.commit()
@@ -431,7 +431,7 @@ async def test_privacy_deletion_retains_financial_records():
         await db.commit()
         pk = await db.scalar(select(PrivacyRequest.id))
     app.asgi_client.cookies.clear()
-    await owner_session()
+    await admin_session()
     _, reviewed = await form_post(
         f"/admin/security/privacy/{pk}",
         {"decision": "approve", "notes": "Identity verified; retain transaction snapshots for tax records."},
@@ -445,16 +445,16 @@ async def test_privacy_deletion_retains_financial_records():
 
 
 @pytest.mark.asyncio
-async def test_offline_owner_recovery_requires_existing_owner_and_audits():
-    uid = await make_user(role="owner", mfa=True)
+async def test_offline_admin_recovery_requires_existing_admin_and_audits():
+    uid = await make_user(role="admin", mfa=True)
     token = await create_session_token(uid, "admin")
     with pytest.raises(ValueError):
         await recover("unknown@example.com", PASSWORD, "Verified identity")
-    await recover("owner@example.com", "new-unique-owner-passphrase", "Identity verified offline")
+    await recover("admin@example.com", "new-unique-admin-passphrase", "Identity verified offline")
     async with session_scope() as db:
         user = await db.get(User, uid)
         assert not user.mfa_secret and user.security_version == 1
-        assert await db.scalar(select(SecurityEvent).where(SecurityEvent.action == "owner_break_glass"))
+        assert await db.scalar(select(SecurityEvent).where(SecurityEvent.action == "admin_break_glass"))
     app.asgi_client.cookies.set(ADMIN_COOKIE, token)
     _, blocked = await app.asgi_client.get("/admin/")
     assert blocked.status == 302
