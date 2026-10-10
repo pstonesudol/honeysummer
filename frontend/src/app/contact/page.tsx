@@ -141,7 +141,7 @@ export default async function ContactPage() {
         <article className="contact-card">
           <Camera aria-hidden="true" size={20} strokeWidth={1.5} />
           <h2>Follow along</h2>
-           <p>{content.instagram ? <a href={content.instagram} target="_blank" rel="noopener noreferrer">Instagram</a> : "Instagram coming soon — we will link it here."}</p>
+           <p>{(content.instagram || site.instagram) ? <a href={content.instagram || site.instagram} target="_blank" rel="noopener noreferrer">Instagram</a> : "Instagram coming soon — we will link it here."}</p>
         </article>
       </section>
 

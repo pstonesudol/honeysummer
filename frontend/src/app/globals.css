@@ -564,6 +564,15 @@ textarea {
   color: white;
 }
 
+/* The Instagram entry is a button, so it keeps the control font and colour
+   instead of inheriting the larger serif footer-link styling. */
+.site-footer__links .site-footer__instagram {
+  margin-top: 0.35rem;
+  font-family: var(--font-geist), sans-serif;
+  font-size: 0.9rem;
+  color: var(--cocoa-dark);
+}
+
 .site-footer__bottom {
   display: flex;
   justify-content: space-between;

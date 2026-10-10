@@ -14,7 +14,7 @@ export const site = {
     "Seasonal flowers, garden-inspired floral design, and florist wholesale in Mountain Top and Northeast Pennsylvania.",
   email: "hello@hellohoneysummer.com", // client to provide
   phone: "", // client to provide
-  instagram: "", // client to provide
+  instagram: "https://www.instagram.com/hellohoneysummer/",
   announcementFallback: "Our growing season is waking up — spring flowers coming soon",
 } as const;
 
