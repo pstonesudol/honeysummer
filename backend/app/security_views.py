@@ -30,6 +30,7 @@ from .security import (
     deliver_security_mail,
     encrypt,
     issue_token,
+    password_confirmation_error,
     password_error,
     public_link,
     queue_mail,
@@ -196,7 +197,12 @@ async def reset(request):
     if not await throttle(request, "reset", limit=10):
         return _page(request, mode="reset", error="Please try again later.", status=429)
     password = str(request.form.get("password", ""))
-    error = password_error(password) if kind != "email" else ""
+    if kind != "email":
+        error = password_error(password) or password_confirmation_error(
+            password, str(request.form.get("password_confirm", ""))
+        )
+    else:
+        error = ""
     if error:
         return _page(request, mode="reset", token=token, kind=kind, error=error, status=400)
     try:
@@ -248,7 +254,9 @@ async def force_password(request):
     if not await throttle(request, "account_change", str(user.id)):
         return _page(request, mode="force", error="Please try again later.", status=429)
     password = str(request.form.get("password", ""))
-    error = password_error(password)
+    error = password_error(password) or password_confirmation_error(
+        password, str(request.form.get("password_confirm", ""))
+    )
     async with session_scope() as db:
         row = await db.scalar(select(User).where(User.id == user.id).with_for_update())
         if not row or not row.is_active or row.security_version != user.security_version:
@@ -312,8 +320,11 @@ async def account_change(request):
             message = "Reauthenticated for 10 minutes."
         elif action == "password":
             password = str(request.form.get("password", ""))
-            if password_error(password):
-                return json({"detail": password_error(password)}, status=400)
+            error = password_error(password) or password_confirmation_error(
+                password, str(request.form.get("password_confirm", ""))
+            )
+            if error:
+                return json({"detail": error}, status=400)
             user.password_hash = hash_password(password)
             user.must_change_password = False
             user.security_version += 1
@@ -595,8 +606,11 @@ async def manage_access(request):
                 )
             elif action == "temp_password":
                 new_password = str(request.form.get("password", ""))
-                if password_error(new_password):
-                    return json({"detail": password_error(new_password)}, status=400)
+                error = password_error(new_password) or password_confirmation_error(
+                    new_password, str(request.form.get("password_confirm", ""))
+                )
+                if error:
+                    return json({"detail": error}, status=400)
                 user.password_hash = hash_password(new_password)
                 user.must_change_password = True
                 queue_mail(

@@ -90,6 +90,7 @@ async def reset_token(token, kind="reset", password="another-unique-garden-passp
             "token": token,
             "kind": kind,
             "password": password,
+            "password_confirm": password,
         },
     )
 
@@ -181,12 +182,113 @@ async def test_reset_race_one_winner():
 
     async def submit(password):
         _, response = await app.asgi_client.post(
-            "/admin/security/reset", data={"csrf_token": csrf, "kind": "reset", "token": token, "password": password}
+            "/admin/security/reset",
+            data={
+                "csrf_token": csrf,
+                "kind": "reset",
+                "token": token,
+                "password": password,
+                "password_confirm": password,
+            },
         )
         return response.status
 
     statuses = await asyncio.gather(submit("first-unique-passphrase"), submit("second-unique-passphrase"))
     assert sorted(statuses) == [200, 400]
+
+
+@pytest.mark.asyncio
+async def test_reset_requires_a_matching_password_confirmation():
+    uid = await make_user()
+    token = await token_for(uid)
+    await app.asgi_client.get(f"/admin/security/reset?token={token}")
+    csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
+    _, rejected = await app.asgi_client.post(
+        "/admin/security/reset",
+        data={
+            "csrf_token": csrf,
+            "kind": "reset",
+            "token": token,
+            "password": "another-unique-garden-passphrase",
+            "password_confirm": "different-garden-passphrase",
+        },
+    )
+    assert rejected.status == 400 and "did not match" in rejected.text
+    # A rejected mismatch must not consume the single-use link.
+    async with session_scope() as db:
+        assert await db.scalar(select(AccountToken).where(AccountToken.consumed_at.is_(None))) is not None
+    _, completed = await reset_token(token)
+    assert completed.status == 200
+    async with session_scope() as db:
+        assert verify_password((await db.get(User, uid)).password_hash, "another-unique-garden-passphrase")
+
+
+@pytest.mark.asyncio
+async def test_account_password_change_requires_a_matching_confirmation():
+    uid = await make_user()
+    app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
+    _, rejected = await change(
+        {
+            "action": "password",
+            "password": "new-unique-garden-passphrase",
+            "password_confirm": "different-garden-passphrase",
+        }
+    )
+    assert rejected.status == 400 and "did not match" in rejected.json["detail"]
+    async with session_scope() as db:
+        assert verify_password((await db.get(User, uid)).password_hash, PASSWORD)
+    _, accepted = await change(
+        {
+            "action": "password",
+            "password": "new-unique-garden-passphrase",
+            "password_confirm": "new-unique-garden-passphrase",
+        }
+    )
+    assert accepted.status == 200
+    async with session_scope() as db:
+        assert verify_password((await db.get(User, uid)).password_hash, "new-unique-garden-passphrase")
+
+
+@pytest.mark.asyncio
+async def test_admin_temp_password_requires_a_matching_confirmation():
+    await admin_session()
+    target = await make_user(role="florist", email="temp-confirm@example.com")
+    _, rejected = await access(
+        {
+            "action": "temp_password",
+            "user_id": target,
+            "password": "temporary-passphrase-123",
+            "password_confirm": "temporary-passphrase-124",
+        }
+    )
+    assert rejected.status == 400 and "did not match" in rejected.json["detail"]
+    async with session_scope() as db:
+        user = await db.get(User, target)
+        assert not user.must_change_password and verify_password(user.password_hash, PASSWORD)
+
+
+@pytest.mark.asyncio
+async def test_force_password_requires_a_matching_confirmation():
+    uid = await make_user()
+    async with session_scope() as db:
+        user = await db.get(User, uid)
+        user.password_hash = hash_password("temporary-passphrase-123")
+        user.must_change_password = True
+        await db.commit()
+    app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
+    await app.asgi_client.get("/admin/security/force")
+    _, rejected = await app.asgi_client.post(
+        "/admin/security/force",
+        data={
+            "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE),
+            "current_password": "temporary-passphrase-123",
+            "password": "brand-new-passphrase-456",
+            "password_confirm": "brand-new-passphrase-457",
+        },
+    )
+    assert rejected.status == 400 and "did not match" in rejected.text
+    async with session_scope() as db:
+        assert (await db.get(User, uid)).must_change_password
 
 
 @pytest.mark.asyncio
@@ -355,7 +457,14 @@ async def test_admin_can_send_password_reset_link(monkeypatch):
 async def test_admin_temp_password_forces_change_on_next_sign_in():
     await admin_session()
     target = await make_user(role="florist", email="temp@example.com")
-    _, response = await access({"action": "temp_password", "user_id": target, "password": "temporary-passphrase-123"})
+    _, response = await access(
+        {
+            "action": "temp_password",
+            "user_id": target,
+            "password": "temporary-passphrase-123",
+            "password_confirm": "temporary-passphrase-123",
+        }
+    )
     assert response.status == 302
     async with session_scope() as db:
         user = await db.get(User, target)
@@ -371,6 +480,7 @@ async def test_admin_temp_password_forces_change_on_next_sign_in():
             "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE),
             "current_password": "temporary-passphrase-123",
             "password": "brand-new-passphrase-456",
+            "password_confirm": "brand-new-passphrase-456",
         },
     )
     assert done.status == 200 and "Password updated" in done.text

@@ -18,7 +18,7 @@ from ..auth import (
 )
 from ..db import session_scope
 from ..models import FloristProfile, User
-from ..security import audit, password_error, queue_mail, throttle, valid_email, verify_mfa
+from ..security import audit, password_confirmation_error, password_error, queue_mail, throttle, valid_email, verify_mfa
 from ..settings import get_settings
 
 bp = Blueprint("auth", url_prefix="/api/auth")
@@ -57,6 +57,9 @@ async def signup(request):
         return json({"detail": "Name, business name, email, and password are required."}, status=400)
     if not valid_email(email) or password_error(password):
         return json({"detail": password_error(password) or "Enter a valid email."}, status=400)
+    mismatch = password_confirmation_error(password, str(data.get("password_confirm", "")))
+    if mismatch:
+        return json({"detail": mismatch}, status=400)
     if not await throttle(request, "signup", email, limit=5):
         return json({"detail": "Please try again later."}, status=429)
     if business_type and business_type not in {"florist", "event", "shop", "other"}:

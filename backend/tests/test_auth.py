@@ -37,6 +37,7 @@ async def test_signup_creates_unapproved_profile_and_notifies_the_farm(sent):
             "name": "Jamie Rivera",
             "email": "New@Example.com",
             "password": "flowers-are-nice",
+            "password_confirm": "flowers-are-nice",
             "phone": "570-555-0100",
             "business_type": "florist",
             "website": "https://example.com",
@@ -68,7 +69,13 @@ async def test_signup_rejects_a_duplicate_email(sent):
 
     _, response = await app.asgi_client.post(
         "/api/auth/signup/",
-        json={"name": "Jamie", "business_name": "X", "email": "florist@example.com", "password": "flowers-are-nice"},
+        json={
+            "name": "Jamie",
+            "business_name": "X",
+            "email": "florist@example.com",
+            "password": "flowers-are-nice",
+            "password_confirm": "flowers-are-nice",
+        },
     )
 
     assert response.status == 201
@@ -86,13 +93,37 @@ async def test_signup_requires_business_email_and_password(sent):
 
 @pytest.mark.asyncio
 async def test_signup_requires_contact_name_and_rejects_unknown_business_type(sent):
-    details = {"business_name": "Fern & Fig", "email": "new@example.com", "password": "flowers-are-nice"}
+    details = {
+        "business_name": "Fern & Fig",
+        "email": "new@example.com",
+        "password": "flowers-are-nice",
+        "password_confirm": "flowers-are-nice",
+    }
     _, missing_name = await app.asgi_client.post("/api/auth/signup/", json=details)
     _, invalid_type = await app.asgi_client.post(
         "/api/auth/signup/", json={**details, "name": "Jamie", "business_type": "unknown"}
     )
     assert missing_name.status == 400
     assert invalid_type.status == 400
+    async with session_scope() as session:
+        assert (await session.scalar(select(User))) is None
+
+
+@pytest.mark.asyncio
+async def test_signup_requires_a_matching_password_confirmation(sent):
+    _, response = await app.asgi_client.post(
+        "/api/auth/signup/",
+        json={
+            "business_name": "Fern & Fig",
+            "name": "Jamie",
+            "email": "new@example.com",
+            "password": "flowers-are-nice",
+            "password_confirm": "flowers-are-nicer",
+        },
+    )
+
+    assert response.status == 400
+    assert "did not match" in response.json["detail"]
     async with session_scope() as session:
         assert (await session.scalar(select(User))) is None
 

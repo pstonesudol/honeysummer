@@ -42,7 +42,9 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 <form method="post" action="/admin/security/reset"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 <input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="kind" value="{{ kind }}">
 {% if kind != 'email' %}<label for="password">New password (at least 12 characters)</label>
-<input id="password" name="password" type="password" required minlength="12" maxlength="1024" autocomplete="new-password">{% endif %}
+<input id="password" name="password" type="password" required minlength="12" maxlength="1024" autocomplete="new-password">
+<label for="password_confirm">Confirm new password</label>
+<input id="password_confirm" name="password_confirm" type="password" required minlength="12" maxlength="1024" autocomplete="new-password">{% endif %}
 <button>Confirm update</button></form>
 {% elif mode == 'mfa' %}
 <h2>Authenticator verification</h2>
@@ -70,6 +72,7 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 <label for="current_password">Current password</label><input id="current_password" name="current_password" type="password" required autocomplete="current-password">
 <label for="code">Authenticator / recovery code (required if MFA enabled)</label><input id="code" name="code" autocomplete="one-time-code">
 <label for="password">New password (password change only)</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024">
+<label for="password_confirm">Confirm new password (password change only)</label><input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" minlength="12" maxlength="1024">
 <label for="email">New login email (email change only)</label><input id="email" name="email" type="email" autocomplete="email">
 {% if user.profile %}
 <label for="contact_name">Contact name</label><input id="contact_name" name="contact_name" value="{{ user.profile.contact_name }}" maxlength="200">
@@ -114,7 +117,7 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 <p class="muted">{{ row.user.email }} · a recorded reason is required; the change revokes existing sessions.</p>
 <label for="act-{{ row.user.id }}">Action</label>
 <select id="act-{{ row.user.id }}" name="action">{% for value, label, kind in row.actions %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
-<div data-password hidden><label for="pw-{{ row.user.id }}">New temporary password</label><input id="pw-{{ row.user.id }}" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password"></div>
+<div data-password hidden><label for="pw-{{ row.user.id }}">New temporary password</label><input id="pw-{{ row.user.id }}" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password"><label for="pw2-{{ row.user.id }}">Confirm temporary password</label><input id="pw2-{{ row.user.id }}" name="password_confirm" type="password" minlength="12" maxlength="1024" autocomplete="new-password"></div>
 <label for="reason-{{ row.user.id }}">Recorded reason</label>
 <textarea id="reason-{{ row.user.id }}" name="reason" required maxlength="2000"></textarea>
 <div class="modal-actions"><button type="button" class="btn btn--quiet" data-close>Cancel</button><button class="btn btn--primary">Apply</button></div>
@@ -141,8 +144,7 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
     if(!sel||!box) return;
     var on=sel.value==='temp_password';
     box.hidden=!on;
-    var input=box.querySelector('input');
-    if(input) input.required=on;
+    box.querySelectorAll('input').forEach(function(input){input.required=on;});
   }
   document.querySelectorAll('dialog').forEach(function(dlg){
     var sel=dlg.querySelector('select[name=action]');
@@ -182,6 +184,7 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 <form method="post" action="/admin/security/force"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 <label for="current_password">Temporary password</label><input id="current_password" name="current_password" type="password" required autocomplete="current-password">
 <label for="password">New password (at least 12 characters)</label><input id="password" name="password" type="password" required minlength="12" maxlength="1024" autocomplete="new-password">
+<label for="password_confirm">Confirm new password</label><input id="password_confirm" name="password_confirm" type="password" required minlength="12" maxlength="1024" autocomplete="new-password">
 <button>Save new password</button></form>
 {% endif %}
 <p><a href="/admin/security/">Account settings</a> · <a href="/admin/security/recovery">Forgot password</a> · <a href="/admin/login">Operator sign in</a></p>

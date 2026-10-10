@@ -34,6 +34,13 @@ def password_error(password: str) -> str:
     return ""
 
 
+def password_confirmation_error(password: str, confirmation: str) -> str:
+    """Require the same password twice whenever one is set or reset."""
+    if password != confirmation:
+        return "Passwords did not match. Enter the same password twice."
+    return ""
+
+
 def valid_email(email: str) -> bool:
     """Reject malformed addresses and header injection without SMTP probing."""
     return (

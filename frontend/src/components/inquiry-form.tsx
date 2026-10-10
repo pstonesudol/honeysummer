@@ -209,6 +209,7 @@ export function WholesaleShop() {
     try {
       const body: Record<string, string> = { email: String(form.get("email")), password: String(form.get("password")), mfa_code: String(form.get("mfa_code") ?? "") };
       if (mode === "signup") {
+        body.password_confirm = String(form.get("password_confirm") ?? "");
         for (const field of ["name", "business_name", "phone", "business_type", "website", "message"]) {
           body[field] = String(form.get(field) ?? "").trim();
         }
@@ -242,6 +243,7 @@ export function WholesaleShop() {
         <label>Tell us about your work<textarea name="message" rows={4} maxLength={5000} /></label>
       </>}
       <label>Email<input name="email" type="email" autoComplete="email" required /></label><label>Password<input name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={mode === "signup" ? 12 : undefined} required /></label>
+      {mode === "signup" && <label>Confirm password<input name="password_confirm" type="password" autoComplete="new-password" minLength={12} required /></label>}
       {mode === "login" && <><label>Authenticator or recovery code (if enabled)<input name="mfa_code" autoComplete="one-time-code" /></label><a className="text-link" href="/admin/security/recovery">Forgot password?</a></>}
       <button className="button button--dark" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Request account"}</button>
       <button type="button" className="text-link" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMessage(""); }}>{mode === "login" ? "Need wholesale access? Request an account" : "Already have an account? Sign in"}</button>
