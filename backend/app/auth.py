@@ -122,4 +122,5 @@ def user_payload(user: User | None) -> dict:
         "id": user.id if user else None,
         "approved": bool(profile and profile.approved),
         "business_name": profile.business_name if profile else "",
+        "must_change_password": bool(user and user.must_change_password),
     }

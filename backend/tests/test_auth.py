@@ -111,6 +111,7 @@ async def test_login_me_and_logout_round_trip(sent):
         "authenticated": True,
         "approved": True,
         "business_name": "Fern & Fig",
+        "must_change_password": False,
     }
 
     _, me = await app.asgi_client.get("/api/auth/me/")

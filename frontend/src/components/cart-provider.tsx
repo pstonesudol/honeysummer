@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import type { FlowerListing } from "@/lib/api";
 import { cartIssues, consumePurchased, quantityChange, readCart, type Channel, type SavedCart } from "@/lib/cart";
 
-export type Account = { id: number | null; authenticated: boolean; approved: boolean; business_name: string };
-const anonymous: Account = { id: null, authenticated: false, approved: false, business_name: "" };
+export type Account = { id: number | null; authenticated: boolean; approved: boolean; business_name: string; must_change_password: boolean };
+const anonymous: Account = { id: null, authenticated: false, approved: false, business_name: "", must_change_password: false };
 const blank = (): SavedCart => ({ items: {} });
 const keyFor = (channel: Channel, id: number | null) => `hs-cart-v1:${channel === "retail" ? "retail" : `wholesale:${id}`}`;
 

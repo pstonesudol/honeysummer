@@ -2,6 +2,7 @@
 
 from sanic.response import json
 
+from .auth import COOKIE_NAME, get_current_user
 from .db import session_scope
 from .security import audit
 from .settings import get_settings
@@ -36,6 +37,11 @@ async def protect_request(request):
     if request.path.startswith("/api/") and request.path.rstrip("/") != "/api/inquiries":
         if request.headers.get("x-honeysummer-request") != "1":
             return await _rejected(request, "CSRF request header required.")
+    if request.path.startswith("/api/") and request.cookies.get(COOKIE_NAME):
+        exempt = {"/api/auth/login", "/api/auth/logout", "/api/auth/password"}
+        user = await get_current_user(request)
+        if user and user.must_change_password and request.path.rstrip("/") not in exempt:
+            return await _rejected(request, "Choose a new password before continuing.")
 
 
 async def secure_response(request, response):

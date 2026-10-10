@@ -48,6 +48,7 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     role: Mapped[str] = mapped_column(String(20), default=initial_account_role)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     security_version: Mapped[int] = mapped_column(Integer, default=0)
     mfa_secret: Mapped[str] = mapped_column(Text, default="")
     mfa_pending: Mapped[str] = mapped_column(Text, default="")

@@ -450,6 +450,8 @@ async def load_admin(request):
     """Load the current operator into the request context."""
     request.ctx.admin = await get_current_admin(request)
     user = request.ctx.admin
+    if user and user.must_change_password and request.path.rstrip("/") not in {"/admin/logout", "/admin/login"}:
+        return redirect("/admin/security/force")
     if user and user.role == "staff":
         # Staff may fulfill orders/read preparation only, never finance, PII exports or access administration.
         path = request.path.rstrip("/")

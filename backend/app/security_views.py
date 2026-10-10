@@ -97,6 +97,10 @@ async def protect_forms(request):
         form = request.form.get("csrf_token", "")
         if not cookie or not form or not secrets.compare_digest(cookie, form):
             return json({"detail": "Invalid CSRF token. Reload the form."}, status=403)
+    if request.path.rstrip("/") not in {"/admin/security/force", "/admin/security/reset", "/admin/security/recovery"}:
+        user = await _user(request)
+        if user and user.must_change_password:
+            return redirect("/admin/security/force")
 
 
 @bp.middleware("response")
@@ -230,6 +234,44 @@ async def reset(request):
     )
 
 
+@bp.route("/force", methods=["GET", "POST"])
+async def force_password(request):
+    """A signed-in user given a temporary password must choose a new one before continuing."""
+    user = await _user(request)
+    if not user:
+        return redirect("/admin/login")
+    if not user.must_change_password:
+        return redirect("/admin/security/")
+    destination = "/admin/login" if user.is_admin else "/wholesale"
+    if request.method == "GET":
+        return _page(request, mode="force")
+    if not await throttle(request, "account_change", str(user.id)):
+        return _page(request, mode="force", error="Please try again later.", status=429)
+    password = str(request.form.get("password", ""))
+    error = password_error(password)
+    async with session_scope() as db:
+        row = await db.scalar(select(User).where(User.id == user.id).with_for_update())
+        if not row or not row.is_active or row.security_version != user.security_version:
+            return redirect(destination)
+        if not verify_password(row.password_hash, str(request.form.get("current_password", ""))):
+            return _page(request, mode="force", error="Enter your current (temporary) password.", status=400)
+        if error:
+            return _page(request, mode="force", error=error, status=400)
+        row.password_hash = hash_password(password)
+        row.must_change_password = False
+        row.security_version += 1
+        queue_mail(
+            db,
+            row.email,
+            "Password updated",
+            "Your password was changed. Sign in again with your new password.",
+        )
+        audit(db, request, "force_password", actor=row.id, target=row.id)
+        await db.commit()
+    await deliver_security_mail()
+    return _page(request, mode="done", message="Password updated. Sign in again with your new password.")
+
+
 @bp.get("/")
 async def account(request):
     """Account settings are available to pending/approved florists and operators."""
@@ -273,6 +315,7 @@ async def account_change(request):
             if password_error(password):
                 return json({"detail": password_error(password)}, status=400)
             user.password_hash = hash_password(password)
+            user.must_change_password = False
             user.security_version += 1
             queue_mail(
                 db,
@@ -383,6 +426,7 @@ def _row_actions(account, profile) -> list[tuple[str, str, str]]:
             actions.append(("reset_mfa", "Reset authenticator", "quiet"))
     if account.is_active:
         actions.append(("password", "Send password reset", "quiet"))
+        actions.append(("temp_password", "Set temporary password", "quiet"))
     return actions
 
 
@@ -464,6 +508,8 @@ async def manage_access(request):
         current_actor = next((u for u in admins if u.id == actor.id), None)
         if not current_actor or not current_actor.is_active or current_actor.security_version != actor.security_version:
             return json({"detail": "Admin session revoked. Sign in again."}, status=403)
+        link = ""
+        link_email = ""
         if action == "invite":
             email = str(request.form.get("email", "")).strip().lower()
             if not valid_email(email) or await db.scalar(select(User.id).where(User.email == email)):
@@ -537,13 +583,28 @@ async def manage_access(request):
                 if not user.is_active:
                     return json({"detail": "Reactivate the account before sending a password reset."}, status=400)
                 token = issue_token(db, user, "reset")
+                link = public_link(f"/admin/security/reset?token={token}&kind=reset")
+                link_email = user.email
                 queue_mail(
                     db,
                     user.email,
                     "Reset your password",
                     "An administrator sent you a password reset link. Use this single-use link within 30 minutes:\n"
-                    + public_link(f"/admin/security/reset?token={token}&kind=reset"),
+                    + link,
                     challenge=True,
+                )
+            elif action == "temp_password":
+                new_password = str(request.form.get("password", ""))
+                if password_error(new_password):
+                    return json({"detail": password_error(new_password)}, status=400)
+                user.password_hash = hash_password(new_password)
+                user.must_change_password = True
+                queue_mail(
+                    db,
+                    user.email,
+                    "Temporary password set",
+                    "An administrator set a temporary password for your account. Sign in with it, then choose a "
+                    "new password.\n" + public_link("/admin/security/force"),
                 )
             else:
                 return json({"detail": "Unknown access action."}, status=400)
@@ -562,6 +623,8 @@ async def manage_access(request):
         audit(db, request, "access_" + action, actor=actor.id, target=user.id, reason=reason)
         await db.commit()
     await deliver_security_mail()
+    if link:
+        return _page(request, mode="link", link=link, link_email=link_email)
     return redirect("/admin/security/access")
 
 

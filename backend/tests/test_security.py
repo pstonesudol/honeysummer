@@ -342,14 +342,41 @@ async def test_admin_can_send_password_reset_link(monkeypatch):
     await admin_session()
     target = await make_user(role="florist", email="resetme@example.com")
     _, response = await access({"action": "password", "user_id": target})
-    assert response.status == 302
-    reset = next(mail for mail in sent if "Reset your password" in mail["subject"])
-    assert reset["to"] == "resetme@example.com"
-    token = re.search(r"token=([^\s&]+)", reset["body"]).group(1)
+    assert response.status == 200 and "Password reset link" in response.text
+    assert any(mail["to"] == "resetme@example.com" and "Reset your password" in mail["subject"] for mail in sent)
+    token = re.search(r"token=([^\s&\"<]+)", response.text).group(1)
     _, completed = await reset_token(token)
     assert completed.status == 200
     async with session_scope() as db:
         assert verify_password((await db.get(User, target)).password_hash, "another-unique-garden-passphrase")
+
+
+@pytest.mark.asyncio
+async def test_admin_temp_password_forces_change_on_next_sign_in():
+    await admin_session()
+    target = await make_user(role="florist", email="temp@example.com")
+    _, response = await access({"action": "temp_password", "user_id": target, "password": "temporary-passphrase-123"})
+    assert response.status == 302
+    async with session_scope() as db:
+        user = await db.get(User, target)
+        assert user.must_change_password and verify_password(user.password_hash, "temporary-passphrase-123")
+
+    app.asgi_client.cookies.clear()
+    app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(target))
+    _, page = await app.asgi_client.get("/admin/security/force")
+    assert page.status == 200 and "Choose a new password" in page.text
+    _, done = await app.asgi_client.post(
+        "/admin/security/force",
+        data={
+            "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE),
+            "current_password": "temporary-passphrase-123",
+            "password": "brand-new-passphrase-456",
+        },
+    )
+    assert done.status == 200 and "Password updated" in done.text
+    async with session_scope() as db:
+        user = await db.get(User, target)
+        assert not user.must_change_password and verify_password(user.password_hash, "brand-new-passphrase-456")
 
 
 @pytest.mark.asyncio

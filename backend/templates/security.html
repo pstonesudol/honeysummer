@@ -26,6 +26,7 @@ table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;bord
 .invite-form{padding:16px 20px;margin:0}.invite-form .row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}.invite-form .row>div{flex:1 1 220px}
 dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 24px 60px #4c342d4d}dialog::backdrop{background:#2c1f1aa6}
 .modal-form{padding:20px;background:#fff9f3;margin:0}.modal-form h3{margin-top:0}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.share-box{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff9f3;border:1px solid #c8b6a6;border-radius:10px;padding:10px}.share-box code{overflow-wrap:anywhere;flex:1;min-width:200px}
 @media (max-width:760px){.utable__head{display:none}.utable__row{grid-template-columns:1fr;gap:6px;padding:14px 20px}.actions{justify-content:flex-start}}
 </style></head><body><main>
 <a href="/">Honey Summer</a> · <a href="/wholesale">Wholesale</a> · <a href="/admin/">Admin</a>
@@ -113,6 +114,7 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 <p class="muted">{{ row.user.email }} · a recorded reason is required; the change revokes existing sessions.</p>
 <label for="act-{{ row.user.id }}">Action</label>
 <select id="act-{{ row.user.id }}" name="action">{% for value, label, kind in row.actions %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+<div data-password hidden><label for="pw-{{ row.user.id }}">New temporary password</label><input id="pw-{{ row.user.id }}" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password"></div>
 <label for="reason-{{ row.user.id }}">Recorded reason</label>
 <textarea id="reason-{{ row.user.id }}" name="reason" required maxlength="2000"></textarea>
 <div class="modal-actions"><button type="button" class="btn btn--quiet" data-close>Cancel</button><button class="btn btn--primary">Apply</button></div>
@@ -134,12 +136,26 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 </section>
 <script>
 (function(){
+  function syncPassword(dlg){
+    var sel=dlg.querySelector('select[name=action]'),box=dlg.querySelector('[data-password]');
+    if(!sel||!box) return;
+    var on=sel.value==='temp_password';
+    box.hidden=!on;
+    var input=box.querySelector('input');
+    if(input) input.required=on;
+  }
+  document.querySelectorAll('dialog').forEach(function(dlg){
+    var sel=dlg.querySelector('select[name=action]');
+    if(sel) sel.addEventListener('change',function(){syncPassword(dlg);});
+    syncPassword(dlg);
+  });
   document.querySelectorAll('[data-open]').forEach(function(btn){
     btn.addEventListener('click',function(){
       var dlg=document.getElementById(btn.getAttribute('data-open'));
       if(!dlg||typeof dlg.showModal!=='function') return;
       var preset=btn.getAttribute('data-preset'),sel=dlg.querySelector('select[name=action]');
       if(preset&&sel) sel.value=preset;
+      syncPassword(dlg);
       dlg.showModal();
     });
   });
@@ -155,6 +171,18 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 <h2>Review {{ item.kind }} request #{{ item.id }}</h2><p>Account {{ item.user_id }} · {{ item.status }}</p><p>Export excludes credentials, MFA and tokens. Deletion disables access and anonymizes contact details only after legal retention review; orders, invoices and audit IDs remain intact.</p>
 <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label for="notes">Retention/identity-review decision</label><textarea id="notes" name="notes" required maxlength="2000"></textarea><label for="decision">Decision</label><select id="decision" name="decision"><option value="approve">Approve</option><option value="deny">Deny</option></select><button>Record decision</button></form>
 {% if item.snapshot %}<h3>Reviewed export</h3><pre style="white-space:pre-wrap">{{ item.snapshot|tojson(indent=2) }}</pre>{% endif %}
+{% elif mode == 'link' %}
+<h2>Password reset link</h2>
+<p>Send this single-use link to <strong>{{ link_email }}</strong> through a verified channel. It expires in 30 minutes.</p>
+<div class="share-box"><code>{{ link }}</code><button type="button" onclick="navigator.clipboard.writeText('{{ link }}')">Copy link</button></div>
+<p><a href="/admin/security/access">Back to Users</a></p>
+{% elif mode == 'force' %}
+<h2>Choose a new password</h2>
+<p>An administrator set a temporary password for your account. Enter it below and choose a new one to continue.</p>
+<form method="post" action="/admin/security/force"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="current_password">Temporary password</label><input id="current_password" name="current_password" type="password" required autocomplete="current-password">
+<label for="password">New password (at least 12 characters)</label><input id="password" name="password" type="password" required minlength="12" maxlength="1024" autocomplete="new-password">
+<button>Save new password</button></form>
 {% endif %}
 <p><a href="/admin/security/">Account settings</a> · <a href="/admin/security/recovery">Forgot password</a> · <a href="/admin/login">Operator sign in</a></p>
 </main></body></html>
