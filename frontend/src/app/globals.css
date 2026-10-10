@@ -120,6 +120,10 @@ textarea {
 .flower-card__body { display: grid; gap: .45rem; padding: 1.2rem; }
 .flower-card__body h3, .flower-card__body p { margin: 0; }
 .flower-card__body strong { margin-top: .4rem; }
+.flower-card__quantity { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-top: .5rem; font: 500 .8rem/1.4 var(--font-geist), sans-serif; letter-spacing: .06em; text-transform: uppercase; }
+.flower-card__quantity input { width: 5.5rem; min-height: 2.75rem; padding: .45rem .6rem; border: 1px solid var(--taupe); border-radius: .5rem; background: var(--cream-light); color: var(--cocoa-dark); font: 1rem/1.4 var(--font-geist), sans-serif; text-align: center; }
+.flower-card__quantity input:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+.flower-card__quantity input:disabled { opacity: .6; }
 .quantity { display: flex; justify-content: space-between; align-items: center; margin-top: .5rem; }
 .quantity input { width: 5rem; padding: .4rem; }
 .sold-out { color: var(--cocoa); font-family: var(--font-geist), sans-serif; font-size: .95rem; text-transform: uppercase; letter-spacing: .08em; }
