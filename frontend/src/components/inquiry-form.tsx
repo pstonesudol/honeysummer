@@ -223,12 +223,12 @@ export function WholesaleShop() {
 
   if (account?.authenticated && account.must_change_password) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">
     <div><p className="eyebrow">Action required</p><h2 id="shop-title">Choose a new password</h2><p>An administrator set a temporary password for your account. Choose a new password to continue shopping.</p></div>
-    <div><a className="text-link" href="/admin/security/force">Choose a new password</a> · <button className="text-link" onClick={() => void logout()}>Sign out</button></div>
+    <div className="wholesale-access__actions"><a className="button button--primary" href="/admin/security/force">Choose a new password</a><button className="button button--quiet" type="button" onClick={() => void logout()}>Sign out</button></div>
   </section>;
 
   if (account?.authenticated && !account.approved) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">
     <div><p className="eyebrow">Wholesale shop</p><h2 id="shop-title">Your account is awaiting approval.</h2><p>Isabella will email you once your account is ready. You can sign in with the password you chose.</p></div>
-    <div><a className="text-link" href="/admin/security/">Account security</a> · <button className="text-link" onClick={() => void logout()}>Sign out</button></div>
+    <div className="wholesale-access__actions"><a className="button button--quiet" href="/admin/security/">Account security</a><button className="button button--quiet" type="button" onClick={() => void logout()}>Sign out</button></div>
   </section>;
 
   if (!account?.authenticated) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">

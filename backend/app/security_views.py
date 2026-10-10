@@ -331,7 +331,13 @@ async def account(request):
     user = await _user(request)
     if not user:
         return _page(request, mode="done", message="Sign in to manage your account.", status=401)
-    return _page(request, mode="account", user=user, pending=await _account_pending(user.id))
+    return _page(
+        request,
+        mode="account",
+        user=user,
+        pending=await _account_pending(user.id),
+        selected=str(request.args.get("action", "")),
+    )
 
 
 @bp.post("/change")

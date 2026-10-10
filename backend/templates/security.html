@@ -64,7 +64,7 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 {% if pending %}<p>Authenticator setup key: <code>{{ pending }}</code>. Add it to your authenticator before confirming.</p>{% endif %}
 <form method="post" action="/admin/security/change" data-account-form>
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-{% set picked = selected if selected else ('mfa_confirm' if pending else 'reauth') %}
+{% set picked = selected if selected else ('mfa_confirm' if pending else ('password' if user.role == 'florist' else 'reauth')) %}
 <label for="action">Action</label><select id="action" name="action">
 <option value="reauth"{% if picked == 'reauth' %} selected{% endif %}>Reauthenticate for sensitive changes</option><option value="password"{% if picked == 'password' %} selected{% endif %}>Change password</option>
 <option value="email"{% if picked == 'email' %} selected{% endif %}>Change login email</option><option value="revoke"{% if picked == 'revoke' %} selected{% endif %}>Sign out all browsers</option>

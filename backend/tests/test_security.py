@@ -694,6 +694,22 @@ async def test_account_form_error_keeps_the_form_and_selected_action():
 
 
 @pytest.mark.asyncio
+async def test_account_page_defaults_florists_to_password_and_honors_action_query():
+    uid = await make_user()
+    app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
+    _, page = await app.asgi_client.get("/admin/security/")
+    assert page.status == 200
+    assert '<option value="password" selected>' in page.text
+    assert 'data-field="password"' in page.text
+    _, email_page = await app.asgi_client.get("/admin/security/?action=email")
+    assert '<option value="email" selected>' in email_page.text
+    app.asgi_client.cookies.clear()
+    await admin_session()
+    _, admin_page = await app.asgi_client.get("/admin/security/")
+    assert '<option value="reauth" selected>' in admin_page.text
+
+
+@pytest.mark.asyncio
 async def test_privacy_deletion_retains_financial_records():
     uid = await make_user()
     app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
