@@ -1,16 +1,16 @@
 """Inquiry intake: bouquet, wedding, and general contact requests."""
 
-import json
 import asyncio
+import json
 
 from sanic import Blueprint
 from sanic.response import json as json_response
 
 from ..db import session_scope
 from ..emails import send_inquiry_emails
+from ..media import store_private_image
 from ..models import Inquiry, InquiryCorrespondence
 from ..schemas import InquiryOut
-from ..media import store_private_image
 
 bp = Blueprint("inquiries", url_prefix="/api")
 
@@ -25,6 +25,7 @@ def _string(form, key: str) -> str:
 
 @bp.post("/inquiries/")
 async def create_inquiry(request):
+    """Accept a public inquiry and store any private inspiration photo."""
     form = request.form
     kind = _string(form, "kind")
     name = _string(form, "name")
@@ -45,7 +46,7 @@ async def create_inquiry(request):
             details = json.loads(raw_details)
             if not isinstance(details, dict):
                 raise ValueError
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             errors["details"] = ["Details must be an object."]
 
     upload = request.files.get("photo")
@@ -84,9 +85,15 @@ async def create_inquiry(request):
         current = await session.get(Inquiry, inquiry.id)
         current.email_delivery = outcomes
         if outcomes["customer"] == "accepted":
-            session.add(InquiryCorrespondence(inquiry_id=inquiry.id, actor_id=None,
-                direction="sent", subject="We received your note — Honey Summer",
-                summary="Automatic inquiry acknowledgement accepted by email provider; delivery is not confirmed."))
+            session.add(
+                InquiryCorrespondence(
+                    inquiry_id=inquiry.id,
+                    actor_id=None,
+                    direction="sent",
+                    subject="We received your note — Honey Summer",
+                    summary="Automatic inquiry acknowledgement accepted by email provider; delivery is not confirmed.",
+                )
+            )
         await session.commit()
 
     payload = InquiryOut.model_validate(inquiry).model_dump(mode="json")

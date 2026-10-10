@@ -47,7 +47,7 @@ uv run python -m app.seed --email you@example.com --password 'change-me-in-produ
 uv run sanic app.server:app --dev
 ```
 
-The API runs at [http://localhost:8000](http://localhost:8000), with a health check at `/api/health/` and the admin at `/admin/`. Run the test suite with `uv run pytest`.
+The API runs at [http://localhost:8000](http://localhost:8000), with a health check at `/api/health/` and the admin at `/admin/`. Run the test suite with `uv run pytest`. Lint and format the Python code with `uv run ruff check` and `uv run ruff format` (configuration lives in `backend/pyproject.toml`). `uv run ruff check` is the validation gate; `uv run ruff format --check` verifies formatting without rewriting files.
 
 ### Content and inquiries
 

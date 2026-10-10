@@ -3,8 +3,9 @@
 Revision ID: 73ae28c0b912
 Revises: f3b8a209cd17
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 revision = "73ae28c0b912"
 down_revision = "f3b8a209cd17"
@@ -21,7 +22,9 @@ def upgrade():
     op.add_column("orders", sa.Column("activity", sa.JSON(), nullable=False, server_default="[]"))
     op.execute("UPDATE orders SET fulfillment_state = 'completed' WHERE fulfilled_at IS NOT NULL")
     op.create_check_constraint("flower_low_stock_threshold_nonnegative", "flower_listings", "low_stock_threshold >= 0")
-    op.create_check_constraint("order_fulfillment_state_valid", "orders", "fulfillment_state IN ('new', 'preparing', 'ready', 'completed')")
+    op.create_check_constraint(
+        "order_fulfillment_state_valid", "orders", "fulfillment_state IN ('new', 'preparing', 'ready', 'completed')"
+    )
     op.create_index("ix_orders_fulfillment_date", "orders", ["fulfillment_date"])
 
 

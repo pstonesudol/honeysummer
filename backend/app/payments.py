@@ -3,32 +3,50 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
+import stripe
 from sqlalchemy import func, select
 
 from .db import session_scope
 from .emails import send_order_emails
-from .models import BouquetProposal, FlowerListing, InventoryMovement, Order, OrderItem, OrderNotification, OrderRefund, StripeEvent
+from .models import (
+    BouquetProposal,
+    FlowerListing,
+    InventoryMovement,
+    Order,
+    OrderItem,
+    OrderNotification,
+    OrderRefund,
+    StripeEvent,
+)
 from .orders import items_context, load_order, release_order, settle_order
 from .settings import get_settings
 
 
 def expected_cents(order: Order) -> int:
-    return int((sum((item.price_snapshot * item.quantity for item in order.items), Decimal("0")) + order.delivery_fee) * 100)
+    """Return the order total in cents from its items and delivery fee."""
+    return int(
+        (sum((item.price_snapshot * item.quantity for item in order.items), Decimal("0")) + order.delivery_fee) * 100
+    )
 
 
-async def create_checkout(order_id: int, *, line_items: list[dict], success_url: str, cancel_url: str, customer_email: str | None = None):
-    import stripe
+async def create_checkout(
+    order_id: int, *, line_items: list[dict], success_url: str, cancel_url: str, customer_email: str | None = None
+):
+    """Create a Stripe Checkout session for a pending order."""
 
     stripe.api_key = get_settings().stripe_secret_key
     async with session_scope() as db:
         order = await load_order(db, order_id)
     params = dict(
-        mode="payment", success_url=success_url, cancel_url=cancel_url,
-        line_items=line_items, metadata={"order_id": str(order_id)},
+        mode="payment",
+        success_url=success_url,
+        cancel_url=cancel_url,
+        line_items=line_items,
+        metadata={"order_id": str(order_id)},
         expires_at=int(order.hold_expires_at.timestamp()),
     )
     if customer_email:
@@ -53,7 +71,7 @@ async def create_checkout(order_id: int, *, line_items: list[dict], success_url:
                 raise RuntimeError("The reservation is no longer available.")
             current.stripe_session_id = checkout.id
             if isinstance(getattr(checkout, "expires_at", None), (int, float)):
-                current.hold_expires_at = datetime.fromtimestamp(checkout.expires_at, timezone.utc)
+                current.hold_expires_at = datetime.fromtimestamp(checkout.expires_at, UTC)
             await db.commit()
     except Exception:
         # Keep the hold if Stripe could not confirm expiration; the reconciler
@@ -89,11 +107,13 @@ async def deliver_notifications(order_id: int) -> None:
     for recipient in ("customer", "farm"):
         async with session_scope() as db:
             notification = await db.scalar(
-                select(OrderNotification).where(
+                select(OrderNotification)
+                .where(
                     OrderNotification.order_id == order_id,
                     OrderNotification.recipient == recipient,
                     OrderNotification.sent_at.is_(None),
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             if not notification:
                 continue
@@ -101,28 +121,34 @@ async def deliver_notifications(order_id: int) -> None:
             proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.order_id == order_id))
             context = items_context(order)
             if proposal and proposal.history:
-                context = [dict(name=line["name"], price=f"{Decimal(line['unit_cents']) / 100:.2f}", quantity=line["quantity"])
-                           for line in proposal.history[-1]["draft"]["lines"]]
+                context = [
+                    dict(name=line["name"], price=f"{Decimal(line['unit_cents']) / 100:.2f}", quantity=line["quantity"])
+                    for line in proposal.history[-1]["draft"]["lines"]
+                ]
             notification.attempts += 1
             try:
                 send_order_emails(
-                    order_id=order.id, order_reference=order.order_reference,
-                    channel=order.channel, fulfillment=order.fulfillment,
-                    pickup_window=order.pickup_window, delivery_address=order.delivery_address,
+                    order_id=order.id,
+                    order_reference=order.order_reference,
+                    channel=order.channel,
+                    fulfillment=order.fulfillment,
+                    pickup_window=order.pickup_window,
+                    delivery_address=order.delivery_address,
                     customer_email=order.customer.email if order.customer else order.customer_email,
-                    items=context, delivery_fee=order.delivery_fee,
-                    recipient=recipient, raise_errors=True,
+                    items=context,
+                    delivery_fee=order.delivery_fee,
+                    recipient=recipient,
+                    raise_errors=True,
                 )
             except Exception:
                 await db.commit()
             else:
-                notification.sent_at = datetime.now(timezone.utc)
+                notification.sent_at = datetime.now(UTC)
                 await db.commit()
 
 
 async def expire_checkout(order_id: int) -> str:
     """Confirm the hosted session is no longer payable before releasing stock."""
-    import stripe
 
     async with session_scope() as db:
         order = await load_order(db, order_id)
@@ -150,8 +176,13 @@ async def apply_checkout_event(event: dict) -> str:
     if event_type == "charge.refunded":
         intent = obj.get("payment_intent")
         amount_refunded, amount_paid = obj.get("amount_refunded"), obj.get("amount")
-        if (not intent or obj.get("currency") != "usd" or not isinstance(amount_paid, int)
-                or not isinstance(amount_refunded, int) or not 0 < amount_refunded <= amount_paid):
+        if (
+            not intent
+            or obj.get("currency") != "usd"
+            or not isinstance(amount_paid, int)
+            or not isinstance(amount_refunded, int)
+            or not 0 < amount_refunded <= amount_paid
+        ):
             return "review"
         async with session_scope() as db:
             order_id = await db.scalar(select(Order.id).where(Order.stripe_payment_intent_id == intent))
@@ -161,7 +192,9 @@ async def apply_checkout_event(event: dict) -> str:
             if event_id and await db.scalar(select(StripeEvent.id).where(StripeEvent.event_id == event_id)):
                 return "ignored"
             proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.order_id == order_id))
-            total = proposal.history[-1]["draft"]["total_cents"] if proposal and proposal.history else expected_cents(order)
+            total = (
+                proposal.history[-1]["draft"]["total_cents"] if proposal and proposal.history else expected_cents(order)
+            )
             if order.status not in ("paid", "refunded") or amount_paid != total:
                 return "review"
             refunds = (await db.scalars(select(OrderRefund).where(OrderRefund.order_id == order_id))).all()
@@ -182,30 +215,46 @@ async def apply_checkout_event(event: dict) -> str:
                 # invented allocation to a local refund request.
                 return "review"
             elif recorded < amount_refunded:
-                db.add(OrderRefund(order_id=order_id, amount_cents=amount_refunded - recorded, status="succeeded",
-                                   reason="Full refund verified from Stripe webhook", reference=str(obj.get("id", "")),
-                                   idempotency_key=str(uuid4())))
+                db.add(
+                    OrderRefund(
+                        order_id=order_id,
+                        amount_cents=amount_refunded - recorded,
+                        status="succeeded",
+                        reason="Full refund verified from Stripe webhook",
+                        reference=str(obj.get("id", "")),
+                        idempotency_key=str(uuid4()),
+                    )
+                )
             if amount_refunded == total and order.status != "refunded":
                 order.status = "refunded"
                 for item in order.items:
                     if item.listing_id is None:
                         continue  # Custom services have no inventory journal.
-                    db.add(InventoryMovement(
-                        listing_id=item.listing_id, order_id=order.id, kind="refund", delta=0,
-                        units=item.quantity, reason="Full refund; no automatic restock", source="stripe",
-                    ))
+                    db.add(
+                        InventoryMovement(
+                            listing_id=item.listing_id,
+                            order_id=order.id,
+                            kind="refund",
+                            delta=0,
+                            units=item.quantity,
+                            reason="Full refund; no automatic restock",
+                            source="stripe",
+                        )
+                    )
             if event_id:
                 db.add(StripeEvent(event_id=event_id, order_id=order.id, event_type=event_type, outcome="applied"))
             await db.commit()
             return "applied"
     if event_type not in {
-        "checkout.session.completed", "checkout.session.expired",
-        "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed",
+        "checkout.session.completed",
+        "checkout.session.expired",
+        "checkout.session.async_payment_succeeded",
+        "checkout.session.async_payment_failed",
     }:
         return "ignored"
     try:
         order_id = int(obj.get("metadata", {}).get("order_id", ""))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return "ignored"
     async with session_scope() as db:
         order = await load_order(db, order_id, for_update=True)
@@ -245,41 +294,37 @@ async def apply_checkout_event(event: dict) -> str:
 async def reconcile(*, apply: bool = False, full: bool = False) -> list[str]:
     """Audit every balance and inspect overdue reservations against Stripe."""
     findings: list[str] = []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     async with session_scope() as db:
         listings = (await db.scalars(select(FlowerListing).order_by(FlowerListing.id))).all()
         for listing in listings:
             ledger = await db.scalar(
-                select(func.sum(InventoryMovement.delta))
-                .where(InventoryMovement.listing_id == listing.id)
+                select(func.sum(InventoryMovement.delta)).where(InventoryMovement.listing_id == listing.id)
             )
             if ledger is None or ledger != listing.quantity_available:
-                findings.append(
-                    f"Listing #{listing.id}: available={listing.quantity_available}, ledger={ledger}"
-                )
+                findings.append(f"Listing #{listing.id}: available={listing.quantity_available}, ledger={ledger}")
             reserved = await db.scalar(
                 select(func.coalesce(func.sum(OrderItem.quantity), 0))
                 .join(Order, Order.id == OrderItem.order_id)
                 .where(OrderItem.listing_id == listing.id, Order.status == "pending")
             )
-            movements = (await db.scalars(
-                select(InventoryMovement).where(InventoryMovement.listing_id == listing.id)
-            )).all()
+            movements = (
+                await db.scalars(select(InventoryMovement).where(InventoryMovement.listing_id == listing.id))
+            ).all()
             journal_reserved = sum(
                 movement.units * (1 if movement.kind in ("reserve", "legacy_hold") else -1)
-                for movement in movements if movement.kind in ("reserve", "legacy_hold", "release", "sale")
+                for movement in movements
+                if movement.kind in ("reserve", "legacy_hold", "release", "sale")
             )
             if reserved != journal_reserved:
-                findings.append(
-                    f"Listing #{listing.id}: pending units={reserved}, journal holds={journal_reserved}"
-                )
+                findings.append(f"Listing #{listing.id}: pending units={reserved}, journal holds={journal_reserved}")
         pending_ids = (await db.scalars(select(Order.id).where(Order.status == "pending"))).all()
     for order_id in pending_ids:
         async with session_scope() as db:
             order = await load_order(db, order_id)
             deadline = order.hold_expires_at
             if deadline is not None and deadline.tzinfo is None:
-                deadline = deadline.replace(tzinfo=timezone.utc)  # SQLite test adapter
+                deadline = deadline.replace(tzinfo=UTC)  # SQLite test adapter
             due = deadline is None or deadline <= now
             session_id = order.stripe_session_id
         if not due:
@@ -303,7 +348,6 @@ async def reconcile(*, apply: bool = False, full: bool = False) -> list[str]:
         if not get_settings().stripe_secret_key:
             findings.append(f"Order #{order_id}: Stripe key missing; cannot reconcile")
             continue
-        import stripe
 
         stripe.api_key = get_settings().stripe_secret_key
         try:
@@ -314,9 +358,7 @@ async def reconcile(*, apply: bool = False, full: bool = False) -> list[str]:
         if remote.status == "complete" and remote.payment_status == "paid":
             findings.append(f"Order #{order_id}: paid on Stripe but pending locally")
             if apply:
-                outcome = await apply_checkout_event({
-                    "type": "checkout.session.completed", "data": {"object": remote}
-                })
+                outcome = await apply_checkout_event({"type": "checkout.session.completed", "data": {"object": remote}})
                 if outcome != "applied":
                     findings.append(f"Order #{order_id}: {outcome}; manual review")
         elif remote.status == "expired" or (
@@ -331,31 +373,32 @@ async def reconcile(*, apply: bool = False, full: bool = False) -> list[str]:
                         current.status = "expired"
                         await db.commit()
         else:
-            findings.append(
-                f"Order #{order_id}: Stripe {remote.status}/{remote.payment_status}; manual review"
-            )
+            findings.append(f"Order #{order_id}: Stripe {remote.status}/{remote.payment_status}; manual review")
     async with session_scope() as db:
-        unsent_ids = (await db.scalars(
-            select(OrderNotification.order_id)
-            .where(OrderNotification.sent_at.is_(None)).distinct()
-        )).all()
+        unsent_ids = (
+            await db.scalars(select(OrderNotification.order_id).where(OrderNotification.sent_at.is_(None)).distinct())
+        ).all()
         paid_query = select(Order.id).where(Order.status == "paid", Order.stripe_session_id.is_not(None))
         if not full:
             paid_query = paid_query.where(Order.created_at >= now - timedelta(days=2))
         paid_ids = (await db.scalars(paid_query)).all()
-        invoice_ids = (await db.scalars(select(BouquetProposal.id).where(
-            BouquetProposal.stripe_invoice_id.is_not(None),
-            BouquetProposal.status.in_(("sent", "review", "stock_review", "paid")),
-        ))).all()
+        invoice_ids = (
+            await db.scalars(
+                select(BouquetProposal.id).where(
+                    BouquetProposal.stripe_invoice_id.is_not(None),
+                    BouquetProposal.status.in_(("sent", "review", "stock_review", "paid")),
+                )
+            )
+        ).all()
     for order_id in unsent_ids:
         findings.append(f"Order #{order_id}: unsent confirmation email")
         if apply:
             await deliver_notifications(order_id)
     if get_settings().stripe_secret_key:
-        import stripe
-
         stripe.api_key = get_settings().stripe_secret_key
-        from .proposals import apply_invoice_event
+        # payments <-> proposals is a deliberate import cycle; keep this lazy.
+        from .proposals import apply_invoice_event  # noqa: PLC0415
+
         for proposal_id in invoice_ids:
             async with session_scope() as db:
                 proposal = await db.get(BouquetProposal, proposal_id)
@@ -377,7 +420,12 @@ async def reconcile(*, apply: bool = False, full: bool = False) -> list[str]:
                     findings.append(f"Proposal #{proposal_id}: void on Stripe but sent locally")
                     if apply:
                         await apply_invoice_event({"type": "invoice.voided", "data": {"object": remote}})
-                elif remote.status == "open" and local_status == "sent" and remote.due_date and remote.due_date < int(now.timestamp()):
+                elif (
+                    remote.status == "open"
+                    and local_status == "sent"
+                    and remote.due_date
+                    and remote.due_date < int(now.timestamp())
+                ):
                     findings.append(f"Proposal #{proposal_id}: invoice overdue")
             except Exception as exc:
                 findings.append(f"Proposal #{proposal_id}: Stripe invoice lookup failed: {exc}")
@@ -386,12 +434,17 @@ async def reconcile(*, apply: bool = False, full: bool = False) -> list[str]:
                 order = await load_order(db, order_id)
             try:
                 remote = await asyncio.to_thread(stripe.checkout.Session.retrieve, order.stripe_session_id)
-                if remote.payment_status != "paid" or remote.currency != "usd" or remote.amount_total != expected_cents(order):
+                if (
+                    remote.payment_status != "paid"
+                    or remote.currency != "usd"
+                    or remote.amount_total != expected_cents(order)
+                ):
                     findings.append(f"Order #{order_id}: local total/payment differs from Stripe; manual review")
                     continue
                 if order.stripe_payment_intent_id:
                     intent = await asyncio.to_thread(
-                        stripe.PaymentIntent.retrieve, order.stripe_payment_intent_id,
+                        stripe.PaymentIntent.retrieve,
+                        order.stripe_payment_intent_id,
                         expand=["latest_charge"],
                     )
                     charge = intent.get("latest_charge")

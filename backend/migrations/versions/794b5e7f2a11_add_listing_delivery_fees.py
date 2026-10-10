@@ -4,9 +4,8 @@ Revision ID: 794b5e7f2a11
 Revises: 06df37b3a004
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "794b5e7f2a11"
 down_revision = "06df37b3a004"
@@ -21,13 +20,9 @@ def upgrade() -> None:
     )
     op.add_column(
         "flower_listings",
-        sa.Column(
-            "delivery_fee_mode", sa.String(20), nullable=False, server_default="per_listing"
-        ),
+        sa.Column("delivery_fee_mode", sa.String(20), nullable=False, server_default="per_listing"),
     )
-    op.create_check_constraint(
-        "flower_delivery_fee_nonnegative", "flower_listings", "delivery_fee >= 0"
-    )
+    op.create_check_constraint("flower_delivery_fee_nonnegative", "flower_listings", "delivery_fee >= 0")
     op.create_check_constraint(
         "flower_delivery_fee_mode_valid",
         "flower_listings",

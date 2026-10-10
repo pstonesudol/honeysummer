@@ -3,8 +3,9 @@
 Revision ID: 4a98c2de6710
 Revises: 73ae28c0b912
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 revision = "4a98c2de6710"
 down_revision = "73ae28c0b912"
@@ -13,12 +14,17 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column("orders", sa.Column("payment_method", sa.String(20), nullable=False, server_default="stripe_checkout"))
+    op.add_column(
+        "orders", sa.Column("payment_method", sa.String(20), nullable=False, server_default="stripe_checkout")
+    )
     op.add_column("orders", sa.Column("payment_reference", sa.String(255), nullable=False, server_default=""))
     op.add_column("orders", sa.Column("manual_key", sa.String(36), nullable=True))
     op.create_unique_constraint("uq_orders_manual_key", "orders", ["manual_key"])
     op.alter_column("order_items", "listing_id", existing_type=sa.Integer(), nullable=True)
-    op.execute("UPDATE orders SET payment_method = 'stripe_invoice' WHERE id IN (SELECT order_id FROM bouquet_proposals WHERE order_id IS NOT NULL)")
+    op.execute(
+        "UPDATE orders SET payment_method = 'stripe_invoice' WHERE id IN "
+        "(SELECT order_id FROM bouquet_proposals WHERE order_id IS NOT NULL)"
+    )
 
 
 def downgrade():

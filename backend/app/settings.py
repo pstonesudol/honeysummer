@@ -13,6 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
+    """Environment-backed settings loaded from the process or ``backend/.env``."""
+
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env", extra="ignore")
 
     debug: bool = False
@@ -44,4 +46,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """Return the cached settings instance."""
     return Settings()

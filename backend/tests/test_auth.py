@@ -23,9 +23,7 @@ async def _make_user(
 ) -> None:
     async with session_scope() as session:
         user = User(email=email, password_hash=hash_password(password), is_active=True)
-        session.add(
-            FloristProfile(business_name="Fern & Fig", approved=approved, user=user)
-        )
+        session.add(FloristProfile(business_name="Fern & Fig", approved=approved, user=user))
         await session.commit()
 
 
@@ -76,9 +74,7 @@ async def test_signup_rejects_a_duplicate_email(sent):
 
 @pytest.mark.asyncio
 async def test_signup_requires_business_email_and_password(sent):
-    _, response = await app.asgi_client.post(
-        "/api/auth/signup/", json={"email": "someone@example.com"}
-    )
+    _, response = await app.asgi_client.post("/api/auth/signup/", json={"email": "someone@example.com"})
 
     assert response.status == 400
     async with session_scope() as session:

@@ -4,9 +4,8 @@ Revision ID: 8c55d1b6a940
 Revises: 794b5e7f2a11
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "8c55d1b6a940"
 down_revision = "794b5e7f2a11"
@@ -15,9 +14,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_check_constraint(
-        "flower_available_nonnegative", "flower_listings", "quantity_available >= 0"
-    )
+    op.create_check_constraint("flower_available_nonnegative", "flower_listings", "quantity_available >= 0")
     op.add_column("orders", sa.Column("hold_expires_at", sa.DateTime(timezone=True)))
     op.add_column("orders", sa.Column("fulfilled_at", sa.DateTime(timezone=True)))
     op.add_column("orders", sa.Column("restocked_at", sa.DateTime(timezone=True)))

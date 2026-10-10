@@ -15,11 +15,12 @@ from sanic.response import json
 from sqlalchemy import select
 
 from ..db import session_scope
+from ..media import public_media_url
 from ..models import FlowerListing
 from ..orders import StockError, reserve_order
 from ..payments import complete_without_stripe, create_checkout
-from .catalog import _listing_payload
 from ..settings import get_settings
+from .catalog import _listing_payload
 
 bp = Blueprint("retail", url_prefix="/api")
 logger = logging.getLogger(__name__)
@@ -30,16 +31,13 @@ FULFILLMENTS = {"pickup", "delivery"}
 def _stripe_product_data(item: dict, settings) -> dict:
     """Build Stripe's richer hosted-checkout product summary."""
     description = " · ".join(
-        value
-        for value in (item.get("variety"), item.get("color"), item.get("stem_notes"))
-        if value
+        value for value in (item.get("variety"), item.get("color"), item.get("stem_notes")) if value
     )
     product_data = {"name": item["name"]}
     if description:
         product_data["description"] = description[:500]
 
     if item.get("photo"):
-        from ..media import public_media_url
         media_base = public_media_url()
         image_url = (
             f"{media_base}/{item['photo']}"
@@ -131,28 +129,34 @@ async def retail_checkout(request):
             success_url=settings.retail_checkout_success_url,
             cancel_url=settings.retail_checkout_cancel_url,
             line_items=[
-            {
-                "price_data": {
-                    "currency": "usd",
-                    "product_data": _stripe_product_data(item, settings),
-                    "unit_amount": int(Decimal(item["price"]) * 100),
-                },
-                "quantity": item["quantity"],
-            }
-            for item in items_context
-        ]
-        + ([
-            {
-                "price_data": {
-                    "currency": "usd",
-                    "product_data": {"name": "Delivery"},
-                    "unit_amount": int(delivery_fee * 100),
-                },
-                "quantity": 1,
-            }
-        ] if delivery_fee > 0 else []),
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": _stripe_product_data(item, settings),
+                        "unit_amount": int(Decimal(item["price"]) * 100),
+                    },
+                    "quantity": item["quantity"],
+                }
+                for item in items_context
+            ]
+            + (
+                [
+                    {
+                        "price_data": {
+                            "currency": "usd",
+                            "product_data": {"name": "Delivery"},
+                            "unit_amount": int(delivery_fee * 100),
+                        },
+                        "quantity": 1,
+                    }
+                ]
+                if delivery_fee > 0
+                else []
+            ),
         )
     except Exception:
         logger.exception("Unable to create retail Stripe Checkout for order %s", order_id)
         return json({"detail": "Unable to start payment. Please try again."}, status=503)
-    return json({"order_id": order_id, "order_reference": order_reference, "checkout_url": stripe_session.url}, status=201)
+    return json(
+        {"order_id": order_id, "order_reference": order_reference, "checkout_url": stripe_session.url}, status=201
+    )

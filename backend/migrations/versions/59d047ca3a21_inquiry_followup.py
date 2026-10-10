@@ -3,8 +3,9 @@
 Revision ID: 59d047ca3a21
 Revises: 4a98c2de6710
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 revision = "59d047ca3a21"
 down_revision = "4a98c2de6710"
@@ -18,7 +19,9 @@ def upgrade():
     op.add_column("inquiries", sa.Column("internal_notes", sa.Text(), nullable=False, server_default=""))
     op.execute("UPDATE inquiries SET stage = 'closed' WHERE handled = true")
     op.create_index("ix_inquiries_follow_up_date", "inquiries", ["follow_up_date"])
-    op.create_check_constraint("inquiry_stage_valid", "inquiries", "stage IN ('new', 'contacted', 'quoted', 'booked', 'closed')")
+    op.create_check_constraint(
+        "inquiry_stage_valid", "inquiries", "stage IN ('new', 'contacted', 'quoted', 'booked', 'closed')"
+    )
 
 
 def downgrade():

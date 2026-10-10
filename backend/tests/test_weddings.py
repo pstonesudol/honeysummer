@@ -1,34 +1,71 @@
-from types import SimpleNamespace
-from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
+from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 import stripe
 from sqlalchemy import select
 
-from app.admin import CSRF_COOKIE, _admin_date, _admin_label
+from app import weddings
+from app.admin import CSRF_COOKIE, _admin_date, _admin_label, _booked_weddings
 from app.auth import hash_password
+from app.balance_report import invoice_balance_rows
 from app.db import session_scope
 from app.models import Inquiry, InvoiceRefund, Order, OrderItem, User, WeddingInvoice, WeddingQuote
+from app.routes import checkout
 from app.server import app
 from app.settings import get_settings
-from app.weddings import (apply_wedding_invoice_event, approve_wedding_schedule, due_timestamp,
-                           eastern_today, run_wedding_schedule, send_wedding_invoice, attach_reviewed_wedding_invoice,
-                           agree_revised_wedding, revise_wedding_invoice, validate_installments, validate_quote, validate_schedule)
+from app.weddings import (
+    agree_revised_wedding,
+    apply_wedding_invoice_event,
+    approve_wedding_schedule,
+    attach_reviewed_wedding_invoice,
+    due_timestamp,
+    eastern_today,
+    revise_wedding_invoice,
+    run_wedding_schedule,
+    send_wedding_invoice,
+    validate_installments,
+    validate_quote,
+    validate_schedule,
+)
 
 
 def form(mode="deposit", deposit="30.00"):
-    return dict(title="Wedding flowers", description="Garden design", terms="Seasonal substitutions",
-                location="September 18, Green Barn", payment_mode=mode, deposit=deposit,
-                name_1="Ceremony flowers", quantity_1="2", price_1="25.00",
-                name_2="Design labor", quantity_2="1", price_2="10.00")
+    return dict(
+        title="Wedding flowers",
+        description="Garden design",
+        terms="Seasonal substitutions",
+        location="September 18, Green Barn",
+        payment_mode=mode,
+        deposit=deposit,
+        name_1="Ceremony flowers",
+        quantity_1="2",
+        price_1="25.00",
+        name_2="Design labor",
+        quantity_2="1",
+        price_2="10.00",
+    )
 
 
 def paid(invoice_id, amount, event_id):
-    return dict(id=event_id, type="invoice.paid", data={"object": dict(
-        id=invoice_id, currency="usd", total=amount, amount_paid=amount,
-        amount_remaining=0, status="paid", paid_out_of_band=False)})
+    return dict(
+        id=event_id,
+        type="invoice.paid",
+        data={
+            "object": dict(
+                id=invoice_id,
+                currency="usd",
+                total=amount,
+                amount_paid=amount,
+                amount_remaining=0,
+                status="paid",
+                paid_out_of_band=False,
+            )
+        },
+    )
 
 
 def mock_stripe(monkeypatch, amounts):
@@ -37,12 +74,22 @@ def mock_stripe(monkeypatch, amounts):
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_mock")
     monkeypatch.setattr(stripe.Customer, "create", lambda **kwargs: SimpleNamespace(id="cus_wedding"))
     monkeypatch.setattr(stripe.Customer, "retrieve", lambda *args: SimpleNamespace(id="cus_wedding"))
-    monkeypatch.setattr(stripe.Invoice, "create", lambda **kwargs: SimpleNamespace(id=f"in_{kwargs['metadata']['step']}"))
+    monkeypatch.setattr(
+        stripe.Invoice, "create", lambda **kwargs: SimpleNamespace(id=f"in_{kwargs['metadata']['step']}")
+    )
     monkeypatch.setattr(stripe.InvoiceItem, "create", lambda **kwargs: SimpleNamespace(id="ii_1"))
-    monkeypatch.setattr(stripe.Invoice, "finalize_invoice", lambda invoice_id, **kwargs: SimpleNamespace(
-        id=invoice_id, total=amounts[invoice_id], currency="usd"))
-    monkeypatch.setattr(stripe.Invoice, "send_invoice", lambda invoice_id, **kwargs: SimpleNamespace(
-        id=invoice_id, hosted_invoice_url=f"https://invoice.stripe.com/{invoice_id}"))
+    monkeypatch.setattr(
+        stripe.Invoice,
+        "finalize_invoice",
+        lambda invoice_id, **kwargs: SimpleNamespace(id=invoice_id, total=amounts[invoice_id], currency="usd"),
+    )
+    monkeypatch.setattr(
+        stripe.Invoice,
+        "send_invoice",
+        lambda invoice_id, **kwargs: SimpleNamespace(
+            id=invoice_id, hosted_invoice_url=f"https://invoice.stripe.com/{invoice_id}"
+        ),
+    )
 
 
 def test_quote_validation_and_schedule():
@@ -56,10 +103,11 @@ def test_quote_validation_and_schedule():
 
 @pytest.mark.asyncio
 async def test_partially_refunded_wedding_requires_customer_agreement_before_new_invoice(monkeypatch):
-    from app import payments
+
     async def deliver(_):
         return None
-    monkeypatch.setattr(payments, "deliver_notifications", deliver)
+
+    monkeypatch.setattr(weddings, "deliver_notifications", deliver)
     mock_stripe(monkeypatch, {"in_amended": 4000})
     draft, _, _ = validate_quote(form())
     async with session_scope() as db:
@@ -67,23 +115,44 @@ async def test_partially_refunded_wedding_requires_customer_agreement_before_new
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add_all([owner, inquiry])
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, status="review", payment_mode="deposit",
-            deposit_cents=3000, draft=draft, snapshot=draft, activity=[])
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id,
+            status="review",
+            payment_mode="deposit",
+            deposit_cents=3000,
+            draft=draft,
+            snapshot=draft,
+            activity=[],
+        )
         db.add(quote)
         await db.flush()
-        old = WeddingInvoice(quote_id=quote.id, step="deposit", status="paid", amount_cents=3000,
-                             stripe_invoice_id="in_deposit")
+        old = WeddingInvoice(
+            quote_id=quote.id, step="deposit", status="paid", amount_cents=3000, stripe_invoice_id="in_deposit"
+        )
         db.add(old)
         await db.flush()
-        db.add(InvoiceRefund(wedding_invoice_id=old.id, amount_cents=1000,
-            payment_intent_id="pi_old", stripe_refund_id="re_old", status="succeeded",
-            reason="Price change", idempotency_key=str(uuid4()), actor_id=owner.id))
+        db.add(
+            InvoiceRefund(
+                wedding_invoice_id=old.id,
+                amount_cents=1000,
+                payment_intent_id="pi_old",
+                stripe_refund_id="re_old",
+                status="succeeded",
+                reason="Price change",
+                idempotency_key=str(uuid4()),
+                actor_id=owner.id,
+            )
+        )
         await db.commit()
         quote_id, old_id = quote.id, old.id
     with pytest.raises(ValueError):
         await send_wedding_invoice(quote_id, "balance")
-    revised = {**form(mode="full"), "amendment_due_date": (eastern_today() + timedelta(days=14)).isoformat(),
-               "acceptance_reference": "Client accepted by email Oct 10", "customer_accepted": "on"}
+    revised = {
+        **form(mode="full"),
+        "amendment_due_date": (eastern_today() + timedelta(days=14)).isoformat(),
+        "acceptance_reference": "Client accepted by email Oct 10",
+        "customer_accepted": "on",
+    }
     with pytest.raises(ValueError, match="written acceptance"):
         await agree_revised_wedding(quote_id, {**revised, "customer_accepted": ""}, actor_id=1)
     with pytest.raises(ValueError, match=r"at least \$0.50 due"):
@@ -96,18 +165,19 @@ async def test_partially_refunded_wedding_requires_customer_agreement_before_new
         owner = await db.get(User, 1)
         owner.password_hash = hash_password("password")
         await db.commit()
-    await app.asgi_client.post("/admin/login", data=dict(
-        email="owner@example.com", password="password", csrf_token=csrf))
+    await app.asgi_client.post(
+        "/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf)
+    )
     _, detail = await app.asgi_client.get(f"/admin/weddings/{quote_id}")
     assert detail.status == 200 and "Save revised agreement (do not send yet)" in detail.text
     _, forbidden = await app.asgi_client.post(f"/admin/weddings/{quote_id}/amend", data=revised)
     assert forbidden.status == 403
     csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
-    _, invalid = await app.asgi_client.post(f"/admin/weddings/{quote_id}/amend", data={
-        **revised, "customer_accepted": "", "csrf_token": csrf})
+    _, invalid = await app.asgi_client.post(
+        f"/admin/weddings/{quote_id}/amend", data={**revised, "customer_accepted": "", "csrf_token": csrf}
+    )
     assert invalid.status == 409 and invalid.json["field"] == "acceptance_reference"
-    _, saved = await app.asgi_client.post(f"/admin/weddings/{quote_id}/amend", data={
-        **revised, "csrf_token": csrf})
+    _, saved = await app.asgi_client.post(f"/admin/weddings/{quote_id}/amend", data={**revised, "csrf_token": csrf})
     assert saved.status == 302
     with pytest.raises(ValueError, match="partially refunded"):
         await agree_revised_wedding(quote_id, revised, actor_id=1)
@@ -117,12 +187,11 @@ async def test_partially_refunded_wedding_requires_customer_agreement_before_new
         assert quote.status == "amendment_ready"
         assert quote.amendments[-1]["retained_paid_cents"] == 2000
         assert quote.amendments[-1]["amount_cents"] == 4000
-        from app.admin import _booked_weddings
+
         booked, count = await _booked_weddings(db, limit=10)
         assert count == 1 and booked[0]["balance_cents"] == 4000
     assert await send_wedding_invoice(quote_id, "amended") == "in_amended"
     async with session_scope() as db:
-        from app.balance_report import invoice_balance_rows
         rows = await invoice_balance_rows(db)
         assert rows[0]["balance_cents"] == 4000
         assert rows[0]["open_cents"] == 4000
@@ -133,15 +202,16 @@ async def test_partially_refunded_wedding_requires_customer_agreement_before_new
         quote = await db.get(WeddingQuote, quote_id)
         order = await db.get(Order, quote.order_id)
         assert quote.status == "paid" and order.status == "paid"
-        assert sum(item.price_snapshot * item.quantity for item in (
-            await db.scalars(select(OrderItem).where(OrderItem.order_id == order.id))).all()) == Decimal("60.00")
+        assert sum(
+            item.price_snapshot * item.quantity
+            for item in (await db.scalars(select(OrderItem).where(OrderItem.order_id == order.id))).all()
+        ) == Decimal("60.00")
         assert (await db.get(WeddingInvoice, old_id)).status == "paid"
 
 
 @pytest.mark.asyncio
 async def test_amended_wedding_remains_visible_if_old_gross_reaches_old_total():
-    from app.admin import _booked_weddings
-    from app.balance_report import invoice_balance_rows
+
     draft, _, _ = validate_quote(form())
     old_draft = {**draft, "total_cents": 3000}
     async with session_scope() as db:
@@ -149,17 +219,32 @@ async def test_amended_wedding_remains_visible_if_old_gross_reaches_old_total():
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add_all([owner, inquiry])
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, status="amendment_ready", payment_mode="deposit",
-            draft=old_draft, snapshot=old_draft, amendments=[{
-                "draft": draft, "retained_paid_cents": 2000, "amount_cents": 4000}], activity=[])
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id,
+            status="amendment_ready",
+            payment_mode="deposit",
+            draft=old_draft,
+            snapshot=old_draft,
+            amendments=[{"draft": draft, "retained_paid_cents": 2000, "amount_cents": 4000}],
+            activity=[],
+        )
         db.add(quote)
         await db.flush()
         old = WeddingInvoice(quote_id=quote.id, step="deposit", status="paid", amount_cents=3000)
         db.add(old)
         await db.flush()
-        db.add(InvoiceRefund(wedding_invoice_id=old.id, amount_cents=1000, status="succeeded",
-            payment_intent_id="pi_old", stripe_refund_id="re_old",
-            reason="Adjustment", idempotency_key=str(uuid4()), actor_id=owner.id))
+        db.add(
+            InvoiceRefund(
+                wedding_invoice_id=old.id,
+                amount_cents=1000,
+                status="succeeded",
+                payment_intent_id="pi_old",
+                stripe_refund_id="re_old",
+                reason="Adjustment",
+                idempotency_key=str(uuid4()),
+                actor_id=owner.id,
+            )
+        )
         await db.flush()
         booked, count = await _booked_weddings(db, limit=10)
         assert count == 1 and booked[0]["balance_cents"] == 4000
@@ -173,7 +258,7 @@ def test_admin_payment_labels_and_eastern_dates_are_display_only():
     assert _admin_label("stripe_invoice") == "Stripe invoice"
     assert _admin_label("paid") == "Paid"
     assert _admin_date("2027-12-04") == "Dec 4, 2027"
-    assert _admin_date(datetime(2026, 10, 9, 3, 24, tzinfo=timezone.utc)) == "Oct 8, 2026 · 11:24 PM EDT"
+    assert _admin_date(datetime(2026, 10, 9, 3, 24, tzinfo=UTC)) == "Oct 8, 2026 · 11:24 PM EDT"
 
 
 @pytest.mark.asyncio
@@ -185,23 +270,43 @@ async def test_wedding_admin_renders_installment_labels_not_storage_keys():
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add(inquiry)
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, status="paid", payment_mode="installments",
-                             draft=snapshot, snapshot=snapshot, activity=[], installments=[
-                                 dict(amount_cents=3000, send_mode="manual", due_date=(today + timedelta(days=7)).isoformat()),
-                                 dict(amount_cents=3000, send_mode="manual", due_date=(today + timedelta(days=14)).isoformat())])
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id,
+            status="paid",
+            payment_mode="installments",
+            draft=snapshot,
+            snapshot=snapshot,
+            activity=[],
+            installments=[
+                dict(amount_cents=3000, send_mode="manual", due_date=(today + timedelta(days=7)).isoformat()),
+                dict(amount_cents=3000, send_mode="manual", due_date=(today + timedelta(days=14)).isoformat()),
+            ],
+        )
         db.add(quote)
         await db.flush()
-        db.add_all([WeddingInvoice(quote_id=quote.id, step=f"part_0{index}", status="paid", amount_cents=3000)
-                    for index in (1, 2)])
+        db.add_all(
+            [
+                WeddingInvoice(quote_id=quote.id, step=f"part_0{index}", status="paid", amount_cents=3000)
+                for index in (1, 2)
+            ]
+        )
         await db.commit()
     await app.asgi_client.get("/admin/login")
     csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
-    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf))
+    await app.asgi_client.post(
+        "/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf)
+    )
     _, page = await app.asgi_client.get(f"/admin/weddings/{quote.id}")
     assert page.status == 200
     assert 'Payment & booking <span class="status-badge status-badge--success">Paid</span>' in page.text
-    assert 'Installment 1 · revision 1 · $30.00 · <span class="status-badge status-badge--success">Paid</span>' in page.text
-    assert 'Installment 2 · revision 1 · $30.00 · <span class="status-badge status-badge--success">Paid</span>' in page.text
+    assert (
+        'Installment 1 · revision 1 · $30.00 · <span class="status-badge status-badge--success">Paid</span>'
+        in page.text
+    )
+    assert (
+        'Installment 2 · revision 1 · $30.00 · <span class="status-badge status-badge--success">Paid</span>'
+        in page.text
+    )
     assert "part_01" not in page.text and "part_02" not in page.text
 
 
@@ -209,22 +314,33 @@ async def test_wedding_admin_renders_installment_labels_not_storage_keys():
 async def test_void_open_wedding_invoice_keeps_history_and_uses_fresh_stripe_keys(monkeypatch):
     mock_stripe(monkeypatch, {"in_full_1": 6000, "in_full_2": 6500})
     create_keys = []
+
     def create(**kwargs):
         create_keys.append(kwargs["idempotency_key"])
         return SimpleNamespace(id=f"in_full_{len(create_keys)}")
+
     monkeypatch.setattr(stripe.Invoice, "create", create)
-    monkeypatch.setattr(stripe.Invoice, "retrieve", lambda invoice_id: SimpleNamespace(
-        id=invoice_id, status="open", currency="usd", total=6000))
+    monkeypatch.setattr(
+        stripe.Invoice,
+        "retrieve",
+        lambda invoice_id: SimpleNamespace(id=invoice_id, status="open", currency="usd", total=6000),
+    )
     void_calls = []
-    monkeypatch.setattr(stripe.Invoice, "void_invoice", lambda invoice_id, **kwargs: (
-        void_calls.append(kwargs["idempotency_key"]) or SimpleNamespace(id=invoice_id, status="void")))
+    monkeypatch.setattr(
+        stripe.Invoice,
+        "void_invoice",
+        lambda invoice_id, **kwargs: (
+            void_calls.append(kwargs["idempotency_key"]) or SimpleNamespace(id=invoice_id, status="void")
+        ),
+    )
     draft, mode, deposit = validate_quote(form(mode="full"))
     async with session_scope() as db:
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add(inquiry)
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot={}, payment_mode=mode,
-                             deposit_cents=deposit, activity=[])
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id, draft=draft, snapshot={}, payment_mode=mode, deposit_cents=deposit, activity=[]
+        )
         db.add(quote)
         await db.commit()
         quote_id = quote.id
@@ -241,8 +357,11 @@ async def test_void_open_wedding_invoice_keeps_history_and_uses_fresh_stripe_key
     async with session_scope() as db:
         quote = await db.get(WeddingQuote, quote_id)
         assert quote.status == "draft" and quote.order_id is None
-        quote.draft = {**quote.draft, "total_cents": 6500,
-                       "lines": [*quote.draft["lines"], dict(name="Additional flowers", quantity=1, unit_cents=500)]}
+        quote.draft = {
+            **quote.draft,
+            "total_cents": 6500,
+            "lines": [*quote.draft["lines"], dict(name="Additional flowers", quantity=1, unit_cents=500)],
+        }
         await db.commit()
     assert await send_wedding_invoice(quote_id, "full") == "in_full_2"
     assert create_keys == [f"wedding-{quote_id}-full-v1-invoice", f"wedding-{quote_id}-full-v2-invoice"]
@@ -250,31 +369,36 @@ async def test_void_open_wedding_invoice_keeps_history_and_uses_fresh_stripe_key
     assert await apply_wedding_invoice_event(paid("in_full_1", 6000, "late_voided_payment")) == "review"
     async with session_scope() as db:
         rows = (await db.scalars(select(WeddingInvoice).order_by(WeddingInvoice.revision))).all()
-        assert [(row.revision, row.status, row.amount_cents) for row in rows] == [
-            (1, "void", 6000), (2, "sent", 6500)]
+        assert [(row.revision, row.status, row.amount_cents) for row in rows] == [(1, "void", 6000), (2, "sent", 6500)]
 
 
 @pytest.mark.asyncio
 async def test_void_failure_requires_review_and_never_reissues(monkeypatch):
     mock_stripe(monkeypatch, {"in_full": 6000})
-    monkeypatch.setattr(stripe.Invoice, "retrieve", lambda invoice_id: SimpleNamespace(
-        id=invoice_id, status="open", currency="usd", total=6000))
+    monkeypatch.setattr(
+        stripe.Invoice,
+        "retrieve",
+        lambda invoice_id: SimpleNamespace(id=invoice_id, status="open", currency="usd", total=6000),
+    )
+
     def ambiguous(*args, **kwargs):
         raise RuntimeError("connection dropped after request")
+
     monkeypatch.setattr(stripe.Invoice, "void_invoice", ambiguous)
     draft, mode, deposit = validate_quote(form(mode="full"))
     async with session_scope() as db:
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add(inquiry)
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot={}, payment_mode=mode,
-                             deposit_cents=deposit, activity=[])
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id, draft=draft, snapshot={}, payment_mode=mode, deposit_cents=deposit, activity=[]
+        )
         db.add(quote)
         await db.commit()
         quote_id = quote.id
     await send_wedding_invoice(quote_id, "full")
     async with session_scope() as db:
-        invoice_id = (await db.scalar(select(WeddingInvoice.id)))
+        invoice_id = await db.scalar(select(WeddingInvoice.id))
     with pytest.raises(ValueError, match="uncertain"):
         await revise_wedding_invoice(quote_id, invoice_id, actor_id=1)
     async with session_scope() as db:
@@ -297,8 +421,9 @@ async def test_stripe_void_webhook_can_reopen_only_after_verified_remote_void(mo
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add(inquiry)
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot={}, payment_mode=mode,
-                             deposit_cents=deposit, activity=[])
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id, draft=draft, snapshot={}, payment_mode=mode, deposit_cents=deposit, activity=[]
+        )
         db.add(quote)
         await db.commit()
         quote_id = quote.id
@@ -308,8 +433,11 @@ async def test_stripe_void_webhook_can_reopen_only_after_verified_remote_void(mo
         row_id = row.id
     event = dict(id="evt_void", type="invoice.voided", data={"object": {"id": "in_deposit"}})
     assert await apply_wedding_invoice_event(event) == "applied"
-    monkeypatch.setattr(stripe.Invoice, "retrieve", lambda invoice_id: SimpleNamespace(
-        id=invoice_id, status="void", currency="usd", total=3000))
+    monkeypatch.setattr(
+        stripe.Invoice,
+        "retrieve",
+        lambda invoice_id: SimpleNamespace(id=invoice_id, status="void", currency="usd", total=3000),
+    )
     await revise_wedding_invoice(quote_id, row_id, actor_id=1)
     async with session_scope() as db:
         assert (await db.get(WeddingQuote, quote_id)).status == "draft"
@@ -324,20 +452,37 @@ async def test_attach_uncertain_invoice_checks_remote_identity_and_never_sends(m
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add(inquiry)
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot=draft, payment_mode=mode,
-                             deposit_cents=deposit, status="review", activity=[])
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id,
+            draft=draft,
+            snapshot=draft,
+            payment_mode=mode,
+            deposit_cents=deposit,
+            status="review",
+            activity=[],
+        )
         db.add(quote)
         await db.flush()
         row = WeddingInvoice(quote_id=quote.id, step="deposit", status="review", amount_cents=3000)
         db.add(row)
         await db.commit()
         quote_id, row_id = quote.id, row.id
+
     class Remote(dict):
         def __getattr__(self, key):
             return self[key]
+
     metadata = dict(wedding_quote_id=str(quote_id), step="deposit", revision="1")
-    remote = Remote(id="in_found", status="open", currency="usd", total=3000, amount_paid=0,
-                    metadata=metadata, customer="cus_found", hosted_invoice_url="https://stripe.test/in_found")
+    remote = Remote(
+        id="in_found",
+        status="open",
+        currency="usd",
+        total=3000,
+        amount_paid=0,
+        metadata=metadata,
+        customer="cus_found",
+        hosted_invoice_url="https://stripe.test/in_found",
+    )
     monkeypatch.setattr(stripe.Invoice, "retrieve", lambda invoice_id: remote)
     remote["amount_paid"] = 100
     with pytest.raises(ValueError, match="payment details"):
@@ -358,30 +503,48 @@ async def test_attach_uncertain_invoice_checks_remote_identity_and_never_sends(m
 @pytest.mark.asyncio
 async def test_attach_verified_paid_invoice_books_exactly_once(monkeypatch):
     mock_stripe(monkeypatch, {})
-    from app import payments
+
     async def deliver(_):
         return None
-    monkeypatch.setattr(payments, "deliver_notifications", deliver)
+
+    monkeypatch.setattr(weddings, "deliver_notifications", deliver)
     draft, mode, deposit = validate_quote(form(mode="full"))
     async with session_scope() as db:
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add(inquiry)
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot=draft, payment_mode=mode,
-                             deposit_cents=deposit, status="review", activity=[])
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id,
+            draft=draft,
+            snapshot=draft,
+            payment_mode=mode,
+            deposit_cents=deposit,
+            status="review",
+            activity=[],
+        )
         db.add(quote)
         await db.flush()
         row = WeddingInvoice(quote_id=quote.id, step="full", status="review", amount_cents=6000)
         db.add(row)
         await db.commit()
         quote_id, row_id = quote.id, row.id
+
     class Remote(dict):
         def __getattr__(self, key):
             return self[key]
-    remote = Remote(id="in_paid_lost", status="paid", currency="usd", total=6000,
-        amount_paid=6000, amount_remaining=0, paid_out_of_band=False,
+
+    remote = Remote(
+        id="in_paid_lost",
+        status="paid",
+        currency="usd",
+        total=6000,
+        amount_paid=6000,
+        amount_remaining=0,
+        paid_out_of_band=False,
         metadata=dict(wedding_quote_id=str(quote_id), step="full", revision="1"),
-        customer="cus_found", hosted_invoice_url="https://stripe.test/in_paid_lost")
+        customer="cus_found",
+        hosted_invoice_url="https://stripe.test/in_paid_lost",
+    )
     monkeypatch.setattr(stripe.Invoice, "retrieve", lambda _: remote)
     await attach_reviewed_wedding_invoice(quote_id, row_id, "in_paid_lost", actor_id=1)
     async with session_scope() as db:
@@ -447,9 +610,14 @@ def test_installments_must_sum_exactly_and_have_increasing_dates():
 
 def test_dynamic_installments_and_percentages_with_rounding():
     today = eastern_today()
-    mixed = {"installment_ids": "1,3", "installment_type_1": "percent", "installment_percent_1": "25",
-             "installment_amount_3": "75.00", "installment_due_date_1": (today + timedelta(days=1)).isoformat(),
-             "installment_due_date_3": (today + timedelta(days=2)).isoformat()}
+    mixed = {
+        "installment_ids": "1,3",
+        "installment_type_1": "percent",
+        "installment_percent_1": "25",
+        "installment_amount_3": "75.00",
+        "installment_due_date_1": (today + timedelta(days=1)).isoformat(),
+        "installment_due_date_3": (today + timedelta(days=2)).isoformat(),
+    }
     assert [part["amount_cents"] for part in validate_installments(mixed, 10000, today=today)] == [2500, 7500]
     mixed["installment_amount_3"] = "74.99"
     with pytest.raises(ValueError, match="exactly"):
@@ -457,10 +625,15 @@ def test_dynamic_installments_and_percentages_with_rounding():
     # Deleted row 2 is ignored; add seven percentage rows beyond the old six-payment limit.
     fields = {"installment_ids": "1,3,9,11,12,13,14"}
     percentages = ("20", "20", "20", "10", "10", "10", "10")
-    for position, (index, percent) in enumerate(zip((1, 3, 9, 11, 12, 13, 14), percentages), start=1):
-        fields.update({f"installment_type_{index}": "percent", f"installment_percent_{index}": percent,
-                       f"installment_amount_{index}": "not-a-dollar",
-                       f"installment_due_date_{index}": (today + timedelta(days=position)).isoformat()})
+    for position, (index, percent) in enumerate(zip((1, 3, 9, 11, 12, 13, 14), percentages, strict=False), start=1):
+        fields.update(
+            {
+                f"installment_type_{index}": "percent",
+                f"installment_percent_{index}": percent,
+                f"installment_amount_{index}": "not-a-dollar",
+                f"installment_due_date_{index}": (today + timedelta(days=position)).isoformat(),
+            }
+        )
     parts = validate_installments(fields, 10001, today=today)
     assert len(parts) == 7 and sum(part["amount_cents"] for part in parts) == 10001
     assert parts[-1]["amount_cents"] == 1001
@@ -478,28 +651,39 @@ def test_dynamic_installments_and_percentages_with_rounding():
 
 @pytest.mark.asyncio
 async def test_three_installments_wait_for_each_payment_and_create_one_order(monkeypatch):
-    from app import weddings
+
     today = eastern_today()
     draft, mode, deposit = validate_quote(installment_form(today))
     parts = validate_installments(installment_form(today), draft["total_cents"])
     mock_stripe(monkeypatch, {"in_part_01": 1000, "in_part_02": 2000, "in_part_03": 3000})
     invoice_payloads, invoice_lines = [], []
+
     def create_invoice(**kwargs):
         invoice_payloads.append(kwargs)
         return SimpleNamespace(id=f"in_{kwargs['metadata']['step']}")
+
     def create_line(**kwargs):
         invoice_lines.append(kwargs)
         return SimpleNamespace(id=f"ii_{len(invoice_lines)}")
+
     monkeypatch.setattr(stripe.Invoice, "create", create_invoice)
     monkeypatch.setattr(stripe.InvoiceItem, "create", create_line)
     async with session_scope() as db:
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add(inquiry)
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, draft=draft, snapshot={}, payment_mode=mode,
-                             deposit_cents=deposit, installments=parts, activity=[],
-                             initial_send_mode="automatic", initial_send_date=today,
-                             initial_due_date=today + timedelta(days=7))
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id,
+            draft=draft,
+            snapshot={},
+            payment_mode=mode,
+            deposit_cents=deposit,
+            installments=parts,
+            activity=[],
+            initial_send_mode="automatic",
+            initial_send_date=today,
+            initial_due_date=today + timedelta(days=7),
+        )
         db.add(quote)
         await db.commit()
         quote_id = quote.id
@@ -522,7 +706,8 @@ async def test_three_installments_wait_for_each_payment_and_create_one_order(mon
     assert await run_wedding_schedule(apply=True) == []  # automatic part 3 date not reached
     monkeypatch.setattr(weddings, "eastern_today", lambda: today + timedelta(days=14))
     assert await run_wedding_schedule(apply=True, today=today + timedelta(days=14)) == [
-        f"Wedding quote #{quote_id}: sent part_03 invoice in_part_03"]
+        f"Wedding quote #{quote_id}: sent part_03 invoice in_part_03"
+    ]
     assert await apply_wedding_invoice_event(paid("in_part_03", 3000, "evt_part_03")) == "applied"
     assert await apply_wedding_invoice_event(paid("in_part_03", 3000, "evt_part_03")) == "ignored"
     async with session_scope() as db:
@@ -534,25 +719,35 @@ async def test_three_installments_wait_for_each_payment_and_create_one_order(mon
 
 
 def test_dated_schedule_validation_and_eastern_due_time():
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
+
     today = eastern_today()
-    fields = dict(initial_send_mode="automatic", initial_send_date=today.isoformat(),
-                  initial_due_date=(today + timedelta(days=7)).isoformat(),
-                  balance_send_mode="automatic", balance_send_date=(today + timedelta(days=10)).isoformat(),
-                  balance_due_date=(today + timedelta(days=20)).isoformat())
+    fields = dict(
+        initial_send_mode="automatic",
+        initial_send_date=today.isoformat(),
+        initial_due_date=(today + timedelta(days=7)).isoformat(),
+        balance_send_mode="automatic",
+        balance_send_date=(today + timedelta(days=10)).isoformat(),
+        balance_due_date=(today + timedelta(days=20)).isoformat(),
+    )
     saved = validate_schedule(fields, "deposit", today=today)
     assert saved["initial_due_date"] == today + timedelta(days=7)
     instant = datetime.fromtimestamp(due_timestamp(today), ZoneInfo("America/New_York"))
     assert (instant.hour, instant.minute, instant.second) == (23, 59, 59)
-    for invalid in ({**fields, "balance_due_date": today.isoformat()},
-                    {**fields, "initial_send_date": ""},
-                    {**fields, "balance_send_date": ""}):
+    for invalid in (
+        {**fields, "balance_due_date": today.isoformat()},
+        {**fields, "initial_send_date": ""},
+        {**fields, "balance_send_date": ""},
+    ):
         with pytest.raises(ValueError):
             validate_schedule(invalid, "deposit", today=today)
-    stale = {**fields, "initial_send_mode": "manual", "initial_send_date": "not-a-date",
-             "balance_send_mode": "automatic", "balance_send_date": "not-a-date",
-             "balance_due_date": "not-a-date"}
+    stale = {
+        **fields,
+        "initial_send_mode": "manual",
+        "initial_send_date": "not-a-date",
+        "balance_send_mode": "automatic",
+        "balance_send_date": "not-a-date",
+        "balance_due_date": "not-a-date",
+    }
     saved = validate_schedule(stale, "full", today=today)
     assert saved["initial_send_date"] is None and saved["balance_send_date"] is None
     assert saved["balance_due_date"] is None and saved["balance_send_mode"] == "manual"
@@ -560,26 +755,41 @@ def test_dated_schedule_validation_and_eastern_due_time():
 
 @pytest.mark.asyncio
 async def test_approved_automatic_invoices_wait_for_dates_and_paid_deposit(monkeypatch):
-    from app import weddings
+
     today = eastern_today()
-    schedule = validate_schedule(dict(
-        initial_send_mode="automatic", initial_send_date=today.isoformat(),
-        initial_due_date=(today + timedelta(days=7)).isoformat(),
-        balance_send_mode="automatic", balance_send_date=(today + timedelta(days=10)).isoformat(),
-        balance_due_date=(today + timedelta(days=20)).isoformat()), "deposit")
+    schedule = validate_schedule(
+        dict(
+            initial_send_mode="automatic",
+            initial_send_date=today.isoformat(),
+            initial_due_date=(today + timedelta(days=7)).isoformat(),
+            balance_send_mode="automatic",
+            balance_send_date=(today + timedelta(days=10)).isoformat(),
+            balance_due_date=(today + timedelta(days=20)).isoformat(),
+        ),
+        "deposit",
+    )
     mock_stripe(monkeypatch, {"in_deposit": 3000, "in_balance": 3000})
     creates = []
+
     def create_invoice(**kwargs):
         creates.append(kwargs)
         return SimpleNamespace(id=f"in_{kwargs['metadata']['step']}")
+
     monkeypatch.setattr(stripe.Invoice, "create", create_invoice)
     snapshot, mode, deposit = validate_quote(form())
     async with session_scope() as db:
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add(inquiry)
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, draft=snapshot, snapshot={},
-                             payment_mode=mode, deposit_cents=deposit, activity=[], **schedule)
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id,
+            draft=snapshot,
+            snapshot={},
+            payment_mode=mode,
+            deposit_cents=deposit,
+            activity=[],
+            **schedule,
+        )
         db.add(quote)
         await db.commit()
         quote_id = quote.id
@@ -595,7 +805,8 @@ async def test_approved_automatic_invoices_wait_for_dates_and_paid_deposit(monke
     assert await run_wedding_schedule(apply=True) == []  # not the balance date yet
     monkeypatch.setattr(weddings, "eastern_today", lambda: today + timedelta(days=10))
     assert await run_wedding_schedule(apply=True, today=today + timedelta(days=10)) == [
-        f"Wedding quote #{quote_id}: sent balance invoice in_balance"]
+        f"Wedding quote #{quote_id}: sent balance invoice in_balance"
+    ]
     assert creates[1]["due_date"] == due_timestamp(today + timedelta(days=20))
     assert await run_wedding_schedule(apply=True, today=today + timedelta(days=10)) == []
 
@@ -612,15 +823,22 @@ async def test_admin_can_approve_a_dated_quote_without_sending_yet():
         await db.commit()
     await app.asgi_client.get("/admin/login")
     csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
-    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf))
+    await app.asgi_client.post(
+        "/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf)
+    )
     _, page = await app.asgi_client.get("/admin/weddings/1")
     assert page.status == 200 and "Send automatically on date" in page.text
     csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
-    _, saved = await app.asgi_client.post("/admin/weddings/1/save", data={
-        **form(mode="full"), "csrf_token": csrf, "initial_send_mode": "automatic",
-        "initial_send_date": (today + timedelta(days=2)).isoformat(),
-        "initial_due_date": (today + timedelta(days=9)).isoformat(),
-    })
+    _, saved = await app.asgi_client.post(
+        "/admin/weddings/1/save",
+        data={
+            **form(mode="full"),
+            "csrf_token": csrf,
+            "initial_send_mode": "automatic",
+            "initial_send_date": (today + timedelta(days=2)).isoformat(),
+            "initial_due_date": (today + timedelta(days=9)).isoformat(),
+        },
+    )
     assert saved.status == 302
     _, page = await app.asgi_client.get("/admin/weddings/1")
     assert "Approve and schedule first invoice" in page.text
@@ -645,13 +863,15 @@ async def test_admin_hides_irrelevant_payment_fields_and_builds_installments():
         await db.commit()
     await app.asgi_client.get("/admin/login")
     csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
-    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf))
+    await app.asgi_client.post(
+        "/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf)
+    )
     _, page = await app.asgi_client.get("/admin/weddings/1")
     assert page.status == 200
     assert 'data-payment-modes="deposit" hidden' in page.text
     assert 'id="add-quote-line"' in page.text
     assert 'id="rebalance-installment"' in page.text
-    assert 'data-payment-calculated' in page.text
+    assert "data-payment-calculated" in page.text
     assert 'id="name_1" type="text"' in page.text
     assert page.text.count('data-line-id="1"') == 1
     assert page.text.index('id="quote-lines"') < page.text.index('id="wpayment"')
@@ -707,31 +927,41 @@ async def test_invalid_installment_total_stays_in_admin_instead_of_raw_json():
         await db.commit()
     await app.asgi_client.get("/admin/login")
     csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
-    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf))
+    await app.asgi_client.post(
+        "/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf)
+    )
     await app.asgi_client.get("/admin/weddings/1")
     csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
     fields = {**installment_form(today), "installment_amount_3": "29.99", "csrf_token": csrf}
-    _, page = await app.asgi_client.post("/admin/weddings/1/save", data=fields,
-                                         headers={"accept": "text/html"})
+    _, page = await app.asgi_client.post("/admin/weddings/1/save", data=fields, headers={"accept": "text/html"})
     assert page.status == 400
     assert "Could not save this change" in page.text
     assert "Installments must total exactly $60.00." in page.text
     assert "Current payments total $59.99. Add $0.01 to the payments." in page.text
     assert "Return to form" in page.text
     assert '{"detail":' not in page.text
-    _, api = await app.asgi_client.post("/admin/weddings/1/save", data={**fields, "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE)},
-                                        headers={"accept": "application/json"})
+    _, api = await app.asgi_client.post(
+        "/admin/weddings/1/save",
+        data={**fields, "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE)},
+        headers={"accept": "application/json"},
+    )
     assert api.status == 400 and "Current payments total $59.99" in api.json["detail"]
     assert api.json["field"] == "installment_total"
     fields["installment_amount_3"] = "30.00"
     fields["installment_due_date_2"] = fields["installment_due_date_1"]
-    _, api = await app.asgi_client.post("/admin/weddings/1/save", data={**fields, "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE)},
-                                        headers={"accept": "application/json"})
+    _, api = await app.asgi_client.post(
+        "/admin/weddings/1/save",
+        data={**fields, "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE)},
+        headers={"accept": "application/json"},
+    )
     assert api.status == 400 and api.json["field"] == "installment_due_date_2"
     fields["installment_due_date_2"] = (today + timedelta(days=14)).isoformat()
     fields["price_1"] = "invalid"
-    _, api = await app.asgi_client.post("/admin/weddings/1/save", data={**fields, "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE)},
-                                        headers={"accept": "application/json"})
+    _, api = await app.asgi_client.post(
+        "/admin/weddings/1/save",
+        data={**fields, "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE)},
+        headers={"accept": "application/json"},
+    )
     assert api.status == 400 and api.json["field"] == "price_1"
 
 
@@ -746,26 +976,59 @@ async def test_booked_weddings_appear_on_dashboard_and_orders_without_becoming_p
         db.add_all([deposit_inquiry, unpaid_inquiry, installment_inquiry])
         await db.flush()
         snapshot = dict(title="Fall wedding", location="October 20, Barn", total_cents=5000)
-        deposit = WeddingQuote(inquiry_id=deposit_inquiry.id, status="deposit_paid", payment_mode="deposit",
-                               deposit_cents=1000, balance_due_date=today + timedelta(days=14),
-                               snapshot=snapshot, draft=snapshot, activity=[])
-        unpaid = WeddingQuote(inquiry_id=unpaid_inquiry.id, status="sent", payment_mode="deposit",
-                              deposit_cents=1000, snapshot=snapshot, draft=snapshot, activity=[])
-        installments = [dict(amount_cents=1000, send_mode="manual", due_date=(today + timedelta(days=7)).isoformat()),
-                        dict(amount_cents=4000, send_mode="automatic", send_date=(today + timedelta(days=8)).isoformat(),
-                             due_date=(today + timedelta(days=14)).isoformat())]
-        partial = WeddingQuote(inquiry_id=installment_inquiry.id, status="review", payment_mode="installments",
-                               installments=installments, snapshot=snapshot, draft=snapshot, activity=[])
+        deposit = WeddingQuote(
+            inquiry_id=deposit_inquiry.id,
+            status="deposit_paid",
+            payment_mode="deposit",
+            deposit_cents=1000,
+            balance_due_date=today + timedelta(days=14),
+            snapshot=snapshot,
+            draft=snapshot,
+            activity=[],
+        )
+        unpaid = WeddingQuote(
+            inquiry_id=unpaid_inquiry.id,
+            status="sent",
+            payment_mode="deposit",
+            deposit_cents=1000,
+            snapshot=snapshot,
+            draft=snapshot,
+            activity=[],
+        )
+        installments = [
+            dict(amount_cents=1000, send_mode="manual", due_date=(today + timedelta(days=7)).isoformat()),
+            dict(
+                amount_cents=4000,
+                send_mode="automatic",
+                send_date=(today + timedelta(days=8)).isoformat(),
+                due_date=(today + timedelta(days=14)).isoformat(),
+            ),
+        ]
+        partial = WeddingQuote(
+            inquiry_id=installment_inquiry.id,
+            status="review",
+            payment_mode="installments",
+            installments=installments,
+            snapshot=snapshot,
+            draft=snapshot,
+            activity=[],
+        )
         db.add_all([deposit, unpaid, partial])
         await db.flush()
-        db.add_all([WeddingInvoice(quote_id=deposit.id, step="deposit", status="paid", amount_cents=1000),
-                    WeddingInvoice(quote_id=unpaid.id, step="deposit", status="sent", amount_cents=1000),
-                    WeddingInvoice(quote_id=partial.id, step="part_01", status="paid", amount_cents=1000),
-                    WeddingInvoice(quote_id=partial.id, step="part_02", status="review", amount_cents=4000)])
+        db.add_all(
+            [
+                WeddingInvoice(quote_id=deposit.id, step="deposit", status="paid", amount_cents=1000),
+                WeddingInvoice(quote_id=unpaid.id, step="deposit", status="sent", amount_cents=1000),
+                WeddingInvoice(quote_id=partial.id, step="part_01", status="paid", amount_cents=1000),
+                WeddingInvoice(quote_id=partial.id, step="part_02", status="review", amount_cents=4000),
+            ]
+        )
         await db.commit()
     await app.asgi_client.get("/admin/login")
     csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
-    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf))
+    await app.asgi_client.post(
+        "/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=csrf)
+    )
     for url in ("/admin/", "/admin/orders"):
         _, page = await app.asgi_client.get(url)
         assert page.status == 200
@@ -791,7 +1054,9 @@ async def test_deposit_books_work_balance_creates_one_paid_order(monkeypatch):
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add(inquiry)
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, draft=snapshot, snapshot={}, payment_mode=mode, deposit_cents=deposit, activity=[])
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id, draft=snapshot, snapshot={}, payment_mode=mode, deposit_cents=deposit, activity=[]
+        )
         db.add(quote)
         await db.commit()
         quote_id = quote.id
@@ -829,7 +1094,9 @@ async def test_full_upfront_and_wedding_admin_gating(monkeypatch):
     assert anonymous.status == 302
     await app.asgi_client.get("/admin/login")
     token = app.asgi_client.cookies.get(CSRF_COOKIE)
-    await app.asgi_client.post("/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=token))
+    await app.asgi_client.post(
+        "/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=token)
+    )
     token = await app.asgi_client.get(f"/admin/weddings/from-inquiry/{inquiry_id}")
     csrf = app.asgi_client.cookies.get(CSRF_COOKIE)
     _, start = await app.asgi_client.post(f"/admin/weddings/from-inquiry/{inquiry_id}", data={"csrf_token": csrf})
@@ -854,21 +1121,47 @@ async def test_out_of_order_and_voided_deposit_never_book():
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
         db.add(inquiry)
         await db.flush()
-        quote = WeddingQuote(inquiry_id=inquiry.id, status="sent", draft=snapshot,
-                             snapshot=snapshot, payment_mode="deposit", deposit_cents=deposit, activity=[])
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id,
+            status="sent",
+            draft=snapshot,
+            snapshot=snapshot,
+            payment_mode="deposit",
+            deposit_cents=deposit,
+            activity=[],
+        )
         db.add(quote)
         await db.flush()
-        db.add(WeddingInvoice(quote_id=quote.id, step="deposit", status="sent", amount_cents=deposit,
-                              stripe_invoice_id="in_deposit"))
+        db.add(
+            WeddingInvoice(
+                quote_id=quote.id, step="deposit", status="sent", amount_cents=deposit, stripe_invoice_id="in_deposit"
+            )
+        )
         await db.commit()
         quote_id = quote.id
-    assert await apply_wedding_invoice_event(paid("in_deposit", 3000, "evt_bad_oob") | {
-        "data": {"object": {**paid("in_deposit", 3000, "evt_bad_oob")["data"]["object"], "paid_out_of_band": True}}
-    }) == "review"
-    assert await apply_wedding_invoice_event(dict(id="evt_void", type="invoice.voided",
-        data={"object": {"id": "in_deposit"}})) == "applied"
-    assert await apply_wedding_invoice_event(dict(id="evt_void_again", type="invoice.voided",
-        data={"object": {"id": "in_deposit"}})) == "ignored"
+    assert (
+        await apply_wedding_invoice_event(
+            paid("in_deposit", 3000, "evt_bad_oob")
+            | {
+                "data": {
+                    "object": {**paid("in_deposit", 3000, "evt_bad_oob")["data"]["object"], "paid_out_of_band": True}
+                }
+            }
+        )
+        == "review"
+    )
+    assert (
+        await apply_wedding_invoice_event(
+            dict(id="evt_void", type="invoice.voided", data={"object": {"id": "in_deposit"}})
+        )
+        == "applied"
+    )
+    assert (
+        await apply_wedding_invoice_event(
+            dict(id="evt_void_again", type="invoice.voided", data={"object": {"id": "in_deposit"}})
+        )
+        == "ignored"
+    )
     assert await apply_wedding_invoice_event(paid("in_deposit", 3000, "evt_late")) == "review"
     async with session_scope() as db:
         assert (await db.get(WeddingQuote, quote_id)).status == "void"
@@ -877,8 +1170,7 @@ async def test_out_of_order_and_voided_deposit_never_book():
 
 @pytest.mark.asyncio
 async def test_signed_webhook_routes_wedding_invoice_not_bouquet(monkeypatch):
-    from app import weddings
-    from app import proposals
+
     settings = get_settings()
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_mock")
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_mock")
@@ -889,19 +1181,25 @@ async def test_signed_webhook_routes_wedding_invoice_not_bouquet(monkeypatch):
         quote = WeddingQuote(inquiry_id=inquiry.id, status="sent", draft={}, snapshot={}, activity=[])
         db.add(quote)
         await db.flush()
-        db.add(WeddingInvoice(quote_id=quote.id, step="full", status="sent", amount_cents=1000,
-                              stripe_invoice_id="in_wedding_route"))
+        db.add(
+            WeddingInvoice(
+                quote_id=quote.id, step="full", status="sent", amount_cents=1000, stripe_invoice_id="in_wedding_route"
+            )
+        )
         await db.commit()
     event = dict(id="evt_route", type="invoice.paid", data={"object": {"id": "in_wedding_route"}})
     monkeypatch.setattr(stripe.Webhook, "construct_event", lambda *args: event)
     outcomes = []
+
     async def wedding_handler(value):
         outcomes.append("wedding")
         return "ignored"
+
     async def bouquet_handler(value):
         outcomes.append("bouquet")
         return "ignored"
-    monkeypatch.setattr(weddings, "apply_wedding_invoice_event", wedding_handler)
-    monkeypatch.setattr(proposals, "apply_invoice_event", bouquet_handler)
+
+    monkeypatch.setattr(checkout, "apply_wedding_invoice_event", wedding_handler)
+    monkeypatch.setattr(checkout, "apply_invoice_event", bouquet_handler)
     _, response = await app.asgi_client.post("/api/stripe/webhook/", data=b"signed")
     assert response.status == 200 and outcomes == ["wedding"]

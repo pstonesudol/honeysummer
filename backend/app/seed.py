@@ -31,6 +31,7 @@ async def _run(email: str, password: str) -> None:
 
 
 def main() -> None:
+    """Create or update the first operator account from the command line."""
     parser = argparse.ArgumentParser(description="Create or update a Honey Summer admin.")
     parser.add_argument("--email", required=True)
     parser.add_argument("--password", required=True)

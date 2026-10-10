@@ -3,8 +3,9 @@
 Revision ID: 751e841829ae
 Revises: b538d903ec41
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 revision = "751e841829ae"
 down_revision = "b538d903ec41"
@@ -13,7 +14,8 @@ depends_on = None
 
 
 def upgrade():
-    op.create_table("order_refunds",
+    op.create_table(
+        "order_refunds",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("order_id", sa.Integer(), sa.ForeignKey("orders.id"), nullable=False),
         sa.Column("amount_cents", sa.Integer(), nullable=False),

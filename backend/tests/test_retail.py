@@ -5,9 +5,8 @@ import pytest
 from sqlalchemy import select
 
 from app import emails
-from app.auth import hash_password
 from app.db import session_scope
-from app.models import FlowerListing, Order, OrderItem, User
+from app.models import FlowerListing, Order, OrderItem
 from app.server import app
 from app.settings import get_settings
 
@@ -160,9 +159,7 @@ async def test_retail_checkout_requires_contact_details(sent, stripe_off):
 async def test_retail_delivery_requires_an_address(sent, stripe_off):
     listing_id = await _add_listing()
 
-    _, response = await _checkout(
-        [{"id": listing_id, "quantity": 1}], fulfillment="delivery"
-    )
+    _, response = await _checkout([{"id": listing_id, "quantity": 1}], fulfillment="delivery")
 
     assert response.status == 400
 
@@ -247,9 +244,7 @@ async def test_configured_retail_checkout_returns_a_stripe_session(sent, stripe_
 
     assert response.status == 201
     assert response.json["checkout_url"] == "https://checkout.stripe.com/cs_test_9"
-    assert create.call_args.kwargs["success_url"] == (
-        get_settings().retail_checkout_success_url
-    )
+    assert create.call_args.kwargs["success_url"] == (get_settings().retail_checkout_success_url)
     async with session_scope() as session:
         order = await session.get(Order, response.json["order_id"])
     assert order.status == "pending"
@@ -257,9 +252,7 @@ async def test_configured_retail_checkout_returns_a_stripe_session(sent, stripe_
 
 
 @pytest.mark.asyncio
-async def test_stripe_checkout_includes_listing_thumbnail_and_description(
-    sent, stripe_on, monkeypatch
-):
+async def test_stripe_checkout_includes_listing_thumbnail_and_description(sent, stripe_on, monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(
         settings,
@@ -281,9 +274,7 @@ async def test_stripe_checkout_includes_listing_thumbnail_and_description(
     assert response.status == 201
     product_data = create.call_args.kwargs["line_items"][0]["price_data"]["product_data"]
     assert product_data["description"] == "Dahlia · Apricot · Seasonal mix"
-    assert product_data["images"] == [
-        "https://hellohoneysummer.com/media/flowers/bouquet.jpg"
-    ]
+    assert product_data["images"] == ["https://hellohoneysummer.com/media/flowers/bouquet.jpg"]
 
 
 @pytest.mark.asyncio
@@ -342,7 +333,15 @@ async def test_webhook_completes_a_guest_order_and_emails(sent, stripe_on):
     event = {
         "type": "checkout.session.completed",
         "id": "evt_paid_retail",
-        "data": {"object": {"id": "cs_seed_retail", "metadata": {"order_id": str(order_id)}, "currency": "usd", "amount_total": 6400, "payment_status": "paid"}},
+        "data": {
+            "object": {
+                "id": "cs_seed_retail",
+                "metadata": {"order_id": str(order_id)},
+                "currency": "usd",
+                "amount_total": 6400,
+                "payment_status": "paid",
+            }
+        },
     }
 
     with mock.patch("stripe.Webhook.construct_event", return_value=event):
@@ -370,7 +369,15 @@ async def test_webhook_email_includes_delivery_fee(sent, stripe_on):
     event = {
         "type": "checkout.session.completed",
         "id": "evt_paid_retail_delivery",
-        "data": {"object": {"id": "cs_seed_retail", "metadata": {"order_id": str(order_id)}, "currency": "usd", "amount_total": 7600, "payment_status": "paid"}},
+        "data": {
+            "object": {
+                "id": "cs_seed_retail",
+                "metadata": {"order_id": str(order_id)},
+                "currency": "usd",
+                "amount_total": 7600,
+                "payment_status": "paid",
+            }
+        },
     }
     with mock.patch("stripe.Webhook.construct_event", return_value=event):
         _, response = await app.asgi_client.post(

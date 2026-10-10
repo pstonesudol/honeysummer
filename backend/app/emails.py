@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
+import resend
+
 from .models import Inquiry
 from .settings import get_settings
 
@@ -25,8 +27,6 @@ def send_email(*, subject: str, body: str, to: str, reply_to: str | None = None)
     """Send one email through Resend, or log it when no key is configured."""
     settings = get_settings()
     if settings.resend_api_key:
-        import resend
-
         resend.api_key = settings.resend_api_key
         params: dict = {
             "from": settings.default_from_email,
@@ -99,10 +99,21 @@ def send_inquiry_emails(inquiry: Inquiry) -> dict:
     settings = get_settings()
     subject = f"Honey Summer — {KIND_LABELS.get(inquiry.kind, inquiry.kind)}"
     outcomes = {}
-    for recipient, params in (("farm", dict(subject=subject, body=_notification_body(inquiry),
-                                            to=settings.inquiry_notification_email, reply_to=inquiry.email)),
-                              ("customer", dict(subject="We received your note — Honey Summer",
-                                                body=_acknowledgement_body(inquiry), to=inquiry.email))):
+    for recipient, params in (
+        (
+            "farm",
+            dict(
+                subject=subject,
+                body=_notification_body(inquiry),
+                to=settings.inquiry_notification_email,
+                reply_to=inquiry.email,
+            ),
+        ),
+        (
+            "customer",
+            dict(subject="We received your note — Honey Summer", body=_acknowledgement_body(inquiry), to=inquiry.email),
+        ),
+    ):
         try:
             send_email(**params)
             outcomes[recipient] = "accepted" if settings.resend_api_key else "logged locally"
@@ -167,9 +178,7 @@ def send_order_emails(
     label = ORDER_LABELS.get(channel, "order")
     reference = order_reference or f"HS{order_id:06d}"
     lines = [f"Thank you for your Honey Summer {label} {reference}.", ""]
-    lines.extend(
-        f"{item['quantity']} × {item['name']} (${item['price']} each)" for item in items
-    )
+    lines.extend(f"{item['quantity']} × {item['name']} (${item['price']} each)" for item in items)
     lines.extend(["", f"Fulfillment: {FULFILLMENT_LABELS.get(fulfillment, fulfillment)}"])
     if pickup_window:
         lines.append(f"Pickup window: {pickup_window}")
@@ -178,23 +187,26 @@ def send_order_emails(
     try:
         if delivery_fee and float(delivery_fee) > 0:
             lines.append(f"Delivery fee: ${float(delivery_fee):.2f}")
-    except (TypeError, ValueError):  # pragma: no cover - defensive
+    except TypeError, ValueError:  # pragma: no cover - defensive
         pass
     body = (
-        "\n".join(lines)
-        + "\n\nIsabella will be in touch with final pickup or delivery details."
+        "\n".join(lines) + "\n\nIsabella will be in touch with final pickup or delivery details."
         "\n\nWith warmth,\nHoney Summer"
     )
     try:
         if recipient in (None, "customer"):
             send_email(
-                subject=f"Honey Summer {label} {reference}", body=body,
-                to=customer_email, reply_to=settings.inquiry_notification_email,
+                subject=f"Honey Summer {label} {reference}",
+                body=body,
+                to=customer_email,
+                reply_to=settings.inquiry_notification_email,
             )
         if recipient in (None, "farm"):
             send_email(
-                subject=f"New Honey Summer {label} {reference}", body=body,
-                to=settings.inquiry_notification_email, reply_to=customer_email,
+                subject=f"New Honey Summer {label} {reference}",
+                body=body,
+                to=settings.inquiry_notification_email,
+                reply_to=customer_email,
             )
     except Exception:  # pragma: no cover - defensive
         logger.exception("Unable to send order emails for order %s", order_id)

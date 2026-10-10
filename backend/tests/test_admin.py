@@ -1,4 +1,7 @@
+from datetime import datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import select
@@ -8,8 +11,14 @@ from app.admin import CSRF_COOKIE
 from app.auth import hash_password
 from app.db import session_scope
 from app.models import (
-    Announcement, FlowerListing, FloristProfile, Inquiry, InventoryMovement, Order,
-    OrderItem, User,
+    Announcement,
+    FloristProfile,
+    FlowerListing,
+    Inquiry,
+    InventoryMovement,
+    Order,
+    OrderItem,
+    User,
 )
 from app.server import app
 from app.settings import get_settings
@@ -33,9 +42,7 @@ async def _make_admin(email: str = ADMIN_EMAIL, is_admin: bool = True) -> None:
 async def _login(email: str = ADMIN_EMAIL, password: str = ADMIN_PASSWORD):
     await app.asgi_client.get("/admin/login")
     token = app.asgi_client.cookies.get(CSRF_COOKIE)
-    return await app.asgi_client.post(
-        "/admin/login", data={"email": email, "password": password, "csrf_token": token}
-    )
+    return await app.asgi_client.post("/admin/login", data={"email": email, "password": password, "csrf_token": token})
 
 
 async def _csrf(path: str) -> str:
@@ -196,9 +203,7 @@ async def test_delete_without_csrf_is_rejected():
         announcement_id = announcement.id
     await _login()
 
-    _, response = await app.asgi_client.post(
-        f"/admin/announcements/{announcement_id}/delete", data={}
-    )
+    _, response = await app.asgi_client.post(f"/admin/announcements/{announcement_id}/delete", data={})
 
     assert response.status == 403
     async with session_scope() as session:
@@ -219,9 +224,7 @@ async def test_admin_can_delete_listing_without_order_or_inventory_history():
     assert f"FL-{listing_id:04d}" in listing_page.text
     token = await _csrf("/admin/flowers")
 
-    _, response = await app.asgi_client.post(
-        f"/admin/flowers/{listing_id}/delete", data={"csrf_token": token}
-    )
+    _, response = await app.asgi_client.post(f"/admin/flowers/{listing_id}/delete", data={"csrf_token": token})
 
     assert response.status == 302
     async with session_scope() as session:
@@ -237,8 +240,12 @@ async def test_admin_cannot_delete_listing_with_inventory_history():
         await session.flush()
         session.add(
             InventoryMovement(
-                listing_id=listing.id, kind="opening", delta=0, units=0,
-                reason="Initial stock", source="admin",
+                listing_id=listing.id,
+                kind="opening",
+                delta=0,
+                units=0,
+                reason="Initial stock",
+                source="admin",
             )
         )
         await session.commit()
@@ -246,9 +253,7 @@ async def test_admin_cannot_delete_listing_with_inventory_history():
     await _login()
     token = await _csrf("/admin/flowers")
 
-    _, response = await app.asgi_client.post(
-        f"/admin/flowers/{listing_id}/delete", data={"csrf_token": token}
-    )
+    _, response = await app.asgi_client.post(f"/admin/flowers/{listing_id}/delete", data={"csrf_token": token})
 
     assert response.status == 409
     async with session_scope() as session:
@@ -260,9 +265,7 @@ async def test_form_post_without_csrf_is_rejected():
     await _make_admin()
     await _login()
 
-    _, response = await app.asgi_client.post(
-        "/admin/announcements/new", data={"text": "Nope"}
-    )
+    _, response = await app.asgi_client.post("/admin/announcements/new", data={"text": "Nope"})
 
     assert response.status == 403
     async with session_scope() as session:
@@ -286,9 +289,7 @@ async def test_approve_florist_action(monkeypatch):
     await _login()
     token = await _csrf("/admin/florists")
 
-    _, response = await app.asgi_client.post(
-        f"/admin/florists/{profile_id}/action/approve", data={"csrf_token": token}
-    )
+    _, response = await app.asgi_client.post(f"/admin/florists/{profile_id}/action/approve", data={"csrf_token": token})
 
     assert response.status == 302
     async with session_scope() as session:
@@ -299,9 +300,7 @@ async def test_approve_florist_action(monkeypatch):
     assert "approved" in sent[0]["subject"]
 
     token = await _csrf("/admin/florists")
-    await app.asgi_client.post(
-        f"/admin/florists/{profile_id}/action/approve", data={"csrf_token": token}
-    )
+    await app.asgi_client.post(f"/admin/florists/{profile_id}/action/approve", data={"csrf_token": token})
     assert len(sent) == 1
 
 
@@ -331,9 +330,7 @@ async def test_cancel_order_action_releases_stock(monkeypatch):
     await _login()
     token = await _csrf("/admin/orders")
 
-    _, response = await app.asgi_client.post(
-        f"/admin/orders/{order_id}/action/cancel", data={"csrf_token": token}
-    )
+    _, response = await app.asgi_client.post(f"/admin/orders/{order_id}/action/cancel", data={"csrf_token": token})
 
     assert response.status == 302
     async with session_scope() as session:
@@ -397,13 +394,15 @@ async def test_orders_list_renders_guest_orders_and_channel():
         )
         session.add(order)
         await session.flush()
-        session.add(OrderItem(
-            order_id=order.id,
-            listing_id=1,
-            name_snapshot="Peony bunch",
-            price_snapshot=Decimal("12.50"),
-            quantity=3,
-        ))
+        session.add(
+            OrderItem(
+                order_id=order.id,
+                listing_id=1,
+                name_snapshot="Peony bunch",
+                price_snapshot=Decimal("12.50"),
+                quantity=3,
+            )
+        )
         await session.commit()
         order_id = order.id
     await _login()
@@ -430,17 +429,30 @@ async def test_fulfillment_schedule_dashboard_and_packing_slip():
         order = Order(status="paid", channel="retail", customer_name="June", customer_email="june@example.com")
         session.add_all([listing, order])
         await session.flush()
-        session.add(OrderItem(order_id=order.id, listing_id=listing.id, name_snapshot="Peonies", price_snapshot=Decimal("8.00"), quantity=2))
+        session.add(
+            OrderItem(
+                order_id=order.id,
+                listing_id=listing.id,
+                name_snapshot="Peonies",
+                price_snapshot=Decimal("8.00"),
+                quantity=2,
+            )
+        )
         await session.commit()
         order_id = order.id
     await _login()
     _, dashboard = await app.asgi_client.get("/admin/")
     assert "Peonies" in dashboard.text
     token = await _csrf(f"/admin/orders/{order_id}")
-    from datetime import datetime, timedelta
-    from zoneinfo import ZoneInfo
+
     day = (datetime.now(ZoneInfo("America/New_York")) + timedelta(days=1)).date().isoformat()
-    form = dict(csrf_token=token, fulfillment_date=day, fulfillment_time="09:30", fulfillment_state="ready", internal_notes="Bring twine")
+    form = dict(
+        csrf_token=token,
+        fulfillment_date=day,
+        fulfillment_time="09:30",
+        fulfillment_state="ready",
+        internal_notes="Bring twine",
+    )
     _, saved = await app.asgi_client.post(f"/admin/orders/{order_id}/fulfillment", data=form)
     assert saved.status == 302
     _, dashboard = await app.asgi_client.get("/admin/")
@@ -477,7 +489,9 @@ async def test_unpaid_fulfillment_and_invalid_schedule_are_rejected():
     await _login()
     token = await _csrf(f"/admin/orders/{order_id}")
     path = f"/admin/orders/{order_id}/fulfillment"
-    _, invalid = await app.asgi_client.post(path, data={"csrf_token": token, "fulfillment_date": "2026-20-80", "fulfillment_state": "ready"})
+    _, invalid = await app.asgi_client.post(
+        path, data={"csrf_token": token, "fulfillment_date": "2026-20-80", "fulfillment_state": "ready"}
+    )
     assert invalid.status == 400
     _, unpaid = await app.asgi_client.post(path, data={"csrf_token": token, "fulfillment_state": "ready"})
     assert unpaid.status == 409
@@ -487,21 +501,35 @@ async def test_unpaid_fulfillment_and_invalid_schedule_are_rejected():
 
 @pytest.mark.asyncio
 async def test_manual_paid_order_stock_custom_lines_and_idempotency(monkeypatch):
-    from uuid import uuid4
+
     monkeypatch.setattr(emails, "send_email", lambda **kwargs: None)
     await _make_admin()
     async with session_scope() as db:
-        flower = FlowerListing(name="Ranunculus", price=Decimal("3.00"), quantity_available=4,
-                               delivery_fee=Decimal("2.00"), channel="both")
+        flower = FlowerListing(
+            name="Ranunculus", price=Decimal("3.00"), quantity_available=4, delivery_fee=Decimal("2.00"), channel="both"
+        )
         db.add(flower)
         await db.commit()
         flower_id = flower.id
     await _login()
     token = await _csrf("/admin/orders/manual/new")
-    form = dict(csrf_token=token, manual_key=str(uuid4()), customer_name="Ada", customer_email="ada@example.com",
-                fulfillment="delivery", delivery_address="123 Main St", payment_method="external",
-                payment_reference="pi_dashboard_123", payment_confirmed="on", amount_collected="18.00",
-                listing_1=str(flower_id), quantity_1="2", name_2="Custom bouquet", quantity_2="1", price_2="10.00")
+    form = dict(
+        csrf_token=token,
+        manual_key=str(uuid4()),
+        customer_name="Ada",
+        customer_email="ada@example.com",
+        fulfillment="delivery",
+        delivery_address="123 Main St",
+        payment_method="external",
+        payment_reference="pi_dashboard_123",
+        payment_confirmed="on",
+        amount_collected="18.00",
+        listing_1=str(flower_id),
+        quantity_1="2",
+        name_2="Custom bouquet",
+        quantity_2="1",
+        price_2="10.00",
+    )
     path = "/admin/orders/manual/new"
     _, wrong_total = await app.asgi_client.post(path, data={**form, "amount_collected": "12.00"})
     assert wrong_total.status == 400
@@ -526,7 +554,7 @@ async def test_manual_paid_order_stock_custom_lines_and_idempotency(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_manual_order_rejects_short_stock_without_order():
-    from uuid import uuid4
+
     await _make_admin()
     async with session_scope() as db:
         flower = FlowerListing(name="Dahlia", price=Decimal("3.00"), quantity_available=1)
@@ -535,10 +563,21 @@ async def test_manual_order_rejects_short_stock_without_order():
         flower_id = flower.id
     await _login()
     token = await _csrf("/admin/orders/manual/new")
-    _, response = await app.asgi_client.post("/admin/orders/manual/new", data=dict(
-        csrf_token=token, manual_key=str(uuid4()), customer_name="Ada", customer_email="ada@example.com",
-        fulfillment="pickup", payment_method="cash", payment_confirmed="on", amount_collected="6.00",
-        listing_1=str(flower_id), quantity_1="2"))
+    _, response = await app.asgi_client.post(
+        "/admin/orders/manual/new",
+        data=dict(
+            csrf_token=token,
+            manual_key=str(uuid4()),
+            customer_name="Ada",
+            customer_email="ada@example.com",
+            fulfillment="pickup",
+            payment_method="cash",
+            payment_confirmed="on",
+            amount_collected="6.00",
+            listing_1=str(flower_id),
+            quantity_1="2",
+        ),
+    )
     assert response.status == 400
     async with session_scope() as db:
         assert (await db.scalars(select(Order))).all() == []
@@ -549,12 +588,21 @@ async def test_manual_order_rejects_short_stock_without_order():
 async def test_sales_ledger_includes_manual_and_protects_csv_cells():
     await _make_admin()
     async with session_scope() as db:
-        order = Order(status="paid", customer_name="=HYPERLINK(foo)", customer_email="x@example.com",
-                      payment_method="cash", payment_reference="+unsafe", channel="retail")
+        order = Order(
+            status="paid",
+            customer_name="=HYPERLINK(foo)",
+            customer_email="x@example.com",
+            payment_method="cash",
+            payment_reference="+unsafe",
+            channel="retail",
+        )
         db.add(order)
         await db.flush()
-        db.add(OrderItem(order_id=order.id, listing_id=None, name_snapshot="Bouquet",
-                         quantity=1, price_snapshot=Decimal("20.00")))
+        db.add(
+            OrderItem(
+                order_id=order.id, listing_id=None, name_snapshot="Bouquet", quantity=1, price_snapshot=Decimal("20.00")
+            )
+        )
         await db.commit()
     await _login()
     _, page = await app.asgi_client.get("/admin/reports/sales")
@@ -580,12 +628,15 @@ async def test_bulk_restock_and_physical_count_keep_audit_trail():
     _, overview = await app.asgi_client.get("/admin/inventory/stock")
     assert overview.status == 200 and "Zinnia" in overview.text
     token = app.asgi_client.cookies.get(CSRF_COOKIE)
-    _, restocked = await app.asgi_client.post("/admin/inventory/bulk-restock", data=dict(
-        csrf_token=token, source="Harvest 42", reason="Garden", listing_1=str(flower_id), units_1="3"))
+    _, restocked = await app.asgi_client.post(
+        "/admin/inventory/bulk-restock",
+        data=dict(csrf_token=token, source="Harvest 42", reason="Garden", listing_1=str(flower_id), units_1="3"),
+    )
     assert restocked.status == 302
     token = await _csrf(f"/admin/flowers/{flower_id}/inventory")
-    _, counted = await app.asgi_client.post(f"/admin/flowers/{flower_id}/count", data=dict(
-        csrf_token=token, on_hand="4", reason="Weekly count"))
+    _, counted = await app.asgi_client.post(
+        f"/admin/flowers/{flower_id}/count", data=dict(csrf_token=token, on_hand="4", reason="Weekly count")
+    )
     assert counted.status == 302
     async with session_scope() as db:
         flower = await db.get(FlowerListing, flower_id)
@@ -615,14 +666,20 @@ async def test_inquiry_followup_and_customer_history():
         inquiry_id = inquiry.id
     await _login()
     token = await _csrf(f"/admin/inquiries/{inquiry_id}")
-    _, recorded = await app.asgi_client.post(f"/admin/inquiries/{inquiry_id}/correspondence", data=dict(
-        csrf_token=token, direction="received", subject="Wedding date", summary="Client confirmed October 12."))
+    _, recorded = await app.asgi_client.post(
+        f"/admin/inquiries/{inquiry_id}/correspondence",
+        data=dict(
+            csrf_token=token, direction="received", subject="Wedding date", summary="Client confirmed October 12."
+        ),
+    )
     assert recorded.status == 302
     _, inquiry_page = await app.asgi_client.get(f"/admin/inquiries/{inquiry_id}")
     assert inquiry_page.status == 200 and "Client confirmed October 12." in inquiry_page.text
     token = await _csrf(f"/admin/inquiries/{inquiry_id}")
-    _, saved = await app.asgi_client.post(f"/admin/inquiries/{inquiry_id}/follow-up", data=dict(
-        csrf_token=token, stage="contacted", follow_up_date="2026-10-15", internal_notes="Send quote"))
+    _, saved = await app.asgi_client.post(
+        f"/admin/inquiries/{inquiry_id}/follow-up",
+        data=dict(csrf_token=token, stage="contacted", follow_up_date="2026-10-15", internal_notes="Send quote"),
+    )
     assert saved.status == 302
     _, history = await app.asgi_client.get("/admin/customers?email=ava@example.com")
     assert history.status == 200 and "Wedding flowers" not in history.text
@@ -631,8 +688,9 @@ async def test_inquiry_followup_and_customer_history():
         inquiry = await db.get(Inquiry, inquiry_id)
     assert inquiry.stage == "contacted" and not inquiry.handled
     token = await _csrf(f"/admin/inquiries/{inquiry_id}")
-    _, closed = await app.asgi_client.post(f"/admin/inquiries/{inquiry_id}/follow-up", data=dict(
-        csrf_token=token, stage="closed", internal_notes="Done"))
+    _, closed = await app.asgi_client.post(
+        f"/admin/inquiries/{inquiry_id}/follow-up", data=dict(csrf_token=token, stage="closed", internal_notes="Done")
+    )
     assert closed.status == 302
     async with session_scope() as db:
         assert (await db.get(Inquiry, inquiry_id)).handled is True
@@ -648,8 +706,10 @@ async def test_duplicate_listing_does_not_copy_stock_and_bulk_price_updates():
         flower_id = flower.id
     await _login()
     token = await _csrf("/admin/flowers")
-    _, seasonal = await app.asgi_client.post("/admin/flowers/bulk-update", data=dict(
-        csrf_token=token, listing_ids=str(flower_id), action="season", value="fall"))
+    _, seasonal = await app.asgi_client.post(
+        "/admin/flowers/bulk-update",
+        data=dict(csrf_token=token, listing_ids=str(flower_id), action="season", value="fall"),
+    )
     assert seasonal.status == 302
     _, filtered = await app.asgi_client.get("/admin/flowers?season=fall")
     assert filtered.status == 200 and "Anemone" in filtered.text
@@ -663,8 +723,10 @@ async def test_duplicate_listing_does_not_copy_stock_and_bulk_price_updates():
         assert clone.quantity_available == 0 and clone.active is False
         clone_id = clone.id
     token = await _csrf("/admin/flowers")
-    _, updated = await app.asgi_client.post("/admin/flowers/bulk-update", data=dict(
-        csrf_token=token, listing_ids=f"{flower_id}, {clone_id}", action="price", value="5.25"))
+    _, updated = await app.asgi_client.post(
+        "/admin/flowers/bulk-update",
+        data=dict(csrf_token=token, listing_ids=f"{flower_id}, {clone_id}", action="price", value="5.25"),
+    )
     assert updated.status == 302
     async with session_scope() as db:
         assert (await db.get(FlowerListing, flower_id)).price == Decimal("5.25")

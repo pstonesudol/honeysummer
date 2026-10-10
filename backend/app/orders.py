@@ -8,8 +8,8 @@ are guest checkouts that carry their own contact details.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -45,15 +45,16 @@ async def change_stock(
     preexisting listings; the opening entry also covers newly-created listings.
     """
     existing = await session.scalar(
-        select(InventoryMovement.id)
-        .where(InventoryMovement.listing_id == listing.id)
-        .limit(1)
+        select(InventoryMovement.id).where(InventoryMovement.listing_id == listing.id).limit(1)
     )
     if existing is None:
         session.add(
             InventoryMovement(
-                listing_id=listing.id, kind="opening", delta=listing.quantity_available,
-                units=listing.quantity_available, reason="Initial available balance",
+                listing_id=listing.id,
+                kind="opening",
+                delta=listing.quantity_available,
+                units=listing.quantity_available,
+                reason="Initial available balance",
                 source="system",
             )
         )
@@ -65,8 +66,14 @@ async def change_stock(
     listing.quantity_available += delta
     session.add(
         InventoryMovement(
-            listing_id=listing.id, order_id=order_id, actor_id=actor_id,
-            kind=kind, delta=delta, units=units, reason=reason, source=source,
+            listing_id=listing.id,
+            order_id=order_id,
+            actor_id=actor_id,
+            kind=kind,
+            delta=delta,
+            units=units,
+            reason=reason,
+            source=source,
         )
     )
 
@@ -87,7 +94,7 @@ def _cart(items: list[dict]) -> dict[int, int]:
             cart[listing_id] = cart.get(listing_id, 0) + quantity
             if cart[listing_id] > 9999:
                 raise ValueError
-    except (TypeError, KeyError, ValueError, AttributeError):
+    except TypeError, KeyError, ValueError, AttributeError:
         raise StockError("Enter valid item IDs and quantities.") from None
     return dict(sorted(cart.items()))
 
@@ -127,7 +134,7 @@ async def reserve_order(
         pickup_window=pickup_window,
         delivery_address=delivery_address,
         notes=notes,
-        hold_expires_at=datetime.now(timezone.utc) + timedelta(minutes=hold_minutes),
+        hold_expires_at=datetime.now(UTC) + timedelta(minutes=hold_minutes),
     )
     session.add(order)
     await session.flush()
@@ -139,11 +146,7 @@ async def reserve_order(
 
     for listing_id, quantity in cart.items():
         listing = (
-            await session.execute(
-                select(FlowerListing)
-                .where(FlowerListing.id == listing_id)
-                .with_for_update()
-            )
+            await session.execute(select(FlowerListing).where(FlowerListing.id == listing_id).with_for_update())
         ).scalar_one_or_none()
         if (
             listing is None
@@ -158,8 +161,13 @@ async def reserve_order(
                 else "That flower is no longer available."
             )
         await change_stock(
-            session, listing, -quantity, kind="reserve", units=quantity,
-            order_id=order_id, source="checkout",
+            session,
+            listing,
+            -quantity,
+            kind="reserve",
+            units=quantity,
+            order_id=order_id,
+            source="checkout",
         )
         if fulfillment == "delivery":
             fee = listing.delivery_fee or Decimal("0")
@@ -204,8 +212,14 @@ async def release_order(session, order: Order) -> None:
             select(FlowerListing).where(FlowerListing.id == item.listing_id).with_for_update()
         )
         await change_stock(
-            session, listing, item.quantity, kind="release", units=item.quantity,
-            order_id=order.id, source="order", reason="Unpaid reservation released",
+            session,
+            listing,
+            item.quantity,
+            kind="release",
+            units=item.quantity,
+            order_id=order.id,
+            source="order",
+            reason="Unpaid reservation released",
         )
 
 
@@ -216,27 +230,33 @@ async def settle_order(session, order: Order) -> None:
             select(FlowerListing).where(FlowerListing.id == item.listing_id).with_for_update()
         )
         await change_stock(
-            session, listing, 0, kind="sale", units=item.quantity,
-            order_id=order.id, source="stripe", reason="Reservation converted to sale",
+            session,
+            listing,
+            0,
+            kind="sale",
+            units=item.quantity,
+            order_id=order.id,
+            source="stripe",
+            reason="Reservation converted to sale",
         )
     order.status = "paid"
-    session.add_all([
-        OrderNotification(order_id=order.id, recipient="customer"),
-        OrderNotification(order_id=order.id, recipient="farm"),
-    ])
+    session.add_all(
+        [
+            OrderNotification(order_id=order.id, recipient="customer"),
+            OrderNotification(order_id=order.id, recipient="farm"),
+        ]
+    )
 
 
 async def load_order(session, order_id: int, *, for_update: bool = False) -> Order | None:
-    query = (
-        select(Order)
-        .options(selectinload(Order.items), selectinload(Order.customer))
-        .where(Order.id == order_id)
-    )
+    """Load an order with its items and customer, optionally row-locked."""
+    query = select(Order).options(selectinload(Order.items), selectinload(Order.customer)).where(Order.id == order_id)
     result = await session.execute(query.with_for_update() if for_update else query)
     return result.scalar_one_or_none()
 
 
 def items_context(order: Order) -> list[dict]:
+    """Build an email-friendly item summary for an order."""
     return [
         {
             "name": item.name_snapshot,

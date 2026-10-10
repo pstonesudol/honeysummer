@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app import emails
 from app.auth import hash_password
 from app.db import session_scope
-from app.models import FlowerListing, FloristProfile, Order, OrderItem, User
+from app.models import FloristProfile, FlowerListing, Order, OrderItem, User
 from app.server import app
 from app.settings import get_settings
 
@@ -36,19 +36,13 @@ def stripe_on(monkeypatch):
 
 async def _make_user(email: str = "florist@example.com", approved: bool = True) -> None:
     async with session_scope() as session:
-        user = User(
-            email=email, password_hash=hash_password("flowers-are-nice"), is_active=True
-        )
-        session.add(
-            FloristProfile(business_name="Fern & Fig", approved=approved, user=user)
-        )
+        user = User(email=email, password_hash=hash_password("flowers-are-nice"), is_active=True)
+        session.add(FloristProfile(business_name="Fern & Fig", approved=approved, user=user))
         await session.commit()
 
 
 async def _login(email: str = "florist@example.com") -> None:
-    await app.asgi_client.post(
-        "/api/auth/login/", json={"email": email, "password": "flowers-are-nice"}
-    )
+    await app.asgi_client.post("/api/auth/login/", json={"email": email, "password": "flowers-are-nice"})
 
 
 async def _add_listing(
@@ -73,9 +67,7 @@ async def _add_listing(
 
 
 async def _checkout(items: list[dict], **extra):
-    return await app.asgi_client.post(
-        "/api/checkout/", json={"items": items, **extra}
-    )
+    return await app.asgi_client.post("/api/checkout/", json={"items": items, **extra})
 
 
 @pytest.mark.asyncio
@@ -88,10 +80,14 @@ async def test_live_checkout_requires_webhook_signing_secret(monkeypatch):
     listing_id = await _add_listing()
     monkeypatch.setattr(settings, "debug", False)
     _, wholesale = await _checkout([{"id": listing_id, "quantity": 1}])
-    _, retail = await app.asgi_client.post("/api/retail/checkout/", json={
-        "items": [{"id": listing_id, "quantity": 1}],
-        "name": "Customer", "email": "customer@example.com",
-    })
+    _, retail = await app.asgi_client.post(
+        "/api/retail/checkout/",
+        json={
+            "items": [{"id": listing_id, "quantity": 1}],
+            "name": "Customer",
+            "email": "customer@example.com",
+        },
+    )
     assert wholesale.status == retail.status == 503
     async with session_scope() as session:
         assert (await session.scalars(select(Order))).all() == []
@@ -201,9 +197,7 @@ async def test_configured_checkout_returns_a_stripe_session_url(sent, stripe_on)
 @pytest.mark.asyncio
 async def test_wholesale_delivery_uses_listing_fees_in_stripe_not_client_amount(sent, stripe_on):
     await _make_user()
-    listing_id = await _add_listing(
-        quantity=5, delivery_fee="7.50", delivery_fee_mode="per_unit"
-    )
+    listing_id = await _add_listing(quantity=5, delivery_fee="7.50", delivery_fee_mode="per_unit")
     await _login()
     stripe_session = mock.Mock(id="cs_delivery", url="https://checkout.stripe.com/cs_delivery")
 
@@ -345,7 +339,15 @@ async def test_webhook_completed_marks_paid_and_emails_both(sent, stripe_on):
         {
             "type": "checkout.session.completed",
             "id": "evt_paid_wholesale",
-            "data": {"object": {"id": "cs_seed", "metadata": {"order_id": str(order_id)}, "currency": "usd", "amount_total": 500, "payment_status": "paid"}},
+            "data": {
+                "object": {
+                    "id": "cs_seed",
+                    "metadata": {"order_id": str(order_id)},
+                    "currency": "usd",
+                    "amount_total": 500,
+                    "payment_status": "paid",
+                }
+            },
         }
     )
 

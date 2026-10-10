@@ -1,5 +1,4 @@
 import pytest
-from sqlalchemy import select
 
 from app.db import session_scope
 from app.models import Announcement, GalleryImage

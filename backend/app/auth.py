@@ -6,8 +6,6 @@ they work across workers); passwords are hashed with Argon2.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -25,13 +23,15 @@ _hasher = PasswordHasher()
 
 
 def hash_password(password: str) -> str:
+    """Hash a plaintext password with Argon2."""
     return _hasher.hash(password)
 
 
 def verify_password(password_hash: str, password: str) -> bool:
+    """Check a plaintext password against its stored Argon2 hash."""
     try:
         return _hasher.verify(password_hash, password)
-    except (VerifyMismatchError, VerificationError, InvalidHashError):
+    except VerifyMismatchError, VerificationError, InvalidHashError:
         return False
 
 
@@ -40,19 +40,22 @@ def _serializer() -> URLSafeTimedSerializer:
 
 
 def create_session_token(user_id: int) -> str:
+    """Sign a session token holding only the user id."""
     return _serializer().dumps({"uid": user_id})
 
 
-def read_session_token(token: str) -> Optional[int]:
+def read_session_token(token: str) -> int | None:
+    """Return the user id from a valid, unexpired session token."""
     try:
         data = _serializer().loads(token, max_age=SESSION_MAX_AGE)
-    except (BadSignature, SignatureExpired):
+    except BadSignature, SignatureExpired:
         return None
     uid = data.get("uid") if isinstance(data, dict) else None
     return uid if isinstance(uid, int) else None
 
 
-async def get_current_user(request) -> Optional[User]:
+async def get_current_user(request) -> User | None:
+    """Load the signed-in user from the request cookie, if any."""
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         return None
@@ -60,13 +63,12 @@ async def get_current_user(request) -> Optional[User]:
     if uid is None:
         return None
     async with session_scope() as session:
-        result = await session.execute(
-            select(User).options(selectinload(User.profile)).where(User.id == uid)
-        )
+        result = await session.execute(select(User).options(selectinload(User.profile)).where(User.id == uid))
         return result.scalar_one_or_none()
 
 
-def user_payload(user: Optional[User]) -> dict:
+def user_payload(user: User | None) -> dict:
+    """Build the public authentication payload for a user."""
     profile = user.profile if user else None
     return {
         "authenticated": bool(user),

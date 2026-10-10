@@ -23,8 +23,10 @@ async def test_postgres_concurrent_checkout_and_adjustment_do_not_oversell():
     try:
         async with maker() as db:
             listing = FlowerListing(
-                name="Postgres concurrency test", price=Decimal("1.00"),
-                channel="both", quantity_available=1,
+                name="Postgres concurrency test",
+                price=Decimal("1.00"),
+                channel="both",
+                quantity_available=1,
             )
             db.add(listing)
             await db.commit()
@@ -34,30 +36,35 @@ async def test_postgres_concurrent_checkout_and_adjustment_do_not_oversell():
             try:
                 async with maker() as db:
                     await reserve_order(
-                        db, items=[{"id": listing_id, "quantity": 1}], channel=channel,
+                        db,
+                        items=[{"id": listing_id, "quantity": 1}],
+                        channel=channel,
                         customer_name="Buyer" if channel == "retail" else "",
                     )
                 return "reserved"
             except StockError:
                 return "sold out"
 
-        assert sorted(await asyncio.wait_for(
-            asyncio.gather(checkout("retail"), checkout("wholesale")), timeout=10
-        )) == ["reserved", "sold out"]
+        assert sorted(
+            await asyncio.wait_for(asyncio.gather(checkout("retail"), checkout("wholesale")), timeout=10)
+        ) == ["reserved", "sold out"]
         async with maker() as db:
             listing = await db.get(FlowerListing, listing_id)
             assert listing.quantity_available == 0
             assert await db.scalar(select(func.count()).select_from(Order).where(Order.status == "pending")) == 1
-            assert await db.scalar(select(func.sum(InventoryMovement.delta)).where(
-                InventoryMovement.listing_id == listing_id
-            )) == 0
+            assert (
+                await db.scalar(
+                    select(func.sum(InventoryMovement.delta)).where(InventoryMovement.listing_id == listing_id)
+                )
+                == 0
+            )
 
         async def adjust():
             try:
                 async with maker() as db:
-                    locked = await db.scalar(select(FlowerListing).where(
-                        FlowerListing.id == listing_id
-                    ).with_for_update())
+                    locked = await db.scalar(
+                        select(FlowerListing).where(FlowerListing.id == listing_id).with_for_update()
+                    )
                     await change_stock(db, locked, -1, kind="waste", units=1, reason="Test", source="test")
                     await db.commit()
                 return "adjusted"
@@ -67,8 +74,10 @@ async def test_postgres_concurrent_checkout_and_adjustment_do_not_oversell():
         assert await adjust() == "sold out"
         async with maker() as db:
             second = FlowerListing(
-                name="Checkout vs adjustment", price=Decimal("1.00"),
-                channel="both", quantity_available=1,
+                name="Checkout vs adjustment",
+                price=Decimal("1.00"),
+                channel="both",
+                quantity_available=1,
             )
             db.add(second)
             await db.commit()
@@ -85,9 +94,9 @@ async def test_postgres_concurrent_checkout_and_adjustment_do_not_oversell():
         async def adjust_second():
             try:
                 async with maker() as db:
-                    locked = await db.scalar(select(FlowerListing).where(
-                        FlowerListing.id == second_id
-                    ).with_for_update())
+                    locked = await db.scalar(
+                        select(FlowerListing).where(FlowerListing.id == second_id).with_for_update()
+                    )
                     await change_stock(db, locked, -1, kind="waste", units=1, reason="Damaged", source="test")
                     await db.commit()
                 return "adjusted"
@@ -99,27 +108,35 @@ async def test_postgres_concurrent_checkout_and_adjustment_do_not_oversell():
         assert sorted(outcome) in (["adjusted", "sold out"], ["bought", "sold out"])
         async with maker() as db:
             assert (await db.get(FlowerListing, second_id)).quantity_available == 0
-            assert await db.scalar(select(func.sum(InventoryMovement.delta)).where(
-                InventoryMovement.listing_id == second_id
-            )) == 0
+            assert (
+                await db.scalar(
+                    select(func.sum(InventoryMovement.delta)).where(InventoryMovement.listing_id == second_id)
+                )
+                == 0
+            )
         async with maker() as db:
-            pair = [FlowerListing(name=f"Multi {n}", price=Decimal("1.00"),
-                                  channel="both", quantity_available=2) for n in range(2)]
+            pair = [
+                FlowerListing(name=f"Multi {n}", price=Decimal("1.00"), channel="both", quantity_available=2)
+                for n in range(2)
+            ]
             db.add_all(pair)
             await db.commit()
             ids = [item.id for item in pair]
 
         async def multi_checkout(order_ids):
             async with maker() as db:
-                await reserve_order(db, items=[{"id": item_id, "quantity": 1} for item_id in order_ids], channel="retail")
+                await reserve_order(
+                    db, items=[{"id": item_id, "quantity": 1} for item_id in order_ids], channel="retail"
+                )
 
         await asyncio.wait_for(asyncio.gather(multi_checkout(ids), multi_checkout(ids[::-1])), timeout=10)
         async with maker() as db:
             assert [(await db.get(FlowerListing, item_id)).quantity_available for item_id in ids] == [0, 0]
 
         async with maker() as db:
-            last = FlowerListing(name="Cancel versus payment", price=Decimal("1.00"),
-                                 channel="both", quantity_available=1)
+            last = FlowerListing(
+                name="Cancel versus payment", price=Decimal("1.00"), channel="both", quantity_available=1
+            )
             db.add(last)
             await db.commit()
             last_id = last.id
@@ -147,8 +164,11 @@ async def test_postgres_concurrent_checkout_and_adjustment_do_not_oversell():
             status = (await db.get(Order, order_id)).status
             available = (await db.get(FlowerListing, last_id)).quantity_available
             assert (status, available) in (("paid", 0), ("cancelled", 1))
-            assert await db.scalar(select(func.sum(InventoryMovement.delta)).where(
-                InventoryMovement.listing_id == last_id
-            )) == available
+            assert (
+                await db.scalar(
+                    select(func.sum(InventoryMovement.delta)).where(InventoryMovement.listing_id == last_id)
+                )
+                == available
+            )
     finally:
         await engine.dispose()

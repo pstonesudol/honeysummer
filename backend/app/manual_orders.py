@@ -1,4 +1,5 @@
 """Record already-collected off-site payments and sell stock exactly once."""
+
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
@@ -6,15 +7,15 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from .models import FlowerListing, Order, OrderItem, OrderNotification
 from .form_errors import FieldValidationError
+from .models import FlowerListing, Order, OrderItem, OrderNotification
 from .orders import StockError, change_stock
 
 
 def _money(value: str) -> Decimal:
     try:
         amount = Decimal(value)
-    except (InvalidOperation, TypeError):
+    except InvalidOperation, TypeError:
         raise ValueError("Enter a valid price.") from None
     if not amount.is_finite() or amount < 0 or amount > Decimal("999999.99") or amount.as_tuple().exponent < -2:
         raise ValueError("Prices must be nonnegative dollars with at most two decimal places.")
@@ -22,6 +23,7 @@ def _money(value: str) -> Decimal:
 
 
 def validate_manual(form) -> dict:
+    """Validate the operator's manual-order form into structured data."""
     name = str(form.get("customer_name", "")).strip()
     email = str(form.get("customer_email", "")).strip().lower()
     method = str(form.get("payment_method", ""))
@@ -40,7 +42,9 @@ def validate_manual(form) -> dict:
     if (method == "external" and not reference) or len(reference) > 255:
         raise FieldValidationError("Provide an external payment reference.", "payment_reference")
     if form.get("payment_confirmed") != "on":
-        raise FieldValidationError("Confirm the payment was collected before recording a paid order.", "payment_confirmed")
+        raise FieldValidationError(
+            "Confirm the payment was collected before recording a paid order.", "payment_confirmed"
+        )
     try:
         collected = _money(str(form.get("amount_collected", "")))
     except ValueError as exc:
@@ -79,8 +83,16 @@ def validate_manual(form) -> dict:
     for field, maximum in (("customer_phone", 40), ("pickup_window", 200), ("delivery_address", 1000), ("notes", 4000)):
         if len(str(form.get(field, ""))) > maximum:
             raise FieldValidationError(f"{field.replace('_', ' ').capitalize()} is too long.", field)
-    return dict(key=key, name=name, email=email, method=method, reference=reference, collected=collected,
-                fulfillment=fulfillment, lines=lines)
+    return dict(
+        key=key,
+        name=name,
+        email=email,
+        method=method,
+        reference=reference,
+        collected=collected,
+        fulfillment=fulfillment,
+        lines=lines,
+    )
 
 
 async def create_manual_order(db, form, actor_id: int) -> Order:
@@ -90,13 +102,22 @@ async def create_manual_order(db, form, actor_id: int) -> Order:
     if previous:
         return previous
     order = Order(
-        manual_key=data["key"], customer_name=data["name"], customer_email=data["email"],
-        customer_phone=str(form.get("customer_phone", "")).strip(), channel="retail",
-        fulfillment=data["fulfillment"], pickup_window=str(form.get("pickup_window", "")).strip(),
+        manual_key=data["key"],
+        customer_name=data["name"],
+        customer_email=data["email"],
+        customer_phone=str(form.get("customer_phone", "")).strip(),
+        channel="retail",
+        fulfillment=data["fulfillment"],
+        pickup_window=str(form.get("pickup_window", "")).strip(),
         delivery_address=str(form.get("delivery_address", "")).strip(),
-        notes=str(form.get("notes", "")).strip(), status="paid", payment_method=data["method"],
-        payment_reference=data["reference"], delivery_fee=Decimal("0"),
-        activity=[dict(action="manual payment recorded", actor=actor_id, method=data["method"], reference=data["reference"])],
+        notes=str(form.get("notes", "")).strip(),
+        status="paid",
+        payment_method=data["method"],
+        payment_reference=data["reference"],
+        delivery_fee=Decimal("0"),
+        activity=[
+            dict(action="manual payment recorded", actor=actor_id, method=data["method"], reference=data["reference"])
+        ],
     )
     db.add(order)
     await db.flush()
@@ -126,19 +147,33 @@ async def create_manual_order(db, form, actor_id: int) -> Order:
         for line in data["lines"]
     )
     if total != data["collected"]:
-        raise FieldValidationError(f"Collected amount must equal the order total (${total:.2f}, including delivery).",
-                                   "amount_collected")
+        raise FieldValidationError(
+            f"Collected amount must equal the order total (${total:.2f}, including delivery).", "amount_collected"
+        )
     for listing_id, quantity in sorted(counts.items()):
         listing = listings[listing_id]
-        await change_stock(db, listing, -quantity, kind="market_sale", units=quantity,
-                           order_id=order.id, actor_id=actor_id, source="manual_order",
-                           reason=f"{data['method']} payment: {data['reference'] or 'cash'}")
+        await change_stock(
+            db,
+            listing,
+            -quantity,
+            kind="market_sale",
+            units=quantity,
+            order_id=order.id,
+            actor_id=actor_id,
+            source="manual_order",
+            reason=f"{data['method']} payment: {data['reference'] or 'cash'}",
+        )
     for line in data["lines"]:
         listing = listings.get(line["listing_id"])
-        db.add(OrderItem(order_id=order.id, listing_id=listing.id if listing else None,
-                         name_snapshot=listing.name if listing else line["name"],
-                         price_snapshot=listing.price if listing else line["price"],
-                         quantity=line["quantity"]))
+        db.add(
+            OrderItem(
+                order_id=order.id,
+                listing_id=listing.id if listing else None,
+                name_snapshot=listing.name if listing else line["name"],
+                price_snapshot=listing.price if listing else line["price"],
+                quantity=line["quantity"],
+            )
+        )
     db.add_all([OrderNotification(order_id=order.id, recipient=recipient) for recipient in ("customer", "farm")])
     await db.commit()
     return order

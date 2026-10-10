@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict
 
 
 class AnnouncementOut(BaseModel):
+    """Serialized announcement banner fields for the public API."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -15,6 +17,8 @@ class AnnouncementOut(BaseModel):
 
 
 class GalleryImageOut(BaseModel):
+    """Serialized gallery image fields for the public API."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -26,6 +30,8 @@ class GalleryImageOut(BaseModel):
 
 
 class InquiryOut(BaseModel):
+    """Serialized inquiry fields returned after submission."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int

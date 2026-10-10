@@ -35,11 +35,13 @@ def _set_session(response, token: str, max_age: int = SESSION_MAX_AGE) -> None:
 
 @bp.get("/me/")
 async def me(request):
+    """Return the current wholesale account payload."""
     return json(user_payload(await get_current_user(request)))
 
 
 @bp.post("/signup/")
 async def signup(request):
+    """Request a wholesale florist account for operator approval."""
     data = request.json or {}
     email = str(data.get("email", "")).strip().lower()
     password = str(data.get("password", ""))
@@ -50,20 +52,22 @@ async def signup(request):
     about_work = str(data.get("message", "")).strip()
 
     if not email or not password or not business or not contact_name:
-        return json(
-            {"detail": "Name, business name, email, and password are required."}, status=400
-        )
+        return json({"detail": "Name, business name, email, and password are required."}, status=400)
     if business_type and business_type not in {"florist", "event", "shop", "other"}:
         return json({"detail": "Select a valid business type."}, status=400)
     phone = str(data.get("phone", "")).strip()
-    if len(contact_name) > 200 or len(business) > 200 or len(phone) > 40 or len(website) > 500 or len(about_work) > 5000:
+    if (
+        len(contact_name) > 200
+        or len(business) > 200
+        or len(phone) > 40
+        or len(website) > 500
+        or len(about_work) > 5000
+    ):
         return json({"detail": "Some account details are too long."}, status=400)
 
     async with session_scope() as session:
         if await session.scalar(select(User).where(User.email == email)):
-            return json(
-                {"detail": "An account with this email already exists."}, status=400
-            )
+            return json({"detail": "An account with this email already exists."}, status=400)
         user = User(email=email, password_hash=hash_password(password), is_active=True)
         session.add(
             FloristProfile(
@@ -88,14 +92,13 @@ async def signup(request):
 
 @bp.post("/login/")
 async def login(request):
+    """Validate credentials and start a signed session cookie."""
     data = request.json or {}
     email = str(data.get("email", "")).strip().lower()
     password = str(data.get("password", ""))
 
     async with session_scope() as session:
-        result = await session.execute(
-            select(User).options(selectinload(User.profile)).where(User.email == email)
-        )
+        result = await session.execute(select(User).options(selectinload(User.profile)).where(User.email == email))
         user = result.scalar_one_or_none()
         if not user or not user.is_active or not verify_password(user.password_hash, password):
             return json({"detail": "Invalid email or password."}, status=400)
@@ -109,6 +112,7 @@ async def login(request):
 
 @bp.post("/logout/")
 async def logout(request):
+    """Clear the wholesale session cookie."""
     response = json({"authenticated": False})
     _set_session(response, "", max_age=0)
     return response

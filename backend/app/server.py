@@ -38,4 +38,5 @@ app.blueprint(retail_bp)
 
 @app.get("/api/health/")
 async def health(request):
+    """Return API liveness status for health checks."""
     return json({"status": "ok", "service": "honey-summer-api"})

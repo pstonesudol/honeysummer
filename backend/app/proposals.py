@@ -1,23 +1,35 @@
 """Bouquet proposal amounts, invoice transitions and paid-order conversion."""
+
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 
+import stripe
 from sqlalchemy import select
 
 from .db import session_scope
 from .form_errors import FieldValidationError
-from .models import BouquetProposal, FlowerListing, Inquiry, InventoryMovement, Order, OrderItem, OrderNotification, StripeEvent
+from .models import (
+    BouquetProposal,
+    FlowerListing,
+    Inquiry,
+    Order,
+    OrderItem,
+    OrderNotification,
+    StripeEvent,
+)
 from .orders import change_stock
+from .payments import deliver_notifications
 from .settings import get_settings
 
 
 def cents(value: str) -> int:
+    """Parse a USD amount string into integer cents."""
     try:
         amount = Decimal(value)
-    except (InvalidOperation, TypeError):
+    except InvalidOperation, TypeError:
         raise ValueError("Enter a valid USD amount.") from None
     if not amount.is_finite() or amount < 0 or amount > 999999 or amount.as_tuple().exponent < -2:
         raise ValueError("Amounts must be nonnegative dollars with at most two decimals.")
@@ -25,6 +37,7 @@ def cents(value: str) -> int:
 
 
 def validate_draft(data: dict) -> dict:
+    """Validate and normalize a bouquet proposal draft."""
     title = str(data.get("title", "")).strip()[:160]
     description = str(data.get("description", "")).strip()[:2000]
     terms = str(data.get("terms", "")).strip()[:2000]
@@ -46,11 +59,11 @@ def validate_draft(data: dict) -> dict:
         detail = str(line.get("description", "")).strip()[:500]
         try:
             quantity = int(line.get("quantity", 0))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             raise FieldValidationError("Enter a valid quantity.", f"quantity_{index}") from None
         try:
             listing_id = int(line["listing_id"]) if line.get("listing_id") else None
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             raise FieldValidationError("Enter a valid listing ID.", f"listing_{index}") from None
         if not name:
             raise FieldValidationError("Name this itemized line.", f"name_{index}")
@@ -59,13 +72,17 @@ def validate_draft(data: dict) -> dict:
         if listing_id is not None and listing_id < 1:
             raise FieldValidationError("Choose a valid listing ID.", f"listing_{index}")
         if len(name) + (3 + len(detail) if detail else 0) > 500:
-            raise FieldValidationError("An item name and description must fit within 500 characters on the invoice.", f"description_{index}")
+            raise FieldValidationError(
+                "An item name and description must fit within 500 characters on the invoice.", f"description_{index}"
+            )
         try:
             price = cents(str(line.get("price", "")))
         except ValueError as exc:
             raise FieldValidationError(str(exc), f"price_{index}") from None
         total += price * quantity
-        normalized.append(dict(name=name, description=detail, quantity=quantity, unit_cents=price, listing_id=listing_id))
+        normalized.append(
+            dict(name=name, description=detail, quantity=quantity, unit_cents=price, listing_id=listing_id)
+        )
     try:
         delivery = cents(str(data.get("delivery", "0"))) if fulfillment == "delivery" else 0
     except ValueError as exc:
@@ -73,13 +90,20 @@ def validate_draft(data: dict) -> dict:
     total += delivery
     if total < 50 or total > 99999999:
         raise FieldValidationError("The total must be between $0.50 and $999,999.99.", "line_ids")
-    return dict(title=title, description=description, terms=terms, fulfillment=fulfillment,
-                location=location, lines=normalized, delivery_cents=delivery, total_cents=total)
+    return dict(
+        title=title,
+        description=description,
+        terms=terms,
+        fulfillment=fulfillment,
+        location=location,
+        lines=normalized,
+        delivery_cents=delivery,
+        total_cents=total,
+    )
 
 
 async def send_invoice(proposal_id: int) -> str:
     """Lock out concurrent sends; ambiguous Stripe errors require operator review."""
-    import stripe
 
     settings = get_settings()
     if not settings.stripe_secret_key or not settings.stripe_webhook_secret:
@@ -102,35 +126,60 @@ async def send_invoice(proposal_id: int) -> str:
         email, name = inquiry.email, inquiry.name
     key = f"bouquet-{proposal_id}-v{version}"
     try:
-        customer = await asyncio.to_thread(stripe.Customer.create, email=email, name=name, idempotency_key=f"{key}-customer")
+        customer = await asyncio.to_thread(
+            stripe.Customer.create, email=email, name=name, idempotency_key=f"{key}-customer"
+        )
         memo = f"{draft['title']} — total ${draft['total_cents'] / 100:.2f}"
         invoice = await asyncio.to_thread(
-            stripe.Invoice.create, customer=customer.id, collection_method="send_invoice",
-            days_until_due=7, auto_advance=False, pending_invoice_items_behavior="exclude",
+            stripe.Invoice.create,
+            customer=customer.id,
+            collection_method="send_invoice",
+            days_until_due=7,
+            auto_advance=False,
+            pending_invoice_items_behavior="exclude",
             metadata={"proposal_id": str(proposal_id), "version": str(version)},
             description=memo,
             idempotency_key=f"{key}-invoice",
         )
         for index, line in enumerate(draft["lines"]):
             await asyncio.to_thread(
-                stripe.InvoiceItem.create, customer=customer.id, invoice=invoice.id,
-                unit_amount_decimal=str(line["unit_cents"]), currency="usd",
-                quantity=line["quantity"], description=f"{line['name']} — {line['description']}" if line["description"] else line["name"],
+                stripe.InvoiceItem.create,
+                customer=customer.id,
+                invoice=invoice.id,
+                unit_amount_decimal=str(line["unit_cents"]),
+                currency="usd",
+                quantity=line["quantity"],
+                description=f"{line['name']} — {line['description']}" if line["description"] else line["name"],
                 idempotency_key=f"{key}-line-{index}",
             )
-        for label, value in (("Design notes", draft["description"]), ("Terms", draft["terms"]),
-                             (draft["fulfillment"].capitalize(), draft["location"])):
+        for label, value in (
+            ("Design notes", draft["description"]),
+            ("Terms", draft["terms"]),
+            (draft["fulfillment"].capitalize(), draft["location"]),
+        ):
             for index in range(0, len(value), 300):
-                await asyncio.to_thread(stripe.InvoiceItem.create, customer=customer.id, invoice=invoice.id,
-                    amount=0, currency="usd", description=f"{label}: {value[index:index + 300]}",
-                    idempotency_key=f"{key}-{label.lower()}-{index // 300}")
+                await asyncio.to_thread(
+                    stripe.InvoiceItem.create,
+                    customer=customer.id,
+                    invoice=invoice.id,
+                    amount=0,
+                    currency="usd",
+                    description=f"{label}: {value[index : index + 300]}",
+                    idempotency_key=f"{key}-{label.lower()}-{index // 300}",
+                )
         if draft["delivery_cents"]:
             await asyncio.to_thread(
-                stripe.InvoiceItem.create, customer=customer.id, invoice=invoice.id,
-                amount=draft["delivery_cents"], currency="usd", description="Delivery / setup",
+                stripe.InvoiceItem.create,
+                customer=customer.id,
+                invoice=invoice.id,
+                amount=draft["delivery_cents"],
+                currency="usd",
+                description="Delivery / setup",
                 idempotency_key=f"{key}-delivery",
             )
-        invoice = await asyncio.to_thread(stripe.Invoice.finalize_invoice, invoice.id, idempotency_key=f"{key}-finalize")
+        invoice = await asyncio.to_thread(
+            stripe.Invoice.finalize_invoice, invoice.id, idempotency_key=f"{key}-finalize"
+        )
         if invoice.total != draft["total_cents"] or invoice.currency != "usd":
             raise ValueError("Stripe invoice total differs from the proposal; inspect and void it in Stripe.")
         invoice = await asyncio.to_thread(stripe.Invoice.send_invoice, invoice.id, idempotency_key=f"{key}-send")
@@ -147,9 +196,14 @@ async def send_invoice(proposal_id: int) -> str:
         current.stripe_invoice_id = invoice.id
         current.invoice_url = invoice.hosted_invoice_url or ""
         current.invoice_number = invoice.number or ""
-        current.history = [*current.history, dict(version=version, draft=draft, invoice_id=invoice.id,
-                                                 sent_at=datetime.now(timezone.utc).isoformat())]
-        current.activity = [*(current.activity or []), dict(action="invoice sent", at=datetime.now(timezone.utc).isoformat(), invoice_id=invoice.id)]
+        current.history = [
+            *current.history,
+            dict(version=version, draft=draft, invoice_id=invoice.id, sent_at=datetime.now(UTC).isoformat()),
+        ]
+        current.activity = [
+            *(current.activity or []),
+            dict(action="invoice sent", at=datetime.now(UTC).isoformat(), invoice_id=invoice.id),
+        ]
         current.status = "sent"
         await db.commit()
     return invoice.id
@@ -157,7 +211,6 @@ async def send_invoice(proposal_id: int) -> str:
 
 async def update_sent_invoice(proposal_id: int, action: str) -> None:
     """Only Stripe-confirmed unpaid invoices may be resent, voided or revised."""
-    import stripe
 
     if action not in ("resend", "void", "revise"):
         raise ValueError("Unknown invoice action.")
@@ -184,13 +237,15 @@ async def update_sent_invoice(proposal_id: int, action: str) -> None:
                 proposal.stripe_invoice_id = None
                 proposal.invoice_url = ""
                 proposal.invoice_number = ""
-        proposal.activity = [*(proposal.activity or []), dict(action=action, at=datetime.now(timezone.utc).isoformat(), invoice_id=invoice_id)]
+        proposal.activity = [
+            *(proposal.activity or []),
+            dict(action=action, at=datetime.now(UTC).isoformat(), invoice_id=invoice_id),
+        ]
         await db.commit()
 
 
 async def apply_invoice_event(event: dict) -> str:
     """Signed webhook caller supplies an invoice; payment never implies stock existed."""
-    from .payments import deliver_notifications
 
     kind = event.get("type", "")
     if kind not in ("invoice.paid", "invoice.payment_failed", "invoice.voided"):
@@ -201,7 +256,9 @@ async def apply_invoice_event(event: dict) -> str:
         return "review"
     order_id = None
     async with session_scope() as db:
-        proposal = await db.scalar(select(BouquetProposal).where(BouquetProposal.stripe_invoice_id == invoice_id).with_for_update())
+        proposal = await db.scalar(
+            select(BouquetProposal).where(BouquetProposal.stripe_invoice_id == invoice_id).with_for_update()
+        )
         if not proposal:
             return "review"
         proposal_id = proposal.id
@@ -209,22 +266,35 @@ async def apply_invoice_event(event: dict) -> str:
             return "ignored"
         if kind == "invoice.paid":
             snapshot = proposal.history[-1]["draft"] if proposal.history else None
-            if (not snapshot or obj.get("currency") != "usd" or obj.get("total") != snapshot["total_cents"]
-                    or obj.get("amount_paid") != snapshot["total_cents"] or obj.get("amount_remaining") != 0
-                    or obj.get("paid_out_of_band") or obj.get("status") != "paid"):
+            if (
+                not snapshot
+                or obj.get("currency") != "usd"
+                or obj.get("total") != snapshot["total_cents"]
+                or obj.get("amount_paid") != snapshot["total_cents"]
+                or obj.get("amount_remaining") != 0
+                or obj.get("paid_out_of_band")
+                or obj.get("status") != "paid"
+            ):
                 return "review"
             if proposal.order_id:
                 return "ignored"
             if proposal.status not in ("sent", "review"):
                 return "review"
             inquiry = await db.get(Inquiry, proposal.inquiry_id)
-            order = Order(customer_name=inquiry.name, customer_email=inquiry.email, customer_phone=inquiry.phone,
-                           channel="retail", status="paid", payment_method="stripe_invoice",
-                           payment_reference=invoice_id, fulfillment=snapshot["fulfillment"],
-                          pickup_window=snapshot["location"] if snapshot["fulfillment"] == "pickup" else "",
-                          delivery_address=snapshot["location"] if snapshot["fulfillment"] == "delivery" else "",
-                          delivery_fee=Decimal(snapshot["delivery_cents"]) / 100,
-                          notes=f"Custom bouquet proposal #{proposal.id} — {snapshot['title']}")
+            order = Order(
+                customer_name=inquiry.name,
+                customer_email=inquiry.email,
+                customer_phone=inquiry.phone,
+                channel="retail",
+                status="paid",
+                payment_method="stripe_invoice",
+                payment_reference=invoice_id,
+                fulfillment=snapshot["fulfillment"],
+                pickup_window=snapshot["location"] if snapshot["fulfillment"] == "pickup" else "",
+                delivery_address=snapshot["location"] if snapshot["fulfillment"] == "delivery" else "",
+                delivery_fee=Decimal(snapshot["delivery_cents"]) / 100,
+                notes=f"Custom bouquet proposal #{proposal.id} — {snapshot['title']}",
+            )
             db.add(order)
             await db.flush()
             counts: dict[int, int] = {}
@@ -241,21 +311,42 @@ async def apply_invoice_event(event: dict) -> str:
                         current.status = "stock_review"
                         await review_db.commit()
                     return "review"
-                await change_stock(db, listing, -quantity, kind="reserve", units=quantity, order_id=order.id, source="invoice")
+                await change_stock(
+                    db, listing, -quantity, kind="reserve", units=quantity, order_id=order.id, source="invoice"
+                )
                 await change_stock(db, listing, 0, kind="sale", units=quantity, order_id=order.id, source="invoice")
             for line in snapshot["lines"]:
                 if line["listing_id"]:
-                    db.add(OrderItem(order_id=order.id, listing_id=line["listing_id"], name_snapshot=line["name"],
-                                     price_snapshot=Decimal(line["unit_cents"]) / 100, quantity=line["quantity"]))
-            db.add_all([OrderNotification(order_id=order.id, recipient=recipient) for recipient in ("customer", "farm")])
+                    db.add(
+                        OrderItem(
+                            order_id=order.id,
+                            listing_id=line["listing_id"],
+                            name_snapshot=line["name"],
+                            price_snapshot=Decimal(line["unit_cents"]) / 100,
+                            quantity=line["quantity"],
+                        )
+                    )
+            db.add_all(
+                [OrderNotification(order_id=order.id, recipient=recipient) for recipient in ("customer", "farm")]
+            )
             proposal.order_id = order.id
             proposal.status = "paid"
-            proposal.activity = [*(proposal.activity or []), dict(action="paid", at=datetime.now(timezone.utc).isoformat(), invoice_id=invoice_id)]
+            proposal.activity = [
+                *(proposal.activity or []),
+                dict(action="paid", at=datetime.now(UTC).isoformat(), invoice_id=invoice_id),
+            ]
             order_id = order.id
         elif proposal.status == "sent":
             if kind == "invoice.voided":
                 proposal.status = "void"
-            proposal.activity = [*(proposal.activity or []), dict(action="invoice voided" if kind == "invoice.voided" else "payment failed", at=datetime.now(timezone.utc).isoformat(), invoice_id=invoice_id)]
+            proposal.activity = [
+                *(proposal.activity or []),
+                dict(
+                    action="invoice voided" if kind == "invoice.voided" else "payment failed",
+                    at=datetime.now(UTC).isoformat(),
+                    invoice_id=invoice_id,
+                ),
+            ]
         elif kind == "invoice.voided" and proposal.status == "paid":
             return "review"
         if event.get("id"):

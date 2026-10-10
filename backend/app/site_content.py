@@ -1,18 +1,30 @@
 """Owner-editable public text; an empty record preserves the current storefront."""
+
 from __future__ import annotations
 
 from urllib.parse import urlparse
 
 FIELDS = {
-    "location": 160, "serviceArea": 500, "email": 254, "phone": 40,
-    "instagram": 500, "pickupLocation": 300, "pickupWindow": 300,
-    "pickupNote": 500, "announcementFallback": 200,
-    "homeIntro": 2000, "aboutIntro": 2000, "weddingsIntro": 2000,
-    "orderIntro": 2000, "contactIntro": 2000, "wholesaleIntro": 2000,
+    "location": 160,
+    "serviceArea": 500,
+    "email": 254,
+    "phone": 40,
+    "instagram": 500,
+    "pickupLocation": 300,
+    "pickupWindow": 300,
+    "pickupNote": 500,
+    "announcementFallback": 200,
+    "homeIntro": 2000,
+    "aboutIntro": 2000,
+    "weddingsIntro": 2000,
+    "orderIntro": 2000,
+    "contactIntro": 2000,
+    "wholesaleIntro": 2000,
 }
 
 
 def validate_content(form) -> dict:
+    """Validate and normalize owner-edited storefront content."""
     result = {}
     for field, limit in FIELDS.items():
         value = str(form.get(field, "")).strip()
