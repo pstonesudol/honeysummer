@@ -1,0 +1,28 @@
+# Repo-wide pre-commit hooks. Install once, then they run on every commit:
+#   uv tool install pre-commit
+#   pre-commit install
+#
+# Hooks run with the project's own toolchain (uv for Python, the frontend
+# workspace for eslint), so versions always match the checked-in config.
+repos:
+  - repo: local
+    hooks:
+      - id: backend-ruff
+        name: ruff check (backend)
+        files: ^backend/.*\.py$
+        language: system
+        # Strip the repo-root-relative path prefix, then run the project's ruff.
+        entry: bash -c 'cd backend && uv run ruff check --force-exclude --fix "${@#backend/}"' --
+      - id: backend-ruff-format
+        name: ruff format (backend)
+        files: ^backend/.*\.py$
+        language: system
+        entry: bash -c 'cd backend && uv run ruff format --force-exclude "${@#backend/}"' --
+
+  - repo: local
+    hooks:
+      - id: frontend-eslint
+        name: eslint (frontend)
+        files: ^frontend/.*\.(cjs|mjs|jsx?|tsx?)$
+        language: system
+        entry: bash -c 'cd frontend && npm exec -- eslint "${@#frontend/}"' --

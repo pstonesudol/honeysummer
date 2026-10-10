@@ -49,6 +49,19 @@ uv run sanic app.server:app --dev
 
 The API runs at [http://localhost:8000](http://localhost:8000), with a health check at `/api/health/` and the admin at `/admin/`. Run the test suite with `uv run pytest`. Lint and format the Python code with `uv run ruff check` and `uv run ruff format` (configuration lives in `backend/pyproject.toml`). `uv run ruff check` is the validation gate; `uv run ruff format --check` verifies formatting without rewriting files.
 
+### Pre-commit hooks
+
+A repo-wide [pre-commit](https://pre-commit.com) config (`.pre-commit-config.yaml`) runs the backend's `ruff check --fix` and `ruff format` on staged Python files and the frontend workspace's `eslint` on staged JS/TS files. Install it once:
+
+```bash
+uv tool install pre-commit   # one-time; adds pre-commit to your PATH tools
+pre-commit install
+```
+
+After that the hooks run automatically on `git commit`. Run them against everything with `pre-commit run --all-files`. The hooks use the project's own toolchain (`uv run ruff …` and the frontend workspace's `eslint`), so versions always match the checked-in config.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the same gates on every push and pull request: `uv lock --check`, `ruff check`, `ruff format --check`, and `uv run pytest` (including the opt-in Postgres concurrency tests against a service database), plus `eslint` for the frontend.
+
 ### Content and inquiries
 
 The marketing pages read live content from the API and post inquiries back to it:
