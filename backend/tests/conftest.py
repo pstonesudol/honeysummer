@@ -12,6 +12,12 @@ _fd, _path = tempfile.mkstemp(suffix=".db")
 os.close(_fd)
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_path}"
 os.environ.setdefault("RESEND_API_KEY", "")
+# Force debug mode so session and CSRF cookies are issued without the Secure
+# flag. The Sanic test client speaks plain HTTP and httpx refuses to send
+# Secure cookies over it, which silently breaks login and CSRF. We set this
+# explicitly instead of relying on backend/.env, which is gitignored and so
+# absent in CI.
+os.environ["DEBUG"] = "true"
 
 import pytest_asyncio  # noqa: E402
 
