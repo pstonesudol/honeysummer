@@ -4,7 +4,7 @@ import Link from "next/link";
 import { BadgeCheck, Flower2, Truck } from "lucide-react";
 
 import { WholesaleShop } from "@/components/inquiry-form";
-import { getSiteContent } from "@/lib/api";
+import { getSiteContent, sitePhoto } from "@/lib/api";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -69,6 +69,7 @@ export default async function WholesalePage() {
               height={1200}
               priority
               sizes="(max-width: 850px) 92vw, 42vw"
+              {...sitePhoto(content, "wholesale")}
             />
           </div>
         </div>

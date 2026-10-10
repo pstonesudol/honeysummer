@@ -128,6 +128,17 @@ class SiteContent(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class AdminActivity(Base):
+    """Append-only administrative request outcomes; never stores form secrets."""
+
+    __tablename__ = "admin_activity"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    path: Mapped[str] = mapped_column(String(500))
+    status_code: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
 class Inquiry(Base):
     """A customer inquiry submitted from the public site."""
 
@@ -169,6 +180,7 @@ class InquiryCorrespondence(Base):
     subject: Mapped[str] = mapped_column(String(200))
     summary: Mapped[str] = mapped_column(Text)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    source_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
 
 
 class BouquetProposal(Base):

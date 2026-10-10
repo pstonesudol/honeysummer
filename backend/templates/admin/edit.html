@@ -138,7 +138,9 @@
 {% if obj.email_delivery %}<p class="muted">Inquiry email submission: farm {{ obj.email_delivery.farm or 'unknown' }} · customer {{ obj.email_delivery.customer or 'unknown' }}. Provider acceptance is not proof of delivery.</p>{% endif %}
 {% if obj.photo %}<h2>Inspiration photo</h2><p><a href="/admin/inquiries/{{ obj.id }}/photo" target="_blank" rel="noopener noreferrer">View customer photo (admin only)</a></p>{% endif %}
 <h2>Correspondence history</h2>
-<p class="muted">Record an email already sent or received outside this system. This form does not send anything or import a mailbox. Do not record sensitive payment details.</p>
+<p class="muted">Record an email already sent or received outside this system. Nothing here sends email. Do not record sensitive payment details.</p>
+<details><summary>Import an exported email (.eml)</summary><p class="muted">Import one plain-text email up to 1 MB, with a dated message and matching customer address. Attachments are ignored; repeat imports do not create duplicates. This does not connect to a mailbox.</p>
+<form method="post" enctype="multipart/form-data" action="/admin/inquiries/{{ obj.id }}/import-email"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label for="import_direction">Direction</label><select id="import_direction" name="direction"><option value="received">Received from customer</option><option value="sent">Sent to customer</option></select><label for="email_file">Exported email</label><input id="email_file" name="email_file" type="file" accept=".eml,message/rfc822" required><p><button type="submit">Import email into history</button></p></form></details>
 <form method="post" action="/admin/inquiries/{{ obj.id }}/correspondence">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <div class="grid"><div><label for="direction">Direction</label><select id="direction" name="direction"><option value="sent">Sent to customer</option><option value="received">Received from customer</option></select></div>

@@ -1,0 +1,7 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Administrative activity</h1><p class="muted">Recorded authenticated POST outcomes from this feature's installation onward. A successful HTTP response is not proof of payment. Financial and inventory details remain in their individual journals. No form values or passwords are recorded.</p>
+<form method="get"><label for="path">Action path contains</label><input id="path" name="path" type="text" value="{{ path }}" maxlength="100"><p><button>Filter</button></p></form>
+<div class="table-scroll"><table><thead><tr><th>Date</th><th>Operator</th><th>Action path</th><th>HTTP outcome</th></tr></thead><tbody>{% for entry, email in rows %}<tr><td>{{ entry.created_at|admin_date }}</td><td>{{ email }}</td><td>{{ entry.path }}</td><td>{{ entry.status_code }}</td></tr>{% else %}<tr><td colspan="4">No recorded actions.</td></tr>{% endfor %}</tbody></table></div>
+<p>{% if page > 1 %}<a href="?page={{ page - 1 }}&amp;path={{ path|urlencode }}">Previous</a>{% endif %} · Page {{ page }} · {% if more %}<a href="?page={{ page + 1 }}&amp;path={{ path|urlencode }}">Next</a>{% endif %}</p>
+{% endblock %}

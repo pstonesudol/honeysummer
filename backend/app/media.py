@@ -114,6 +114,8 @@ def store_private_image(upload) -> str:
             CacheControl="private, no-store",
         )
     else:
+        if settings.private_media_root.resolve().is_relative_to(settings.media_root.resolve()):
+            raise ValueError("Private photo storage must be outside the public media directory.")
         destination = settings.private_media_root / key
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(body)

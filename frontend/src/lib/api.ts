@@ -54,7 +54,13 @@ export type SiteContent = Partial<Record<
   | "announcementFallback" | "homeIntro" | "aboutIntro"
   | "weddingsIntro" | "orderIntro" | "contactIntro" | "wholesaleIntro",
   string
->> & { faq?: { question: string; answer: string }[] };
+>> & { faq?: { question: string; answer: string }[]; photos?: Record<string, GalleryImage> };
+
+export function sitePhoto(content: SiteContent, slot: string) {
+  const photo = content.photos?.[slot];
+  return photo?.image ? { src: photo.image, alt: photo.alt_text, unoptimized: true,
+    style: { objectPosition: `${photo.focal_x}% ${photo.focal_y}%` } } : {};
+}
 
 export async function getSiteContent(): Promise<SiteContent> {
   const data = await apiGet<{ content: SiteContent }>("/api/site-content/", { content: {} });

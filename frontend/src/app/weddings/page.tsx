@@ -3,7 +3,7 @@ import Image from "next/image";
 import { Flower2, Gift, Sparkles } from "lucide-react";
 
 import { Gallery } from "@/components/gallery";
-import { getSiteContent } from "@/lib/api";
+import { getSiteContent, sitePhoto } from "@/lib/api";
 import { InquiryForm } from "@/components/inquiry-form";
 import { inquiryIntros } from "@/lib/inquiry-fields";
 import { site } from "@/lib/site";
@@ -67,6 +67,7 @@ export default async function WeddingsPage() {
               height={1200}
               priority
               sizes="(max-width: 850px) 92vw, 42vw"
+              {...sitePhoto(content, "weddings")}
             />
           </div>
         </div>

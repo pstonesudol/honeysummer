@@ -17,6 +17,8 @@
     <div class="full"><label for="{{ key }}">{{ label }}</label><textarea id="{{ key }}" name="{{ key }}" rows="3" maxlength="2000">{{ content[key] if key in content else '' }}</textarea></div>
     {% endfor %}
   </div>
+  <h2>Storefront photos</h2><p class="muted">Reuse active gallery photos with alt text and focal points. Leave a slot blank to retain the current photograph. Upload new photos in Gallery first.</p>
+  <div class="grid">{% for slot, label in photo_slots.items() %}<div><label for="photo_{{ slot }}">{{ label }}</label><select id="photo_{{ slot }}" name="photo_{{ slot }}" data-photo-select><option value="">Keep original photograph</option>{% for photo in photos %}<option value="{{ photo.id }}" data-src="{{ media_url }}/{{ photo.image }}" data-alt="{{ photo.alt_text }}" {% if content.photos is defined and content.photos.get(slot) == photo.id %}selected{% endif %}>{{ photo.caption or photo.alt_text or 'Photo #' ~ photo.id }}</option>{% endfor %}</select><img class="preview" data-photo-preview alt="" hidden></div>{% endfor %}</div>
   <h2>Contact-page FAQs</h2>
   <p class="muted">Leave all question fields empty to keep the existing FAQs. Add up to eight question-and-answer pairs to replace them.</p>
   {% for index in range(1, 9) %}{% set faq = content.faq[index - 1] if content.faq is defined and content.faq|length >= index else {} %}
@@ -26,4 +28,5 @@
   </fieldset>{% endfor %}
   <p><button type="submit">Save website text</button> <a href="/api/site-content/">Preview published JSON</a></p>
 </form>
+<script>for (const select of document.querySelectorAll('[data-photo-select]')) { const preview=select.parentElement.querySelector('[data-photo-preview]'); function update(){const option=select.selectedOptions[0];preview.hidden=!option.dataset.src;if(option.dataset.src){preview.src=option.dataset.src;preview.alt=option.dataset.alt;}} select.addEventListener('change',update);update(); }</script>
 {% endblock %}

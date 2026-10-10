@@ -5,7 +5,7 @@ import { CalendarHeart, Flower2, PackageCheck } from "lucide-react";
 
 import { InquiryForm } from "@/components/inquiry-form";
 import { RetailShop } from "@/components/retail-shop";
-import { getRetailFlowers, getSiteContent } from "@/lib/api";
+import { getRetailFlowers, getSiteContent, sitePhoto } from "@/lib/api";
 import { inquiryIntros } from "@/lib/inquiry-fields";
 import { pickup, site } from "@/lib/site";
 
@@ -75,6 +75,7 @@ export default async function OrderFlowersPage({
               height={1200}
               priority
               sizes="(max-width: 850px) 92vw, 42vw"
+              {...sitePhoto(content, "order")}
             />
           </div>
         </div>

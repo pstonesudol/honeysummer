@@ -27,6 +27,13 @@ async def record_run(findings: list[str], *, applied: bool, full: bool) -> None:
         await db.commit()
 
 
+async def reconcile_and_record(*, apply: bool, full: bool) -> list[str]:
+    """Use one event loop for the audit and its persistent run summary."""
+    findings = await reconcile(apply=apply, full=full)
+    await record_run(findings, applied=apply, full=full)
+    return findings
+
+
 def main() -> None:
     """Audit stock and Stripe, optionally repairing safe discrepancies."""
     parser = argparse.ArgumentParser(description="Reconcile inventory and Stripe Checkout")
@@ -35,8 +42,7 @@ def main() -> None:
         "--full", action="store_true", help="check all paid orders against Stripe, not just the last 48 hours"
     )
     args = parser.parse_args()
-    findings = asyncio.run(reconcile(apply=args.apply, full=args.full))
-    asyncio.run(record_run(findings, applied=args.apply, full=args.full))
+    findings = asyncio.run(reconcile_and_record(apply=args.apply, full=args.full))
     for finding in findings:
         print(finding)
     if not findings:

@@ -9,7 +9,13 @@ from app.admin import CSRF_COOKIE
 from app.auth import hash_password
 from app.balance_report import invoice_balance_rows
 from app.db import session_scope
-from app.invoice_refunds import close_fully_refunded_quote, issue_invoice_refund, reconcile_invoice_refund
+from app.invoice_refund_audit import audit
+from app.invoice_refunds import (
+    close_fully_refunded_quote,
+    import_external_invoice_refund,
+    issue_invoice_refund,
+    reconcile_invoice_refund,
+)
 from app.models import (
     BouquetProposal,
     Inquiry,
@@ -23,6 +29,7 @@ from app.models import (
 )
 from app.server import app
 from app.settings import get_settings
+from app.weddings import send_wedding_invoice
 
 
 def stripe_payment(monkeypatch, *, total=1000, invoice_id="in_one", refunded=0):
@@ -74,6 +81,66 @@ def stripe_payment(monkeypatch, *, total=1000, invoice_id="in_one", refunded=0):
 
     monkeypatch.setattr(stripe.Refund, "create", create)
     return calls
+
+
+@pytest.mark.asyncio
+async def test_external_invoice_refund_import_is_verified_idempotent_and_never_issues_refund(monkeypatch):
+    calls = stripe_payment(monkeypatch, refunded=400)
+
+    class Remote(dict):
+        def __getattr__(self, key):
+            return self[key]
+
+    remote = Remote(
+        id="re_external",
+        status="succeeded",
+        amount=400,
+        currency="usd",
+        payment_intent="pi_one",
+        charge="ch_one",
+        metadata={},
+    )
+    monkeypatch.setattr(stripe.Refund, "retrieve", lambda _: remote)
+    async with session_scope() as db:
+        owner = User(email="owner@example.com", password_hash="unused", is_admin=True)
+        inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        db.add_all([owner, inquiry])
+        await db.flush()
+        quote = WeddingQuote(
+            inquiry_id=inquiry.id,
+            status="deposit_paid",
+            payment_mode="deposit",
+            snapshot={"total_cents": 2500},
+            activity=[],
+        )
+        db.add(quote)
+        await db.flush()
+        invoice = WeddingInvoice(
+            quote_id=quote.id, step="deposit", status="paid", amount_cents=1000, stripe_invoice_id="in_one"
+        )
+        db.add(invoice)
+        await db.commit()
+        pk, quote_id = invoice.id, quote.id
+    remote["payment_intent"] = "pi_wrong"
+    with pytest.raises(ValueError, match="original payment"):
+        await import_external_invoice_refund("wedding", pk, "re_external", 1)
+    remote["payment_intent"] = "pi_one"
+    findings = await audit()
+    assert len(findings) == 1 and "Stripe refunded 400 cents; local journal 0 cents" in findings[0]
+    await import_external_invoice_refund("wedding", pk, "re_external", 1)
+    await import_external_invoice_refund("wedding", pk, "re_external", 1)
+    assert calls == []
+    assert await audit() == []
+    async with session_scope() as db:
+        rows = (await db.scalars(select(InvoiceRefund))).all()
+        assert len(rows) == 1 and rows[0].amount_cents == 400 and rows[0].status == "succeeded"
+        assert (await db.get(WeddingQuote, quote_id)).status == "review"
+        quote = await db.get(WeddingQuote, quote_id)
+        quote.status = "deposit_paid"  # Even an accidental recovery cannot authorize old-plan sends.
+        await db.commit()
+    monkeypatch.setattr(get_settings(), "stripe_webhook_secret", "whsec_mock")
+    with pytest.raises(ValueError, match="paused the original payment plan"):
+        await send_wedding_invoice(quote_id, "balance")
 
 
 @pytest.mark.asyncio

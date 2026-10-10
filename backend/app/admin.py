@@ -33,13 +33,20 @@ from sqlalchemy.orm import selectinload
 
 from .auth import verify_password
 from .balance_report import invoice_balance_rows
+from .correspondence import parse_email
 from .db import session_scope
 from .emails import send_wholesale_approval_email
 from .form_errors import FieldValidationError
-from .invoice_refunds import close_fully_refunded_quote, issue_invoice_refund, reconcile_invoice_refund
+from .invoice_refunds import (
+    close_fully_refunded_quote,
+    import_external_invoice_refund,
+    issue_invoice_refund,
+    reconcile_invoice_refund,
+)
 from .manual_orders import _money, create_manual_order
 from .media import public_media_url, read_private_image, store_image
 from .models import (
+    AdminActivity,
     Announcement,
     BouquetProposal,
     FloristProfile,
@@ -65,7 +72,7 @@ from .payments import deliver_notifications, expire_checkout
 from .proposals import send_invoice, update_sent_invoice, validate_draft
 from .refunds import issue_refund
 from .settings import BASE_DIR, get_settings
-from .site_content import validate_content
+from .site_content import PHOTO_SLOTS, validate_content
 from .weddings import (
     agree_revised_wedding,
     approve_wedding_schedule,
@@ -461,6 +468,74 @@ async def show_form_error(request, response):
         return
     if isinstance(message, str):
         return _page(request, "admin/error.html", status=response.status, error=message)
+
+
+@bp.middleware("response")
+async def record_admin_outcome(request, response):
+    """Record POST outcomes, not passwords, uploaded content or customer form values."""
+    actor = getattr(request.ctx, "admin", None)
+    if request.method == "POST" and actor and response:
+        async with session_scope() as db:
+            db.add(AdminActivity(actor_id=actor.id, path=request.path[:500], status_code=response.status))
+            await db.commit()
+
+
+@bp.get("/account")
+async def account_settings(request):
+    """Show account details without exposing or changing access credentials."""
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    return _page(request, "admin/account.html", account=request.ctx.admin)
+
+
+@bp.get("/orders/preparation")
+async def daily_preparation(request):
+    """Print paid-order preparation quantities for one Eastern fulfillment day."""
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    try:
+        day = date.fromisoformat(str(request.args.get("date", datetime.now(ZoneInfo("America/New_York")).date())))
+    except ValueError:
+        return json({"detail": "Choose a valid preparation date."}, status=400)
+    async with session_scope() as db:
+        orders = (
+            await db.scalars(
+                select(Order)
+                .options(selectinload(Order.items))
+                .where(Order.status == "paid", Order.fulfillment_date == day, Order.fulfillment_state != "completed")
+                .order_by(Order.fulfillment_time, Order.id)
+            )
+        ).all()
+    quantities = {}
+    for order in orders:
+        for item in order.items:
+            key = (item.listing_id, item.name_snapshot)
+            quantities[key] = quantities.get(key, 0) + item.quantity
+    return _page(
+        request,
+        "admin/preparation.html",
+        day=day,
+        orders=orders,
+        quantities=sorted(quantities.items(), key=lambda row: row[0][1].lower()),
+    )
+
+
+@bp.get("/activity")
+async def administrative_activity(request):
+    """Show filtered, paginated administrative request outcomes."""
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    try:
+        page = max(1, int(request.args.get("page", "1")))
+    except ValueError:
+        page = 1
+    async with session_scope() as db:
+        query = select(AdminActivity, User.email).join(User, User.id == AdminActivity.actor_id)
+        path = str(request.args.get("path", "")).strip()[:100]
+        if path:
+            query = query.where(AdminActivity.path.contains(path, autoescape=True))
+        rows = (await db.execute(query.order_by(AdminActivity.id.desc()).offset((page - 1) * 50).limit(51))).all()
+    return _page(request, "admin/activity.html", rows=rows[:50], more=len(rows) > 50, page=page, path=path)
 
 
 def _page(request, template: str, status: int = 200, **context):
@@ -940,6 +1015,35 @@ async def inquiry_follow_up(request, pk: int):
         inquiry.follow_up_date = follow_up
         inquiry.internal_notes = notes
         await db.commit()
+    return redirect(f"/admin/inquiries/{pk}")
+
+
+@bp.post("/inquiries/<pk:int>/import-email")
+async def import_inquiry_email(request, pk: int):
+    """Import one address-verified email into an inquiry history."""
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    upload = request.files.get("email_file")
+    if not upload:
+        return json({"detail": "Choose an exported .eml email."}, status=400)
+    async with session_scope() as db:
+        inquiry = await db.scalar(select(Inquiry).where(Inquiry.id == pk).with_for_update())
+        if not inquiry:
+            return json({"detail": "Inquiry not found."}, status=404)
+        try:
+            values = parse_email(upload.body, inquiry.email, str(request.form.get("direction", "")))
+        except ValueError as exc:
+            return json({"detail": str(exc)}, status=400)
+        existing = await db.scalar(
+            select(InquiryCorrespondence).where(InquiryCorrespondence.source_id == values["source_id"])
+        )
+        if existing and existing.inquiry_id != pk:
+            return json({"detail": "This email was already imported for another inquiry."}, status=409)
+        if not existing:
+            db.add(InquiryCorrespondence(inquiry_id=pk, actor_id=request.ctx.admin.id, **values))
+            await db.commit()
     return redirect(f"/admin/inquiries/{pk}")
 
 
@@ -1463,6 +1567,26 @@ async def refresh_invoice_refund(request, refund_id: int):
     return redirect(destination)
 
 
+@bp.post("/invoice-refunds/<kind:str>/<pk:int>/import")
+async def import_invoice_refund(request, kind: str, pk: int):
+    """Verify an existing Stripe refund before importing its journal entry."""
+    if not request.ctx.admin:
+        return redirect("/admin/login")
+    if not _valid_csrf(request):
+        return json({"detail": "Invalid CSRF token."}, status=403)
+    try:
+        await import_external_invoice_refund(
+            kind, pk, str(request.form.get("stripe_refund_id", "")).strip(), request.ctx.admin.id
+        )
+    except ValueError as exc:
+        return json({"detail": str(exc)}, status=409)
+    if kind == "wedding":
+        async with session_scope() as db:
+            quote_id = await db.scalar(select(WeddingInvoice.quote_id).where(WeddingInvoice.id == pk))
+        return redirect(f"/admin/weddings/{quote_id}")
+    return redirect(f"/admin/proposals/{pk}")
+
+
 @bp.post("/invoice-refunds/<kind:str>/<pk:int>/close")
 async def close_refunded_quote(request, kind: str, pk: int):
     """Close a fully refunded, review-state wedding or bouquet quote."""
@@ -1972,6 +2096,13 @@ async def site_content_page(request):
         return redirect("/admin/login")
     async with session_scope() as db:
         record = await db.get(SiteContent, 1)
+        photos = (
+            await db.scalars(
+                select(GalleryImage)
+                .where(GalleryImage.active.is_(True))
+                .order_by(GalleryImage.sort_order, GalleryImage.id)
+            )
+        ).all()
 
     checkout = urlsplit(get_settings().retail_checkout_success_url)
     storefront_base = f"{checkout.scheme}://{checkout.netloc}" if checkout.scheme in ("http", "https") else ""
@@ -1982,6 +2113,8 @@ async def site_content_page(request):
         saved=bool(record),
         updated_at=record.updated_at if record else None,
         storefront_base=storefront_base,
+        photos=photos,
+        photo_slots=PHOTO_SLOTS,
     )
 
 
@@ -1998,6 +2131,18 @@ async def save_site_content(request):
     except ValueError as exc:
         return json({"detail": str(exc)}, status=400)
     async with session_scope() as db:
+        selected = {}
+        for slot in PHOTO_SLOTS:
+            raw_id = str(request.form.get(f"photo_{slot}", "")).strip()
+            if not raw_id:
+                continue
+            if not raw_id.isdigit():
+                return json({"detail": "Choose a photo from the gallery."}, status=400)
+            photo = await db.get(GalleryImage, int(raw_id))
+            if not photo or not photo.active or not photo.alt_text.strip():
+                return json({"detail": "Selected photos must be active and have alt text."}, status=400)
+            selected[slot] = photo.id
+        content["photos"] = selected
         record = await db.scalar(select(SiteContent).where(SiteContent.id == 1).with_for_update())
         if not record:
             record = SiteContent(id=1)

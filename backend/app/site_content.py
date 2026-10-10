@@ -22,6 +22,18 @@ FIELDS = {
     "wholesaleIntro": 2000,
 }
 
+PHOTO_SLOTS = {
+    "home": "Home hero",
+    "about": "About hero",
+    "weddings": "Weddings hero",
+    "order": "Order flowers hero",
+    "contact": "Contact hero",
+    "wholesale": "Wholesale hero",
+    "homeFlowers": "Home flowers card",
+    "homeWeddings": "Home weddings card",
+    "homeWholesale": "Home wholesale card",
+}
+
 
 def validate_content(form) -> dict:
     """Validate and normalize owner-edited storefront content."""

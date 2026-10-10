@@ -1,0 +1,8 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>Daily preparation · {{ day|admin_date }}</h1><p class="muted">Paid, incomplete orders scheduled for this Eastern date only. Unscheduled orders and partially paid weddings are excluded. Quantities are preparation guidance, not a new stock deduction; custom services may be included.</p>
+<form class="no-print" method="get"><label for="date">Fulfillment date</label><input id="date" name="date" type="date" value="{{ day }}" required><p><button>Show day</button> <button type="button" class="button--ghost" onclick="window.print()">Print preparation list</button></p></form>
+<h2>Combined item quantities</h2><div class="table-scroll"><table><thead><tr><th>Item</th><th>Listing</th><th>Quantity</th></tr></thead><tbody>{% for key, quantity in quantities %}<tr><td>{{ key[1] }}</td><td>{{ 'FL-' ~ '%04d'|format(key[0]) if key[0] else 'Custom work' }}</td><td>{{ quantity }}</td></tr>{% else %}<tr><td colspan="3">No scheduled paid work.</td></tr>{% endfor %}</tbody></table></div>
+<h2>Orders</h2>{% for order in orders %}<section class="card" style="display:block"><h3><a href="/admin/orders/{{ order.id }}">HS{{ '%06d'|format(order.id) }}</a> · {{ order.fulfillment|admin_label }} · {{ order.fulfillment_time or 'Time not set' }}</h3><p>{{ order.customer_name }} · {{ order.fulfillment_state|admin_label }}</p><ul>{% for item in order.items %}<li>{{ item.quantity }} × {{ item.name_snapshot }}</li>{% endfor %}</ul><p>{{ order.internal_notes }}</p></section>{% endfor %}
+<p class="muted">Printed preparation lists may contain private customer information; store and dispose of them securely.</p>
+{% endblock %}

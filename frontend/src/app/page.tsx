@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { getSiteContent } from "@/lib/api";
+import { getSiteContent, sitePhoto } from "@/lib/api";
 
 export default async function Home() {
   const content = await getSiteContent();
@@ -15,6 +15,7 @@ export default async function Home() {
           fill
           priority
           sizes="100vw"
+          {...sitePhoto(content, "home")}
         />
         <div className="hero__copy section-wrap">
           <p className="eyebrow">Mountain Top · Northeast Pennsylvania</p>
@@ -53,6 +54,7 @@ export default async function Home() {
               alt="A bucket of freshly gathered seasonal flowers"
               fill
               sizes="(max-width: 850px) 92vw, 30vw"
+              {...sitePhoto(content, "homeFlowers")}
             />
           </div>
           <div className="pathway-card__body">
@@ -72,6 +74,7 @@ export default async function Home() {
               alt="A garden-style arrangement of dahlias and other blooms"
               fill
               sizes="(max-width: 850px) 92vw, 30vw"
+              {...sitePhoto(content, "homeWeddings")}
             />
           </div>
           <div className="pathway-card__body">
@@ -91,6 +94,7 @@ export default async function Home() {
               alt="Freshly cut stems held up in the garden"
               fill
               sizes="(max-width: 850px) 92vw, 30vw"
+              {...sitePhoto(content, "homeWholesale")}
             />
           </div>
           <div className="pathway-card__body">

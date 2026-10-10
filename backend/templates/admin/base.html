@@ -39,7 +39,7 @@
     input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=time], textarea, select { width:100%; padding:0.5rem; border:1px solid var(--taupe); border-radius:8px; font:inherit; background:#fff; color:var(--ink); }
     input[type=checkbox] { width:1.1rem; height:1.1rem; margin-top:0.4rem; }
     .row { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
-    .muted { color:#8a7368; font-size:0.85rem; }
+    .muted { color:#705a50; font-size:0.85rem; }
     .status-badge { display:inline-flex; align-items:center; border-radius:999px; padding:0.18rem 0.65rem; font:600 0.78rem/1.4 ui-sans-serif,system-ui,sans-serif; white-space:nowrap; background:#ede2d3; color:#4c342d; vertical-align:middle; }
     .status-badge--success { background:#e5f1e5; color:#275334; }
     .status-badge--attention { background:#f8dede; color:#763c3c; }
@@ -51,6 +51,21 @@
     fieldset { border:1px solid var(--taupe); border-radius:12px; margin:0.8rem 0; padding:0.8rem; }
     .table-scroll { overflow-x:auto; margin-bottom:1rem; }
     a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:3px solid #965576; outline-offset:2px; }
+    .skip-link { position:fixed; left:1rem; top:-8rem; z-index:100; background:var(--ink); color:white; padding:0.7rem 1rem; border-radius:8px; }
+    .skip-link:focus { top:1rem; }
+    button:disabled { cursor:not-allowed; opacity:0.6; }
+    @media (min-width:1100px) {
+      body:has(.admin-menu) header { position:fixed; inset:0 auto 0 0; width:235px; overflow-y:auto; border-right:1px solid var(--taupe); border-bottom:0; }
+      header nav, .admin-menu__links { flex-direction:column; align-items:stretch; }
+      .brand { margin-bottom:0.8rem; }
+      .admin-menu { width:100%; }
+      .admin-menu__links a { padding:0.45rem 0.6rem; }
+      .admin-menu__links a:hover { background:#ede2d3; }
+      .admin-menu__links form { margin:1rem 0 0 !important; }
+      body:has(.admin-menu) main { margin-left:235px; max-width:1400px; }
+    }
+    @media (max-width:680px) { button, .button, .admin-menu__links a { min-height:44px; } .card { flex-wrap:wrap; } }
+    @media print { body:has(.admin-menu) main { margin-left:0; } }
     @media print { header, .no-print, button { display:none !important; } body { background:white; color:black; } main { max-width:none; } }
     @media (min-width:640px){ .grid { grid-template-columns:1fr 1fr; } .grid .full { grid-column:1 / -1; } }
     @media (max-width:680px){
@@ -64,6 +79,7 @@
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
   {% if admin %}
    <header><nav aria-label="Admin navigation">
      <a class="brand" href="/admin/">Honey Summer <span class="muted">· studio</span></a>
@@ -72,13 +88,16 @@
     {% for item in models %}<a href="/admin/{{ item.slug }}">{{ item.label }}</a>{% endfor %}
     <a href="/admin/proposals/">Bouquet proposals</a>
     <a href="/admin/weddings/">Wedding quotes</a>
-    <a href="/admin/inventory/stock">Shop-wide stock</a>
+     <a href="/admin/inventory/stock">Shop-wide stock</a>
+     <a href="/admin/orders/preparation">Daily preparation</a>
      <a href="/admin/reports/sales">Sales ledger</a>
      <a href="/admin/reports/balances">Invoice balances</a>
      <a href="/admin/reports/operations">Products &amp; waste</a>
      <a href="/admin/operations/attention">Needs attention</a>
      <a href="/admin/site-content">Site content</a>
-    <a href="/admin/customers">Customers</a>
+     <a href="/admin/customers">Customers</a>
+     <a href="/admin/activity">Activity</a>
+     <a href="/admin/account">Account settings</a>
      <form class="inline" method="post" action="/admin/logout" style="margin-left:auto">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="button--ghost button--sm" type="submit">Sign out</button>
@@ -86,11 +105,17 @@
      </div></details>
     </nav></header>
   {% endif %}
-  <main>
+  <main id="main-content" tabindex="-1">
     {% block content %}{% endblock %}
   </main>
   {% if admin %}
-  <script>
+   <script>
+   for (const table of document.querySelectorAll('main table')) {
+     if (!table.closest('.table-scroll')) {
+       const wrapper=document.createElement('div');wrapper.className='table-scroll';
+       table.before(wrapper);wrapper.appendChild(table);
+     }
+   }
   const adminMenu = document.querySelector('.admin-menu');
   if (adminMenu) {
     const mobile = window.matchMedia('(max-width:680px)');
@@ -114,7 +139,7 @@
   }
   function showFieldError(form, fieldName, detail) {
     const field = fieldName === 'installment_total' ? form.querySelector('#installment-total')
-      : fieldName === 'line_ids' ? form.querySelector('#quote-lines, #proposal-lines')
+      : fieldName === 'line_ids' ? form.querySelector('#quote-lines, #proposal-lines, #amend_lines')
       : fieldName === 'installment_ids' ? form.querySelector('#installment-rows')
       : form.elements.namedItem(fieldName);
     if (!(field instanceof HTMLElement) || field.closest('[hidden]')) return false;

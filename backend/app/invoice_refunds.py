@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import stripe
 from sqlalchemy import select
@@ -170,6 +170,107 @@ async def reconcile_invoice_refund(refund_id: int) -> str:
         await _complete_refund(db, row, remote.id)
         await db.commit()
         return "succeeded"
+
+
+async def import_external_invoice_refund(kind: str, pk: int, refund_id: str, actor_id: int) -> None:
+    """Verify and import a Stripe refund without issuing one or returning stock."""
+    if kind not in ("wedding", "bouquet") or not refund_id.startswith("re_") or len(refund_id) > 255:
+        raise ValueError("Enter a Stripe refund ID (re_...).")
+    if not get_settings().stripe_secret_key:
+        raise ValueError("Stripe is not configured.")
+    stripe.api_key = get_settings().stripe_secret_key
+    source = "wedding_invoice_id" if kind == "wedding" else "proposal_id"
+    async with session_scope() as db:
+        if kind == "wedding":
+            invoice = await db.scalar(select(WeddingInvoice).where(WeddingInvoice.id == pk).with_for_update())
+            if not invoice or invoice.status != "paid":
+                raise ValueError("Only a verified paid invoice can be reconciled.")
+            owner = await db.scalar(select(WeddingQuote).where(WeddingQuote.id == invoice.quote_id).with_for_update())
+            invoice_id, total = invoice.stripe_invoice_id, invoice.amount_cents
+        else:
+            owner = await db.scalar(select(BouquetProposal).where(BouquetProposal.id == pk).with_for_update())
+            if not owner or not owner.order_id or not owner.history:
+                raise ValueError("Only a verified paid invoice can be reconciled.")
+            invoice_id, total = owner.stripe_invoice_id, owner.history[-1]["draft"]["total_cents"]
+        try:
+            remote = await asyncio.to_thread(stripe.Refund.retrieve, refund_id)
+            paid_invoice = await asyncio.to_thread(stripe.Invoice.retrieve, invoice_id)
+            payments = await asyncio.to_thread(stripe.InvoicePayment.list, invoice=invoice_id, status="paid", limit=2)
+            if (
+                paid_invoice.id != invoice_id
+                or paid_invoice.status != "paid"
+                or paid_invoice.total != total
+                or paid_invoice.currency != "usd"
+                or payments.has_more
+                or len(payments.data) != 1
+            ):
+                raise ValueError("Invoice payment does not match the local paid record.")
+            payment = payments.data[0]
+            if (
+                payment.invoice != invoice_id
+                or payment.amount_paid != total
+                or payment.currency != "usd"
+                or payment.status != "paid"
+                or payment.payment.type != "payment_intent"
+            ):
+                raise ValueError("Unsupported or mismatched invoice payment.")
+            intent_id = payment.payment.payment_intent
+            intent = await asyncio.to_thread(stripe.PaymentIntent.retrieve, intent_id)
+            charge = await asyncio.to_thread(stripe.Charge.retrieve, intent.latest_charge)
+            if (
+                intent.id != intent_id
+                or intent.status != "succeeded"
+                or intent.amount_received != total
+                or intent.currency != "usd"
+                or charge.id != intent.latest_charge
+                or charge.payment_intent != intent_id
+                or remote.id != refund_id
+                or remote.payment_intent != intent_id
+                or remote.charge != charge.id
+                or remote.currency != "usd"
+                or remote.status != "succeeded"
+                or not 0 < remote.amount <= total
+            ):
+                raise ValueError("Refund does not match this invoice's confirmed original payment.")
+        except ValueError:
+            raise
+        except Exception:
+            raise ValueError("Stripe could not verify the refund. No local payment state changed.") from None
+        existing = await db.scalar(select(InvoiceRefund).where(InvoiceRefund.stripe_refund_id == remote.id))
+        if existing:
+            if getattr(existing, source) != pk or existing.amount_cents != remote.amount:
+                raise ValueError("This refund is already linked to a different payment.")
+            if existing.status == "succeeded":
+                return
+        if await db.scalar(select(OrderRefund.id).where(OrderRefund.reference == remote.id)):
+            raise ValueError("This refund already appears in the order journal; reconcile manually.")
+        previous = (await db.scalars(select(InvoiceRefund).where(getattr(InvoiceRefund, source) == pk))).all()
+        unknown = [row for row in previous if row.status != "succeeded" and row != existing]
+        if unknown:
+            if len(unknown) != 1 or (remote.get("metadata") or {}).get("invoice_refund_id") != str(unknown[0].id):
+                raise ValueError("An uncertain request remains. Import only its exact metadata-matched Stripe refund.")
+            existing = unknown[0]
+        if existing and (existing.amount_cents != remote.amount or existing.payment_intent_id != intent_id):
+            raise ValueError("Refund differs from the uncertain request.")
+        recorded = sum(row.amount_cents for row in previous if row.status == "succeeded")
+        if recorded + remote.amount > total or charge.amount_refunded < recorded + remote.amount:
+            raise ValueError("Refund totals do not agree with the original charge.")
+        if not existing:
+            existing = InvoiceRefund(
+                **{source: pk},
+                amount_cents=remote.amount,
+                payment_intent_id=intent_id,
+                status="review",
+                stripe_refund_id=remote.id,
+                reason="Imported verified Stripe refund",
+                idempotency_key=str(uuid4()),
+                actor_id=actor_id,
+            )
+            db.add(existing)
+            await db.flush()
+        owner.status = "review"
+        await _complete_refund(db, existing, remote.id)
+        await db.commit()
 
 
 async def issue_invoice_refund(kind: str, pk: int, form, actor_id: int) -> InvoiceRefund:

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Heart, Leaf, Scissors } from "lucide-react";
 
 import { site } from "@/lib/site";
-import { getSiteContent } from "@/lib/api";
+import { getSiteContent, sitePhoto } from "@/lib/api";
 
 export const metadata: Metadata = {
   title: "Our Story",
@@ -52,6 +52,7 @@ export default async function AboutPage() {
             height={1200}
             priority
             sizes="(max-width: 850px) 92vw, 42vw"
+            {...sitePhoto(content, "about")}
           />
         </div>
       </section>

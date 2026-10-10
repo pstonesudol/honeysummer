@@ -20,7 +20,15 @@ async def site_content(request):
     """Return the owner-edited storefront content."""
     async with session_scope() as session:
         settings = await session.get(SiteContent, 1)
-    return json({"content": settings.content if settings else {}})
+        content = dict(settings.content) if settings else {}
+        photos = {}
+        for slot, pk in content.get("photos", {}).items():
+            photo = await session.get(GalleryImage, pk)
+            if photo and photo.active:
+                photos[slot] = _gallery_payload(photo)
+        if "photos" in content:
+            content["photos"] = photos
+    return json({"content": content})
 
 
 def _gallery_payload(image: GalleryImage) -> dict:

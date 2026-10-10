@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Camera, Mail, MapPin } from "lucide-react";
 
 import { InquiryForm } from "@/components/inquiry-form";
-import { getSiteContent } from "@/lib/api";
+import { getSiteContent, sitePhoto } from "@/lib/api";
 import { inquiryIntros } from "@/lib/inquiry-fields";
 import { pickup, site } from "@/lib/site";
 
@@ -121,6 +121,7 @@ export default async function ContactPage() {
               height={1200}
               priority
               sizes="(max-width: 850px) 92vw, 42vw"
+              {...sitePhoto(content, "contact")}
             />
           </div>
         </div>

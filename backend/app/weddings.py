@@ -522,6 +522,13 @@ async def send_wedding_invoice(quote_id: int, step: str, *, scheduled: bool = Fa
         quote = await db.scalar(select(WeddingQuote).where(WeddingQuote.id == quote_id).with_for_update())
         if not quote:
             raise ValueError("This invoice cannot be sent in the current state.")
+        if step != "amended" and await db.scalar(
+            select(InvoiceRefund.id)
+            .join(WeddingInvoice, WeddingInvoice.id == InvoiceRefund.wedding_invoice_id)
+            .where(WeddingInvoice.quote_id == quote_id)
+            .limit(1)
+        ):
+            raise ValueError("A refund paused the original payment plan. Agree revised terms before collecting more.")
         if step == "amended":
             if quote.status != "amendment_ready" or not quote.amendments or quote.order_id or scheduled:
                 raise ValueError("A customer-accepted revised agreement is required before sending.")
@@ -863,6 +870,13 @@ async def revise_wedding_invoice(quote_id: int, invoice_id: int, *, actor_id: in
             if row.step.startswith("part_") and row.step != "part_01"
             else "draft"
         )
+        if await db.scalar(
+            select(InvoiceRefund.id)
+            .join(WeddingInvoice, WeddingInvoice.id == InvoiceRefund.wedding_invoice_id)
+            .where(WeddingInvoice.quote_id == quote_id)
+            .limit(1)
+        ):
+            quote.status = "review"
         quote.activity = [
             *(quote.activity or []),
             dict(
