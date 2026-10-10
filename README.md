@@ -60,7 +60,7 @@ pre-commit install
 
 After that the hooks run automatically on `git commit`. Run them against everything with `pre-commit run --all-files`. The hooks use the project's own toolchain (`uv run ruff …` and the frontend workspace's `eslint`), so versions always match the checked-in config.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the same gates on every push and pull request: `uv lock --check`, `ruff check`, `ruff format --check`, and `uv run pytest` (including the opt-in Postgres concurrency tests against a service database), plus `eslint` for the frontend.
+GitHub Actions (`.github/workflows/ci.yml`) runs the same gates on every push and pull request: `uv lock --check`, `ruff check`, `ruff format --check`, and `uv run pytest` (including the opt-in Postgres concurrency tests against a service database), plus `eslint` and cart unit tests for the frontend.
 
 ### Content and inquiries
 
@@ -74,6 +74,10 @@ The marketing pages read live content from the API and post inquiries back to it
 - `POST /api/retail/checkout/` — guest retail checkout: holds stock, creates an order, and starts Stripe Checkout
 
 Announcements, gallery images, flower listings, florist accounts, inquiries, and orders are all managed from the admin at `/admin` — create the first operator account with `uv run python -m app.seed`. Set `RESEND_API_KEY` (see `backend/.env.example`) to send mail through Resend; without it, messages print to the console for local development. Uploaded photos are stored under `backend/media/` in development and served at `/media/`. Move to Cloudflare R2 before launch so uploads survive deploys.
+
+### Global shopping carts
+
+The header cart persists separate retail and account-scoped wholesale baskets. Review each order at `/checkout/retail` or `/checkout/wholesale`; only server-verified payment clears purchased quantities, and the other basket remains saved. See [`backend/PHASE10_CART.md`](backend/PHASE10_CART.md) for checkout recovery, migration and verification details. Run cart unit tests with `npm run test --workspace frontend`.
 
 ### Delivery fees
 

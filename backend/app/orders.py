@@ -112,6 +112,7 @@ async def reserve_order(
     pickup_window: str = "",
     delivery_address: str = "",
     notes: str = "",
+    checkout_key: str | None = None,
 ) -> tuple[Order, list[dict]]:
     """Create an order and hold stock for every item.
 
@@ -134,6 +135,7 @@ async def reserve_order(
         pickup_window=pickup_window,
         delivery_address=delivery_address,
         notes=notes,
+        checkout_key=checkout_key,
         hold_expires_at=datetime.now(UTC) + timedelta(minutes=hold_minutes),
     )
     session.add(order)
@@ -160,6 +162,9 @@ async def reserve_order(
                 if listing is not None
                 else "That flower is no longer available."
             )
+        for item in items:
+            if int(item["id"]) == listing_id and "price" in item and str(item["price"]) != format(listing.price, ".2f"):
+                raise StockError(f"The price of {listing.name} changed. Review your cart before checkout.")
         await change_stock(
             session,
             listing,

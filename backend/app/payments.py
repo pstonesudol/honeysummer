@@ -70,6 +70,7 @@ async def create_checkout(
             if current.status != "pending":
                 raise RuntimeError("The reservation is no longer available.")
             current.stripe_session_id = checkout.id
+            current.checkout_url = checkout.url
             if isinstance(getattr(checkout, "expires_at", None), (int, float)):
                 current.hold_expires_at = datetime.fromtimestamp(checkout.expires_at, UTC)
             await db.commit()

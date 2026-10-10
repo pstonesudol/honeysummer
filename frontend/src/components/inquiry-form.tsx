@@ -5,7 +5,8 @@ import { AlertCircle, Loader2, Lock } from "lucide-react";
 
 import { submitInquiry } from "@/lib/actions";
 import type { FlowerListing } from "@/lib/api";
-import { estimateDeliveryFee } from "@/lib/delivery-fee";
+import { useCart } from "./cart-provider";
+import { ProductGrid } from "./retail-shop";
 import {
   inquiryFields,
   type InquiryField,
@@ -180,7 +181,6 @@ export function InquiryForm({
   );
 }
 type Flower = FlowerListing;
-type Cart = Record<number, number>;
 
 async function api(path: string, options?: RequestInit) {
   const response = await fetch(`/api/${path}`, { cache: "no-store", ...options, headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) } });
@@ -190,29 +190,17 @@ async function api(path: string, options?: RequestInit) {
 }
 
 export function WholesaleShop() {
-  const [account, setAccount] = useState<{ authenticated: boolean; approved: boolean; business_name: string } | null>(null);
-  const [flowers, setFlowers] = useState<Flower[]>([]);
-  const [cart, setCart] = useState<Cart>({});
+  const { account, refreshAccount, logout } = useCart();
+  const [catalogue, setCatalogue] = useState<{ owner: number | null; flowers: Flower[] }>({ owner: null, flowers: [] });
+  const flowers = catalogue.owner === account.id ? catalogue.flowers : [];
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [fulfillment, setFulfillment] = useState<"pickup" | "delivery">("pickup");
-  const [pickupWindow, setPickupWindow] = useState("");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
-
   useEffect(() => {
     let active = true;
-    function refresh() {
-      api("auth/me/")
-        .then((next) => { if (active) setAccount(next); })
-        .catch(() => { if (active) setAccount({ authenticated: false, approved: false, business_name: "" }); });
-    }
-    refresh();
-    function onVisibilityChange() { if (document.visibilityState === "visible") refresh(); }
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => { active = false; document.removeEventListener("visibilitychange", onVisibilityChange); };
-  }, []);
-  useEffect(() => { if (account?.authenticated && account.approved) api("flowers/").then(setFlowers).catch(() => undefined); }, [account]);
+    if (account.authenticated && account.approved) api("flowers/").then((next) => { if (active) setCatalogue({ owner: account.id, flowers: next }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [account.id, account.authenticated, account.approved]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setMessage("");
@@ -227,34 +215,14 @@ export function WholesaleShop() {
       }
       const data = await api(`auth/${mode}/`, { method: "POST", body: JSON.stringify(body) });
       if (mode === "signup") { setMessage(data.detail); formElement.reset(); }
-      else setAccount(data);
+      else await refreshAccount();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to continue."); }
-    setBusy(false);
-  }
-
-  async function checkout() {
-    if (fulfillment === "delivery" && !deliveryAddress.trim()) {
-      setMessage("Enter a delivery address before checkout.");
-      return;
-    }
-    setBusy(true); setMessage("");
-    try {
-      const data = await api("checkout/", { method: "POST", body: JSON.stringify({
-        items: Object.entries(cart).map(([id, quantity]) => ({ id: Number(id), quantity })),
-        fulfillment,
-        pickup_window: fulfillment === "pickup" ? pickupWindow.trim() : "",
-        delivery_address: fulfillment === "delivery" ? deliveryAddress.trim() : "",
-      }) });
-      if (data.checkout_url) window.location.href = data.checkout_url;
-      else setMessage(`Order ${data.order_reference ?? `#${data.order_id}`} received. Isabella will confirm your pickup details.`);
-      setCart({});
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Checkout failed."); }
     setBusy(false);
   }
 
   if (account?.authenticated && !account.approved) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">
     <div><p className="eyebrow">Wholesale shop</p><h2 id="shop-title">Your account is awaiting approval.</h2><p>Isabella will email you once your account is ready. You can sign in with the password you chose.</p></div>
-    <div><button className="text-link" onClick={() => api("auth/logout/", { method: "POST" }).then(() => setAccount({ authenticated: false, approved: false, business_name: "" }))}>Sign out</button></div>
+    <div><button className="text-link" onClick={() => void logout()}>Sign out</button></div>
   </section>;
 
   if (!account?.authenticated) return <section className="wholesale-access section-wrap" aria-labelledby="shop-title">
@@ -275,37 +243,9 @@ export function WholesaleShop() {
     </form>
   </section>;
 
-  const cartTotal = Object.entries(cart).reduce((sum, [id, quantity]) => sum + Number(flowers.find((flower) => flower.id === Number(id))?.price ?? 0) * quantity, 0);
-  const deliveryFee = fulfillment === "delivery" ? estimateDeliveryFee(
-    Object.entries(cart).flatMap(([id, quantity]) => {
-      const flower = flowers.find((candidate) => candidate.id === Number(id));
-      return flower && quantity > 0 ? [{ flower, quantity }] : [];
-    }),
-  ) : 0;
   return <section className="wholesale-shop section-wrap" aria-labelledby="shop-title">
-    <div className="wholesale-shop__heading"><div><p className="eyebrow">Welcome, {account.business_name}</p><h2 id="shop-title">This week’s stems.</h2></div><button className="text-link" onClick={() => api("auth/logout/", { method: "POST" }).then(() => setAccount({ authenticated: false, approved: false, business_name: "" }))}>Sign out</button></div>
-    {flowers.length === 0 ? <p>Nothing is listed today — check back soon.</p> : <div className="flower-grid">{flowers.map((flower) => <article className="flower-card" key={flower.id}>
-      {flower.photo_url ? <img src={flower.photo_url} alt="" /> : <div className="flower-card__placeholder">✿</div>}<div className="flower-card__body"><p className="eyebrow">{flower.color || "Seasonal"}</p><h3>{flower.name}</h3><p>{flower.variety} {flower.stem_notes && `· ${flower.stem_notes}`}</p><strong>${flower.price} / {flower.unit}</strong>{Number(flower.delivery_fee) > 0 ? <p>Delivery: ${flower.delivery_fee} {flower.delivery_fee_mode === "per_unit" ? "/ unit" : flower.delivery_fee_mode === "per_order" ? "/ order" : "/ listing"}</p> : null}{flower.available ? <div className="quantity"><label htmlFor={`flower-${flower.id}`}>Quantity</label><input id={`flower-${flower.id}`} type="number" min="0" max={flower.quantity_available} value={cart[flower.id] ?? 0} onChange={(event) => setCart({ ...cart, [flower.id]: Math.min(flower.quantity_available, Math.max(0, Number(event.target.value))) })} /></div> : <span className="sold-out">Sold out</span>}</div>
-    </article>)}</div>}
-    {Object.keys(cart).length > 0 && <div className="retail-checkout inquiry-form">
-      <div className="form-grid">
-        <div className="form-field form-field--half">
-          <label htmlFor="wholesale-fulfillment">Pickup or delivery?</label>
-          <select id="wholesale-fulfillment" value={fulfillment} onChange={(event) => setFulfillment(event.target.value as "pickup" | "delivery")}>
-            <option value="pickup">Pickup at the farm</option>
-            <option value="delivery">Delivery</option>
-          </select>
-        </div>
-        {fulfillment === "delivery" ? <div className="form-field">
-          <label htmlFor="wholesale-delivery-address">Delivery address (required)</label>
-          <input id="wholesale-delivery-address" autoComplete="street-address" required value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} />
-        </div> : <div className="form-field">
-          <label htmlFor="wholesale-pickup-window">Preferred pickup window (optional)</label>
-          <input id="wholesale-pickup-window" value={pickupWindow} onChange={(event) => setPickupWindow(event.target.value)} />
-        </div>}
-      </div>
-      <div className="cart-bar"><span>{Object.values(cart).reduce((sum, quantity) => sum + quantity, 0)} stems · ${cartTotal.toFixed(2)}{fulfillment === "delivery" ? ` + $${deliveryFee.toFixed(2)} delivery = $${(cartTotal + deliveryFee).toFixed(2)}` : ""}</span><button className="button button--dark" disabled={busy} onClick={checkout}>Continue to checkout</button></div>
-    </div>}
+    <div className="wholesale-shop__heading"><div><p className="eyebrow">Welcome, {account.business_name}</p><h2 id="shop-title">This week’s stems.</h2></div><button className="text-link" onClick={() => void logout()}>Sign out</button></div>
+    {flowers.length === 0 ? <p>Nothing is listed today — check back soon.</p> : <ProductGrid flowers={flowers} channel="wholesale" />}
     {message && <p role="status" className="form-message">{message}</p>}
   </section>;
 }

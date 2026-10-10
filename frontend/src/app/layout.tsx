@@ -3,6 +3,8 @@ import { Geist } from "next/font/google";
 import localFont from "next/font/local";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
+import { CartProvider } from "@/components/cart-provider";
+import { CartPanel } from "@/components/cart-panel";
 import { getSiteContent } from "@/lib/api";
 import "./globals.css";
 
@@ -61,11 +63,11 @@ export default async function RootLayout({
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
-        <div className="site-shell">
+        <CartProvider><div className="site-shell">
           <Header />
           <main id="main-content">{children}</main>
            <Footer content={content} />
-        </div>
+        </div><CartPanel /></CartProvider>
       </body>
     </html>
   );

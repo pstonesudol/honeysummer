@@ -346,6 +346,8 @@ class Order(Base):
     payment_method: Mapped[str] = mapped_column(String(20), default="stripe_checkout")
     payment_reference: Mapped[str] = mapped_column(String(255), default="")
     manual_key: Mapped[str | None] = mapped_column(String(36), unique=True, nullable=True)
+    checkout_key: Mapped[str | None] = mapped_column(String(36), unique=True, index=True, nullable=True)
+    checkout_url: Mapped[str] = mapped_column(Text, default="")
     stripe_session_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     status: Mapped[str] = mapped_column(String(12), default="pending")
     hold_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

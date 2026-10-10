@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Menu } from "lucide-react";
 import { AnnouncementBanner } from "./announcement-banner";
 import { BrandMark } from "./brand-mark";
+import { CartButton } from "./cart-panel";
 
 const navigation = [
   { href: "/about", label: "About" },
@@ -24,7 +25,7 @@ export function Header() {
             </Link>
           ))}
         </nav>
-        <details className="mobile-nav">
+        <div className="header-actions"><CartButton /><details className="mobile-nav">
           <summary aria-label="Open navigation">
             <Menu aria-hidden="true" size={16} strokeWidth={1.8} />
             <span>Menu</span>
@@ -36,7 +37,7 @@ export function Header() {
               </Link>
             ))}
           </nav>
-        </details>
+        </details></div>
       </header>
     </>
   );

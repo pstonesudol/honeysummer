@@ -12,12 +12,14 @@ import stripe
 from sanic import Blueprint
 from sanic.response import json
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from ..auth import get_current_user
+from ..cart_checkout import checkout_key, existing_attempt, payload
 from ..db import session_scope
-from ..models import WeddingInvoice
-from ..orders import StockError, reserve_order
-from ..payments import apply_checkout_event, complete_without_stripe, create_checkout
+from ..models import Order, WeddingInvoice
+from ..orders import StockError, load_order, release_order, reserve_order
+from ..payments import apply_checkout_event, complete_without_stripe, create_checkout, expire_checkout
 from ..proposals import apply_invoice_event
 from ..settings import get_settings
 from ..weddings import apply_wedding_invoice_event
@@ -40,6 +42,13 @@ async def checkout(request):
         return json({"detail": "Online payments are not configured."}, status=503)
 
     data = request.json or {}
+    try:
+        key = checkout_key(data)
+    except ValueError as error:
+        return json({"detail": str(error)}, status=400)
+    existing = await existing_attempt(key, "wholesale", user.id)
+    if existing is not None:
+        return existing
     items = data.get("items", [])
     if not items:
         return json({"detail": "Your cart is empty."}, status=400)
@@ -61,12 +70,19 @@ async def checkout(request):
                 fulfillment=fulfillment,
                 pickup_window=str(data.get("pickup_window", "")),
                 delivery_address=delivery_address,
+                notes=str(data.get("notes", "")),
+                checkout_key=key,
             )
             order_id = order.id
             order_reference = order.order_reference
             fulfillment = order.fulfillment
             delivery_address = order.delivery_address
             delivery_fee = order.delivery_fee
+    except IntegrityError:
+        existing = await existing_attempt(key, "wholesale", user.id)
+        if existing is not None:
+            return existing
+        raise
     except (StockError, InvalidOperation) as error:
         return json({"detail": str(error)}, status=409)
 
@@ -111,6 +127,41 @@ async def checkout(request):
     return json(
         {"order_id": order_id, "order_reference": order_reference, "checkout_url": stripe_session.url}, status=201
     )
+
+
+@bp.route("/cart/checkout/<key:str>/", methods=["GET", "DELETE"])
+async def cart_checkout_status(request, key):
+    """Inspect payment or safely cancel an opaque, channel-specific attempt."""
+    try:
+        key = checkout_key({"checkout_key": key})
+    except ValueError:
+        return json({"detail": "Checkout not found."}, status=404)
+    async with session_scope() as session:
+        order = await session.scalar(select(Order).where(Order.checkout_key == key))
+        if order is None:
+            return json({"detail": "Checkout not found."}, status=404)
+        if order.channel == "wholesale":
+            user = await get_current_user(request)
+            if not user or user.id != order.customer_id or not user.profile or not user.profile.approved:
+                return json({"detail": "Wholesale approval is required."}, status=403)
+        order_id = order.id
+        if request.method == "GET":
+            response = json(payload(order))
+            response.headers["Cache-Control"] = "no-store"
+            return response
+    outcome = await expire_checkout(order_id)
+    if outcome != "safe":
+        return json(
+            {"detail": "Payment may still be processing. Resume or wait for confirmation; do not submit again."},
+            status=409,
+        )
+    async with session_scope() as session:
+        order = await load_order(session, order_id, for_update=True)
+        if order.status == "pending":
+            await release_order(session, order)
+            order.status = "cancelled"
+            await session.commit()
+        return json(payload(order))
 
 
 @bp.post("/stripe/webhook/")

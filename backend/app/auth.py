@@ -64,7 +64,8 @@ async def get_current_user(request) -> User | None:
         return None
     async with session_scope() as session:
         result = await session.execute(select(User).options(selectinload(User.profile)).where(User.id == uid))
-        return result.scalar_one_or_none()
+        user = result.scalar_one_or_none()
+        return user if user and user.is_active else None
 
 
 def user_payload(user: User | None) -> dict:
@@ -72,6 +73,7 @@ def user_payload(user: User | None) -> dict:
     profile = user.profile if user else None
     return {
         "authenticated": bool(user),
+        "id": user.id if user else None,
         "approved": bool(profile and profile.approved),
         "business_name": profile.business_name if profile else "",
     }

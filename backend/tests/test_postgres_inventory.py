@@ -3,9 +3,11 @@
 import asyncio
 import os
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db import to_async_url
@@ -169,6 +171,52 @@ async def test_postgres_concurrent_checkout_and_adjustment_do_not_oversell():
                     select(func.sum(InventoryMovement.delta)).where(InventoryMovement.listing_id == last_id)
                 )
                 == available
+            )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_postgres_duplicate_checkout_key_reserves_exactly_once():
+    url = os.getenv("INVENTORY_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("Set INVENTORY_TEST_DATABASE_URL to an isolated migrated Postgres database")
+    engine = create_async_engine(to_async_url(url))
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    key = str(uuid4())
+    try:
+        async with maker() as db:
+            listing = FlowerListing(
+                name="Duplicate attempt", price=Decimal("1.00"), channel="both", quantity_available=5
+            )
+            db.add(listing)
+            await db.commit()
+            listing_id = listing.id
+
+        async def reserve():
+            try:
+                async with maker() as db:
+                    await reserve_order(
+                        db, items=[{"id": listing_id, "quantity": 2}], channel="retail", checkout_key=key
+                    )
+                return "reserved"
+            except IntegrityError:
+                return "duplicate"
+
+        assert sorted(await asyncio.wait_for(asyncio.gather(reserve(), reserve()), timeout=10)) == [
+            "duplicate",
+            "reserved",
+        ]
+        async with maker() as db:
+            assert (await db.get(FlowerListing, listing_id)).quantity_available == 3
+            assert await db.scalar(select(func.count()).select_from(Order).where(Order.checkout_key == key)) == 1
+            assert (
+                await db.scalar(
+                    select(func.count())
+                    .select_from(InventoryMovement)
+                    .where(InventoryMovement.listing_id == listing_id, InventoryMovement.kind == "reserve")
+                )
+                == 1
             )
     finally:
         await engine.dispose()

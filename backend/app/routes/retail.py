@@ -13,7 +13,9 @@ from urllib.parse import urljoin, urlsplit
 from sanic import Blueprint
 from sanic.response import json
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
+from ..cart_checkout import checkout_key, existing_attempt
 from ..db import session_scope
 from ..media import public_media_url
 from ..models import FlowerListing
@@ -72,6 +74,13 @@ async def retail_flowers(request):
 async def retail_checkout(request):
     """Guest checkout for standard retail offerings via Stripe."""
     data = request.json or {}
+    try:
+        key = checkout_key(data)
+    except ValueError as error:
+        return json({"detail": str(error)}, status=400)
+    existing = await existing_attempt(key, "retail")
+    if existing is not None:
+        return existing
     items = data.get("items", [])
     name = str(data.get("name", "")).strip()
     email = str(data.get("email", "")).strip()
@@ -111,10 +120,16 @@ async def retail_checkout(request):
                 pickup_window=pickup_window,
                 delivery_address=delivery_address,
                 notes=notes,
+                checkout_key=key,
             )
             order_id = order.id
             order_reference = order.order_reference
             delivery_fee = order.delivery_fee
+    except IntegrityError:
+        existing = await existing_attempt(key, "retail")
+        if existing is not None:
+            return existing
+        raise
     except (StockError, InvalidOperation) as error:
         return json({"detail": str(error)}, status=409)
 

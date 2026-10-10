@@ -104,6 +104,7 @@ async def test_login_me_and_logout_round_trip(sent):
     )
     assert login.status == 200
     assert login.json == {
+        "id": 1,
         "authenticated": True,
         "approved": True,
         "business_name": "Fern & Fig",
