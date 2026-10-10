@@ -252,7 +252,7 @@ export function WholesaleShop() {
   </section>;
 
   return <section className="wholesale-shop section-wrap" aria-labelledby="shop-title">
-    <div className="wholesale-shop__heading"><div><p className="eyebrow">Welcome, {account.business_name}</p><h2 id="shop-title">This week’s stems.</h2></div><div><a className="text-link" href="/admin/security/">Account security</a> · <button className="text-link" onClick={() => void logout()}>Sign out</button></div></div>
+    <div className="wholesale-shop__heading"><div><p className="eyebrow">Welcome, {account.business_name}</p><h2 id="shop-title">This week’s stems.</h2></div><div className="wholesale-shop__actions"><a className="text-link" href="/admin/security/">Account security</a><button className="button button--quiet button--sm" type="button" onClick={() => void logout()}>Sign out</button></div></div>
     {flowers.length === 0 ? <p>Nothing is listed today — check back soon.</p> : <ProductGrid flowers={flowers} channel="wholesale" />}
     {message && <p role="status" className="form-message">{message}</p>}
   </section>;

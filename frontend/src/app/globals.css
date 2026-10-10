@@ -111,7 +111,8 @@ textarea {
 .wholesale-auth label, .quantity label { display: grid; gap: .35rem; font-family: var(--font-geist), sans-serif; font-size: 1rem; }
 .wholesale-auth input, .wholesale-auth select, .wholesale-auth textarea, .quantity input { border: 1px solid var(--taupe); border-radius: .5rem; background: var(--cream-light); padding: .7rem; }
 .wholesale-auth textarea { resize: vertical; }
-.wholesale-shop__heading { display: flex; justify-content: space-between; align-items: end; margin-bottom: 1.5rem; }
+.wholesale-shop__heading { display: flex; justify-content: space-between; align-items: end; gap: 1.5rem; margin-bottom: 1.5rem; }
+.wholesale-shop__actions { display: flex; align-items: center; gap: 1rem; }
 .flower-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
 .flower-card { overflow: hidden; background: var(--paper); border-radius: 1rem; box-shadow: var(--shadow); }
 .flower-card img, .flower-card__placeholder { width: 100%; height: 220px; object-fit: cover; background: var(--pink-light); }
@@ -124,7 +125,7 @@ textarea {
 .sold-out { color: var(--cocoa); font-family: var(--font-geist), sans-serif; font-size: .95rem; text-transform: uppercase; letter-spacing: .08em; }
 .cart-bar { position: sticky; bottom: 1rem; z-index: 2; display: flex; justify-content: space-between; align-items: center; margin-top: 2rem; padding: 1rem 1.25rem; background: var(--cocoa); color: var(--cream-light); border-radius: 999px; box-shadow: var(--shadow); }
 .form-message { font-family: var(--font-geist), sans-serif; font-size: 1rem; }
-@media (max-width: 700px) { .wholesale-access, .flower-grid { grid-template-columns: 1fr; } .wholesale-access { padding: 1.5rem; } .cart-bar { border-radius: 1rem; gap: 1rem; } }
+@media (max-width: 700px) { .wholesale-access, .flower-grid { grid-template-columns: 1fr; } .wholesale-access { padding: 1.5rem; } .wholesale-shop__heading { flex-direction: column; align-items: start; gap: .85rem; } .wholesale-shop__actions { flex-wrap: wrap; } .cart-bar { border-radius: 1rem; gap: 1rem; } }
 
 .section-intro { max-width: 46rem; margin-bottom: clamp(2rem, 4vw, 3rem); }
 .section-intro h2 { margin-block: 0.4rem 1rem; font-size: clamp(2.5rem, 4vw, 3.75rem); }
@@ -282,6 +283,8 @@ textarea {
   font-size: 0.95rem;
   font-weight: 650;
   letter-spacing: 0.06em;
+  cursor: pointer;
+  white-space: nowrap;
   transition: transform 180ms ease, background 180ms ease;
 }
 
@@ -307,6 +310,16 @@ textarea {
 
 .button--quiet {
   border: 1px solid rgba(106, 78, 66, 0.35);
+}
+
+.button--quiet:hover {
+  background: rgba(106, 78, 66, 0.08);
+}
+
+.button--sm {
+  min-height: 2.25rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.825rem;
 }
 
 .button--light {
