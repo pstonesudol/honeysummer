@@ -9,8 +9,9 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import Blueprint
 from sanic.response import html, json, redirect
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 from .auth import (
     create_session_token,
@@ -350,18 +351,77 @@ async def account_change(request):
     return _page(request, mode="done", message=message)
 
 
+def _row_actions(account, profile) -> list[tuple[str, str, str]]:
+    """List the access actions valid for a single account row as (value, label, kind)."""
+    actions: list[tuple[str, str, str]] = []
+    if account.role == "florist":
+        if profile and profile.application_state != "approved":
+            actions.append(("approve", "Approve application", "primary"))
+        if profile and profile.application_state != "denied":
+            actions.append(("deny", "Deny application", "danger"))
+        actions.append(
+            ("suspend", "Suspend account", "danger")
+            if account.is_active
+            else ("reactivate", "Reactivate account", "secondary")
+        )
+        actions.append(("revoke", "Sign out all sessions", "quiet"))
+        actions.append(("reset_mfa", "Reset authenticator", "quiet"))
+    else:
+        if account.role == "staff":
+            actions.append(("admin", "Promote to admin", "secondary"))
+            if not account.is_active:
+                actions.append(("reinvite", "Reissue invitation", "secondary"))
+        elif account.role == "admin":
+            actions.append(("staff", "Change to staff", "quiet"))
+        actions.append(
+            ("suspend", "Suspend account", "danger")
+            if account.is_active
+            else ("reactivate", "Reactivate account", "secondary")
+        )
+        actions.append(("revoke", "Sign out all sessions", "quiet"))
+        if account.role != "admin":
+            actions.append(("reset_mfa", "Reset authenticator", "quiet"))
+    return actions
+
+
 @bp.get("/access")
 async def access(request):
-    """Admin-only account/audit/outbox/privacy workspace with bounded filters."""
+    """Admin-only user table plus audit/outbox/privacy workspace with bounded filters."""
     user = await _user(request)
     if not user or user.role != "admin":
         return json({"detail": "Admin permission required."}, status=403)
+    search = str(request.args.get("q", "")).strip()[:254]
+    role = str(request.args.get("role", "")).strip()
+    status = str(request.args.get("status", "")).strip()
+    approval = str(request.args.get("approval", "")).strip()
     async with session_scope() as db:
-        user_query = select(User).order_by(User.id.desc()).limit(200)
-        search = str(request.args.get("q", "")).strip()[:254]
+        user_query = (
+            select(User)
+            .options(selectinload(User.profile))
+            .outerjoin(FloristProfile, FloristProfile.user_id == User.id)
+            .order_by(User.id.desc())
+            .limit(200)
+        )
         if search:
-            user_query = user_query.where(User.email.ilike(f"%{search}%"))
-        users = (await db.scalars(user_query)).all()
+            user_query = user_query.where(
+                or_(User.email.ilike(f"%{search}%"), FloristProfile.business_name.ilike(f"%{search}%"))
+            )
+        if role in {"admin", "staff", "florist"}:
+            user_query = user_query.where(User.role == role)
+        if status == "active":
+            user_query = user_query.where(User.is_active.is_(True))
+        elif status == "inactive":
+            user_query = user_query.where(User.is_active.is_(False))
+        if approval in {"pending", "approved", "denied"}:
+            user_query = user_query.where(FloristProfile.application_state == approval)
+        accounts = (await db.scalars(user_query)).all()
+        rows = [
+            {"user": account, "profile": account.profile, "actions": _row_actions(account, account.profile)}
+            for account in accounts
+        ]
+        pending_count = await db.scalar(
+            select(func.count()).select_from(FloristProfile).where(FloristProfile.application_state == "pending")
+        )
         events_query = select(SecurityEvent).order_by(SecurityEvent.id.desc()).limit(100)
         action = str(request.args.get("action", ""))
         if action:
@@ -369,7 +429,20 @@ async def access(request):
         events = (await db.scalars(events_query)).all()
         failures = (await db.scalars(select(SecurityMail).where(SecurityMail.accepted_at.is_(None)))).all()
         requests = (await db.scalars(select(PrivacyRequest).order_by(PrivacyRequest.id.desc()).limit(100))).all()
-    return _page(request, mode="access", user=user, users=users, events=events, failures=failures, requests=requests)
+    return _page(
+        request,
+        mode="access",
+        user=user,
+        rows=rows,
+        pending_count=pending_count,
+        q=search,
+        role=role,
+        status_filter=status,
+        approval=approval,
+        events=events,
+        failures=failures,
+        requests=requests,
+    )
 
 
 @bp.post("/access")

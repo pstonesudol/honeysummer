@@ -324,6 +324,18 @@ async def test_invite_activation_reuse_and_staff_least_privilege():
 
 
 @pytest.mark.asyncio
+async def test_users_table_lists_and_filters_accounts():
+    await admin_session()
+    await make_user(role="florist", email="shopper@example.com")
+    _, page = await app.asgi_client.get("/admin/security/access")
+    assert page.status == 200 and "shopper@example.com" in page.text and "Users" in page.text
+    _, only_admin = await app.asgi_client.get("/admin/security/access?role=admin")
+    assert "shopper@example.com" not in only_admin.text
+    _, search = await app.asgi_client.get("/admin/security/access?q=shopper")
+    assert "shopper@example.com" in search.text
+
+
+@pytest.mark.asyncio
 async def test_admin_self_removal_forbidden_and_suspension_preserves_history():
     admin = await admin_session()
     florist = await make_user()
