@@ -501,10 +501,10 @@ async def record_admin_outcome(request, response):
 
 @bp.get("/account")
 async def account_settings(request):
-    """Show account details without exposing or changing access credentials."""
+    """Open the unified account security workspace from the sidebar and old bookmarks."""
     if not request.ctx.admin:
         return redirect("/admin/login")
-    return _page(request, "admin/account.html", account=request.ctx.admin)
+    return redirect("/admin/security/")
 
 
 @bp.get("/orders/preparation")

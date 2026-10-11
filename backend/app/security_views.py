@@ -114,8 +114,9 @@ def _page(request, *, status=200, template="security.html", **context):
         context.setdefault("admin", viewer)
         context.setdefault("operator", viewer)
         context.setdefault("models", REGISTRY)
-        # Account settings has no matching nav entry, so nothing is highlighted there.
-        context.setdefault("active_href", "" if context.get("mode") == "account" else "/admin/security/access")
+        context.setdefault(
+            "active_href", "/admin/account" if context.get("mode") == "account" else "/admin/security/access"
+        )
     response = html(_env.get_template(template).render(csrf_token=token, **context), status=status)
     response.add_cookie(CSRF_COOKIE, token, httponly=True, secure=not get_settings().debug, samesite="Strict")
     if admin_shell:

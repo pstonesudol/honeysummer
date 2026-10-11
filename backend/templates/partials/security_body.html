@@ -23,73 +23,82 @@
 <h2>Save your recovery codes</h2><p>Shown only once. Keep offline in a safe place. Each code can be used once instead of an authenticator code.</p>
 <ul>{% for code in codes %}<li><code>{{ code }}</code></li>{% endfor %}</ul>
 {% elif mode == 'account' %}
-<p>{{ user.email }} · {{ user.role }} · {{ 'MFA enabled' if user.mfa_secret else 'MFA not enabled' }}</p>
-{% if user.role == 'admin' %}<p><a href="/admin/security/access">Manage accounts, security events and privacy requests</a></p>{% endif %}
-{% if pending %}<p>Authenticator setup key: <code>{{ pending }}</code>. Add it to your authenticator before confirming.</p>{% endif %}
-<form method="post" action="/admin/security/change" data-account-form data-native-submit>
+{% set settings = [
+  ('password', 'Password', 'Choose a strong password of at least 12 characters. Updating it signs you out of all browsers.', 'Update password', 'Sign-in & protection'),
+  ('email', 'Login email', 'We’ll send a confirmation link to your new address before changing your login email.', 'Send confirmation link', 'Sign-in & protection'),
+  ('reauth', 'Verify your identity', 'Confirm your credentials to unlock sensitive changes for the next 10 minutes.', 'Verify identity', 'Sign-in & protection')
+] %}
+{% if user.mfa_secret %}
+{% set settings = settings + [('recovery_codes', 'Recovery codes', 'Generate a fresh set of one-time recovery codes. Your previous codes will stop working.', 'Replace recovery codes', 'Sign-in & protection')] %}
+{% else %}
+{% set settings = settings + [('mfa_start', 'Two-step verification', 'Add an authenticator app for an extra layer of protection when you sign in.', 'Start authenticator setup', 'Sign-in & protection')] %}
+{% if pending %}{% set settings = settings + [('mfa_confirm', 'Finish authenticator setup', 'Add the setup key to your authenticator app, then enter its six-digit code to finish.', 'Enable two-step verification', 'Sign-in & protection')] %}{% endif %}
+{% endif %}
+{% set settings = settings + [('revoke', 'Browser sessions', 'Sign out every browser, including this one. You’ll need to sign in again to continue.', 'Sign out all browsers', 'Sessions')] %}
+{% if user.role == 'florist' %}
+{% set settings = settings + [
+  ('profile', 'Business details', 'Keep your business and contact information up to date.', 'Save business details', 'Business & privacy'),
+  ('export', 'Export your data', 'Request a copy of your account data for admin review. Credentials and security tokens are excluded.', 'Request data export', 'Business & privacy'),
+  ('deletion', 'Delete your account', 'Submit a deletion request for review. Financial records are retained where legally required; this does not immediately delete your account.', 'Request account deletion', 'Business & privacy')
+] %}
+{% endif %}
+{% set default_action = 'mfa_confirm' if pending and not user.mfa_secret else ('password' if user.role == 'florist' else 'reauth') %}
+{% set picked = selected if selected in settings|map(attribute=0)|list else default_action %}
+<div class="security-summary">
+  <div class="security-identity"><span class="security-avatar" aria-hidden="true">{{ user.email[0]|upper }}</span><div><strong>{{ user.email }}</strong><span class="security-caption">{{ user.role|capitalize }} account</span></div></div>
+  <span class="security-status{% if user.mfa_secret %} security-status--enabled{% endif %}"><span aria-hidden="true">●</span> {{ 'Two-step verification on' if user.mfa_secret else 'Two-step verification off' }}</span>
+</div>
+{% if user.role == 'admin' %}
+<nav class="security-tabs" aria-label="Security areas"><a href="/admin/security/" aria-current="page">My security</a><a href="/admin/security/access">Users &amp; access</a><a href="/admin/activity">Activity</a></nav>
+{% endif %}
+<div class="security-layout">
+<nav class="security-settings" aria-label="Account security settings">
+{% for group in ['Sign-in & protection', 'Sessions', 'Business & privacy'] %}
+{% set items = settings|selectattr('4', 'equalto', group)|list %}
+{% if items %}<div class="security-group"><p class="security-group-label">{{ group }}</p>
+{% for value, title, description, submit, category in items %}
+<a class="security-setting{% if picked == value %} is-selected{% endif %}{% if value == 'deletion' %} security-setting--danger{% endif %}" href="/admin/security/?action={{ value }}"{% if picked == value %} aria-current="page"{% endif %}><span>{{ title }}</span><span aria-hidden="true">›</span></a>
+{% endfor %}
+</div>{% endif %}
+{% endfor %}
+</nav>
+{% for value, title, description, submit, category in settings %}{% if picked == value %}
+<form class="security-detail" method="post" action="/admin/security/change" data-account-form data-native-submit aria-labelledby="security-detail-title">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-{% set picked = selected if selected else ('mfa_confirm' if pending else ('password' if user.role == 'florist' else 'reauth')) %}
-<label for="action">Action</label><select id="action" name="action">
-<option value="reauth"{% if picked == 'reauth' %} selected{% endif %}>Reauthenticate for sensitive changes</option><option value="password"{% if picked == 'password' %} selected{% endif %}>Change password</option>
-<option value="email"{% if picked == 'email' %} selected{% endif %}>Change login email</option><option value="revoke"{% if picked == 'revoke' %} selected{% endif %}>Sign out all browsers</option>
-{% if user.role == 'florist' %}<option value="profile"{% if picked == 'profile' %} selected{% endif %}>Update business contact details</option><option value="export"{% if picked == 'export' %} selected{% endif %}>Request data export</option><option value="deletion"{% if picked == 'deletion' %} selected{% endif %}>Request account deletion</option>{% endif %}
-{% if not user.mfa_secret %}<option value="mfa_start"{% if picked == 'mfa_start' %} selected{% endif %}>Start MFA setup</option>{% if pending %}<option value="mfa_confirm"{% if picked == 'mfa_confirm' %} selected{% endif %}>Confirm MFA setup</option>{% endif %}{% else %}<option value="recovery_codes"{% if picked == 'recovery_codes' %} selected{% endif %}>Replace recovery codes</option>{% endif %}
-</select>
+<input type="hidden" name="action" value="{{ picked }}">
+<div class="security-detail-head"><span class="security-group-label">{{ category }}</span><h2 id="security-detail-title">{{ title }}</h2><p>{{ description }}</p></div>
+{% if picked == 'mfa_confirm' %}<div class="security-setup"><label>Authenticator setup key</label><code>{{ pending }}</code><p>Keep this key private. Save your recovery codes after enabling verification.</p></div>{% endif %}
+{% if picked == 'password' %}
+<div data-field="password">
+<label for="password">New password</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required aria-describedby="password-hint">
+<small id="password-hint" class="security-caption">Use at least 12 characters.</small>
+<label for="password_confirm">Confirm new password</label><input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
+</div>
+{% elif picked == 'email' %}
+<div data-field="email"><label for="email">New login email</label><input id="email" name="email" type="email" autocomplete="email" required></div>
+{% elif picked == 'profile' and user.profile %}
+<div data-field="profile" class="security-profile-fields">
+<div><label for="contact_name">Contact name</label><input id="contact_name" name="contact_name" value="{{ user.profile.contact_name }}" maxlength="200" required></div>
+<div><label for="business_name">Business name</label><input id="business_name" name="business_name" value="{{ user.profile.business_name }}" maxlength="200" required></div>
+<div><label for="phone">Phone</label><input id="phone" name="phone" type="tel" value="{{ user.profile.phone }}" maxlength="40" autocomplete="tel"></div>
+<div><label for="website">HTTPS website</label><input id="website" name="website" type="url" value="{{ user.profile.website }}" maxlength="500"></div>
+</div>
+{% endif %}
+<div class="security-proof">
+<p class="security-caption">Confirm it’s you before continuing.</p>
 <div data-field="current_password">
 <label for="current_password">Current password</label><input id="current_password" name="current_password" type="password" required autocomplete="current-password">
 </div>
-<div data-field="code" data-mfa="{{ 'true' if user.mfa_secret else 'false' }}">
-<label for="code" data-code-label>Authenticator / recovery code</label><input id="code" name="code" autocomplete="one-time-code">
-</div>
-<div data-field="password">
-<label for="password">New password (at least 12 characters)</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024">
-<label for="password_confirm">Confirm new password</label><input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" minlength="12" maxlength="1024">
-</div>
-<div data-field="email">
-<label for="email">New login email</label><input id="email" name="email" type="email" autocomplete="email">
-</div>
-{% if user.profile %}
-<div data-field="profile">
-<label for="contact_name">Contact name</label><input id="contact_name" name="contact_name" value="{{ user.profile.contact_name }}" maxlength="200">
-<label for="business_name">Business name</label><input id="business_name" name="business_name" value="{{ user.profile.business_name }}" maxlength="200">
-<label for="phone">Phone</label><input id="phone" name="phone" value="{{ user.profile.phone }}" maxlength="40" autocomplete="tel">
-<label for="website">HTTPS website</label><input id="website" name="website" type="url" value="{{ user.profile.website }}" maxlength="500">
+{% if user.mfa_secret or picked == 'mfa_confirm' %}
+<div data-field="code">
+<label for="code">{{ 'Six-digit code from your new authenticator' if picked == 'mfa_confirm' else 'Authenticator / recovery code' }}</label><input id="code" name="code" autocomplete="one-time-code" required>
 </div>
 {% endif %}
-<button>Confirm action</button></form>
-<script>
-(function(){
-  var form=document.querySelector('[data-account-form]');
-  if(!form) return;
-  var select=form.querySelector('select[name=action]');
-  if(!select) return;
-  var mfaEnabled=form.querySelector('[data-field=code]').getAttribute('data-mfa')==='true';
-  var SHOW={password:['password'],email:['email'],profile:['profile']};
-  var REQUIRED={password:['password','password_confirm'],email:['email'],profile:['contact_name','business_name']};
-  function box(name){return form.querySelector('[data-field='+name+']');}
-  function sync(){
-    var action=select.value;
-    ['current_password','code','password','email','profile'].forEach(function(name){
-      var el=box(name); if(!el) return;
-      if(name==='current_password'){el.hidden=false;return;}
-      if(name==='code'){el.hidden=!(mfaEnabled||action==='mfa_confirm');return;}
-      el.hidden=(SHOW[action]||[]).indexOf(name)===-1;
-    });
-    var codeBox=box('code');
-    var label=codeBox&&codeBox.querySelector('[data-code-label]');
-    if(label) label.textContent=action==='mfa_confirm'
-      ? 'Six-digit code from your new authenticator'
-      : 'Authenticator / recovery code';
-    var required=(REQUIRED[action]||[]).slice();
-    if(mfaEnabled||action==='mfa_confirm') required.push('code');
-    form.querySelectorAll('[data-field] input').forEach(function(input){input.required=required.indexOf(input.name)!==-1;});
-    var current=form.querySelector('[name=current_password]');
-    if(current) current.required=true;
-  }
-  select.addEventListener('change',sync);
-  sync();
-})();
-</script>
+</div>
+<div class="security-detail-footer"><button class="security-submit{% if picked in ['deletion', 'revoke'] %} security-submit--danger{% endif %}" type="submit">{{ submit }}</button><span class="security-caption">Changes are securely recorded.</span></div>
+</form>
+{% endif %}{% endfor %}
+</div>
 {% elif mode == 'access' %}
 <div class="page-head">
 <span class="eyebrow">Access control</span>

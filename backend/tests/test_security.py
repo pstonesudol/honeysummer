@@ -444,8 +444,7 @@ async def test_operator_security_pages_render_in_admin_shell():
     assert account.status == 200
     assert 'class="admin-menu"' in account.text
     assert "data-account-form" in account.text
-    # Account settings has no matching nav entry, so nothing is highlighted.
-    assert 'aria-current="page"' not in account.text
+    assert 'href="/admin/account" class="is-active" aria-current="page"' in account.text
     _, users = await app.asgi_client.get("/admin/security/access")
     assert 'class="admin-menu"' in users.text
     assert 'href="/admin/security/access" class="is-active" aria-current="page"' in users.text
@@ -714,7 +713,7 @@ async def test_account_form_error_keeps_the_form_and_selected_action():
     assert response.status == 400
     assert "did not match" in response.text
     assert "data-account-form" in response.text
-    assert '<option value="password" selected>' in response.text
+    assert '<input type="hidden" name="action" value="password">' in response.text
     assert 'data-field="password"' in response.text
 
 
@@ -724,14 +723,54 @@ async def test_account_page_defaults_florists_to_password_and_honors_action_quer
     app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
     _, page = await app.asgi_client.get("/admin/security/")
     assert page.status == 200
-    assert '<option value="password" selected>' in page.text
+    assert '<input type="hidden" name="action" value="password">' in page.text
+    assert '<select id="action"' not in page.text
+    assert 'aria-label="Account security settings"' in page.text
     assert 'data-field="password"' in page.text
     _, email_page = await app.asgi_client.get("/admin/security/?action=email")
-    assert '<option value="email" selected>' in email_page.text
+    assert '<input type="hidden" name="action" value="email">' in email_page.text
+    assert 'data-field="password"' not in email_page.text
+    assert 'name="email" type="email" autocomplete="email" required' in email_page.text
     app.asgi_client.cookies.clear()
     await admin_session()
     _, admin_page = await app.asgi_client.get("/admin/security/")
-    assert '<option value="reauth" selected>' in admin_page.text
+    assert '<input type="hidden" name="action" value="reauth">' in admin_page.text
+    assert 'aria-label="Security areas"' in admin_page.text
+    assert 'href="/admin/account" class="is-active" aria-current="page"' in admin_page.text
+    assert 'href="/admin/security/?action=deletion"' not in admin_page.text
+
+
+@pytest.mark.asyncio
+async def test_account_navigation_handles_unknown_and_unavailable_actions():
+    uid = await make_user(role="staff")
+    app.asgi_client.cookies.set(ADMIN_COOKIE, await create_session_token(uid, "admin"))
+    for action in ("unknown", "deletion", "mfa_confirm", "recovery_codes"):
+        _, page = await app.asgi_client.get(f"/admin/security/?action={action}")
+        assert page.status == 200
+        assert '<input type="hidden" name="action" value="reauth">' in page.text
+        assert 'aria-label="Security areas"' not in page.text
+
+
+@pytest.mark.asyncio
+async def test_account_navigation_renders_pending_setup_and_mfa_fields():
+    uid = await make_user()
+    app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
+    _, started = await change({"action": "mfa_start"})
+    assert started.status == 302
+    _, setup = await app.asgi_client.get("/admin/security/")
+    assert '<input type="hidden" name="action" value="mfa_confirm">' in setup.text
+    assert "Authenticator setup key" in setup.text
+    assert 'name="code" autocomplete="one-time-code" required' in setup.text
+    async with session_scope() as db:
+        user = await db.get(User, uid)
+        user.mfa_secret = user.mfa_pending
+        user.mfa_pending = ""
+        await db.commit()
+    _, enabled = await app.asgi_client.get("/admin/security/?action=recovery_codes")
+    assert 'name="action" value="recovery_codes"' in enabled.text
+    assert 'name="code" autocomplete="one-time-code" required' in enabled.text
+    assert "Two-step verification on" in enabled.text
+    assert 'href="/admin/security/?action=mfa_start"' not in enabled.text
 
 
 @pytest.mark.asyncio

@@ -22,12 +22,10 @@
 dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 24px 60px #4c342d4d}dialog::backdrop{background:#2c1f1aa6}
 .modal-form{padding:20px;background:#fff9f3;margin:0}.modal-form h3{margin-top:0}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 .share-box{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff9f3;border:1px solid #c8b6a6;border-radius:10px;padding:10px}.share-box code{overflow-wrap:anywhere;flex:1;min-width:200px}
-/* Account settings: the self-service form reads as a card in the admin shell. */
-form[data-account-form]{background:#fff9f3;border:1px solid #c8b6a6;border-radius:14px;padding:20px;margin:20px 0}
-form[data-account-form] label{margin-top:12px}
 code{overflow-wrap:anywhere}
 @media (max-width:760px){.utable__head{display:none}.utable__row{grid-template-columns:1fr;gap:6px;padding:14px 20px}.utable__row .actions{justify-content:flex-start}}
 </style>
+{% include "partials/security_styles.html" %}
 {% endblock %}
 {% block content %}
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
