@@ -26,6 +26,12 @@ All account routes enforce roles on the backend. Staff cannot create manual orde
 
 ## Sessions, browser/proxy contract and passwords
 
+Accounts with MFA enabled can select **Turn off two-step verification** at `/admin/security/`.
+This requires the current password and a valid authenticator or unused recovery code, clears the
+authenticator and all recovery codes, revokes every session, records an audit event and sends a security
+notification. Sign in again with the password; authenticator enrollment remains available afterwards.
+This is not a recovery bypass for accounts without access to either MFA proof.
+
 - Opaque 256-bit cookies; only SHA-256 digests live in `account_sessions`. Every protected request checks activation, role/approval and security version in Postgres, with no process-local authorization cache. Logout deletes the registry entry. Legacy signed UID cookies are deliberately rejected.
 - Admin absolute/idle expiry: 12 hours / 30 minutes. Florist: 14 days / 3 days. IDs rotate at each sign-in; privilege/security changes invalidate old sessions. Cookies have no Domain attribute, use `/`, HttpOnly, SameSite=Lax and Secure outside debug. MFA challenge cookies are HttpOnly/SameSite=Strict and expire in five minutes; challenge versions cannot survive password/security changes.
 - Set `PUBLIC_ORIGIN` to the **exact** browser storefront origin (HTTPS outside debug). Security links never trust Host/forwarded Host. Admin form POSTs require that Origin in production, plus CSRF double-submit proof. API mutations require `X-HoneySummer-Request: 1` and reject foreign Origin/cross-site Fetch Metadata. CORS is disabled. Signed Stripe webhooks are exempt; public inquiry forms are not cookie-authenticated mutations and retain their existing contract.

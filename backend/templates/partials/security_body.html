@@ -29,7 +29,10 @@
   ('reauth', 'Verify your identity', 'Confirm your credentials to unlock sensitive changes for the next 10 minutes.', 'Verify identity', 'Sign-in & protection')
 ] %}
 {% if user.mfa_secret %}
-{% set settings = settings + [('recovery_codes', 'Recovery codes', 'Generate a fresh set of one-time recovery codes. Your previous codes will stop working.', 'Replace recovery codes', 'Sign-in & protection')] %}
+{% set settings = settings + [
+  ('recovery_codes', 'Recovery codes', 'Generate a fresh set of one-time recovery codes. Your previous codes will stop working.', 'Replace recovery codes', 'Sign-in & protection'),
+  ('mfa_disable', 'Turn off two-step verification', 'Your account will be protected by your password only. Your authenticator and recovery codes will stop working, and every browser will be signed out. Confirm your password and an authenticator or recovery code to continue.', 'Turn off two-step verification', 'Sign-in & protection')
+] %}
 {% else %}
 {% set settings = settings + [('mfa_start', 'Two-step verification', 'Add an authenticator app for an extra layer of protection when you sign in.', 'Start authenticator setup', 'Sign-in & protection')] %}
 {% if pending %}{% set settings = settings + [('mfa_confirm', 'Finish authenticator setup', 'Add the setup key to your authenticator app, then enter its six-digit code to finish.', 'Enable two-step verification', 'Sign-in & protection')] %}{% endif %}
@@ -57,7 +60,7 @@
 {% set items = settings|selectattr('4', 'equalto', group)|list %}
 {% if items %}<div class="security-group"><p class="security-group-label">{{ group }}</p>
 {% for value, title, description, submit, category in items %}
-<a class="security-setting{% if picked == value %} is-selected{% endif %}{% if value == 'deletion' %} security-setting--danger{% endif %}" href="/admin/security/?action={{ value }}"{% if picked == value %} aria-current="page"{% endif %}><span>{{ title }}</span><span aria-hidden="true">›</span></a>
+<a class="security-setting{% if picked == value %} is-selected{% endif %}{% if value in ['deletion', 'mfa_disable'] %} security-setting--danger{% endif %}" href="/admin/security/?action={{ value }}"{% if picked == value %} aria-current="page"{% endif %}><span>{{ title }}</span><span aria-hidden="true">›</span></a>
 {% endfor %}
 </div>{% endif %}
 {% endfor %}
@@ -95,7 +98,7 @@
 </div>
 {% endif %}
 </div>
-<div class="security-detail-footer"><button class="security-submit{% if picked in ['deletion', 'revoke'] %} security-submit--danger{% endif %}" type="submit">{{ submit }}</button><span class="security-caption">Changes are securely recorded.</span></div>
+<div class="security-detail-footer"><button class="security-submit{% if picked in ['deletion', 'revoke', 'mfa_disable'] %} security-submit--danger{% endif %}" type="submit">{{ submit }}</button><span class="security-caption">Changes are securely recorded.</span></div>
 </form>
 {% endif %}{% endfor %}
 </div>

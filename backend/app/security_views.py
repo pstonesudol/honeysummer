@@ -467,6 +467,21 @@ async def account_change(request):
             queue_mail(
                 db, user.email, "MFA enabled", "Authenticator protection was enabled. Store recovery codes offline."
             )
+        elif action == "mfa_disable":
+            if not user.mfa_secret:
+                return json({"detail": "MFA is not enabled."}, status=400)
+            user.mfa_secret = user.mfa_pending = ""
+            user.mfa_last_step = 0
+            user.recovery_codes = []
+            user.security_version += 1
+            message = "Two-step verification turned off. All sessions revoked. Sign in again with your password."
+            queue_mail(
+                db,
+                user.email,
+                "MFA disabled",
+                "Two-step verification was turned off. Your authenticator and recovery codes no longer work. "
+                "All sessions were revoked. Sign in again with your password. Contact us if unauthorized.",
+            )
         elif action == "recovery_codes":
             if not user.mfa_secret:
                 return json({"detail": "Enable MFA first."}, status=400)
