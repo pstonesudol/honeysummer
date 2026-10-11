@@ -187,6 +187,46 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
 - Follow-up: user confirmed hosted admin sign-in, logout/protected-page recheck
   and fresh sign-in after PR #3. This verifies the reported login loop is fixed;
   it does not complete the wider deployed security acceptance checklist.
+- Stripe hosted Checkout return follow-up — October 11, 2026: after a staging
+  checkout initially returned to localhost, staging-only Railway success/cancel
+  URLs were set to `https://staging.hellohoneysummer.com` and the backend
+  redeployment succeeded. PR #10 added the checkout-key return recovery and
+  duplicate-toast guard; the user confirmed the merged staging flow looked good,
+  including the return and confirmation toast. No production settings or live
+  payments were involved. This is targeted checkout-return evidence only; it
+  does not close B3/B5/C1 or replace signed webhook, expiry, async/failure,
+  refund, inventory-recovery and separate-cart acceptance.
+- Read-only staging follow-up — October 11, 2026: through the human-authenticated
+  Cloudflare Access session, Worker `/api/health/` and retail catalogue returned
+  expected responses; anonymous `/api/auth/me/` returned no identity and `/admin/`
+  redirected to `/admin/login`. Unauthenticated requests to the public Worker
+  received the Access sign-in page. Direct Railway-origin catalogue and admin
+  requests returned 403; the explicitly allowed direct-origin health probe
+  returned healthy. A manual staging `python -m app.reconcile` report-only run
+  completed with zero findings (`applied=false`); it wrote the normal audit row
+  and did not alter stock or send mail. Infrastructure inspection found only
+  the backend and Postgres services, no scheduled job/cron, no R2 bucket, and no
+  Resend or R2 variables on the staging backend. Therefore provider-backed mail,
+  media, scheduled reconciliation/alerts and the broader authenticated security
+  checks remain open; no provider resources, credentials or alert policies were
+  created or changed.
+- Security probe follow-up — October 11, 2026: unauthenticated `curl` requests to
+  staging admin/auth endpoints received Cloudflare Access redirects with
+  `no-store` and Secure/HttpOnly Access-session cookies. In the human browser
+  session, `/admin/login` loaded normally. This confirms the outer Access gate
+  and the login page are reachable, but does not expose the application response
+  headers or session-cookie attributes. No admin credentials were submitted and
+  no mutation or rate-limit probe was sent. Authenticated application-header,
+  CSRF/Origin/CORS, forwarding/IP, role/session revocation and deployed throttle
+  checks remain open; the public Access redirect prevents completing these
+  probes without an authorized authenticated test session.
+- Authenticated staging inspection — October 11, 2026: user signed in through
+  the browser and the admin dashboard and account-security page loaded as an
+  active admin. The account-security page reports MFA is not enabled. No account
+  settings, credentials, MFA configuration, or sessions were changed. This
+  verifies one admin happy path only; MFA enrollment/recovery, session cookie
+  attributes, CSRF and proxy-header behavior, role boundaries/revocation,
+  throttles and token replay tests remain open.
 - Zero Trust Free activated by the user. Staging CI service-token secret names
   confirmed present in GitHub, with raw values kept private. Preparing fixed-origin,
   no-redirect Access-authenticated smoke requests and stripping Access credentials
