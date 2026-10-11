@@ -11,6 +11,23 @@ back to a plain profile link in the meantime, so the site never looks broken.
 This guide covers getting a token, wiring it up, and keeping it alive. It is written for one
 account that you own and manage, which is the simplest and most common case.
 
+## Official documentation (source of truth)
+
+Meta documents this end to end; this guide is the site-specific wrapper around it. Verify
+against these if anything looks different:
+
+| Topic | Link |
+| --- | --- |
+| Instagram Platform overview | <https://developers.facebook.com/docs/instagram-platform/overview> |
+| Create an Instagram app (incl. selecting the Business app type) | <https://developers.facebook.com/docs/instagram-platform/create-an-instagram-app> |
+| Get started with Instagram Login (get a token, `/me`, media) | <https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started> |
+| Business Login for Instagram (login flow, exchange to long-lived) | <https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login> |
+| Access Token reference (`/access_token`) | <https://developers.facebook.com/docs/instagram-platform/reference/access_token> |
+| Refresh Access Token reference | <https://developers.facebook.com/docs/instagram-platform/reference/refresh_access_token> |
+| Instagram Media reference (fields) | <https://developers.facebook.com/docs/instagram-platform/reference/instagram-media> |
+| Graph API versions & changelog | <https://developers.facebook.com/docs/graph-api/changelog/versions/> |
+| Full product index (LLM-friendly) | <https://developers.facebook.com/documentation/instagram-platform/llms.txt> |
+
 ---
 
 ## 1. What you need
@@ -155,6 +172,7 @@ curl -s "https://graph.instagram.com/access_token\
 | Error code `190` / `OAuthAccessTokenException` | Token expired or revoked. Get a fresh token (section 2). |
 | Error code `200` / permission error | Missing `instagram_business_basic`, or the account is not linked to the app. Fix the app/account setup. |
 | `Unsupported get request` / version error | `INSTAGRAM_API_VERSION` points at a retired version. See the supported list below and update it. |
+| Error code `100` after changing the requested fields | Instagram Login may refuse `caption` / `media_product_type` (Meta marks them "Facebook Login only"). Remove fields one at a time; the code already treats captions as optional. |
 | Folder shows pink/blank squares | The Instagram CDN images did not load (network/CSP), or posts have no `media_url`. Check the browser console. |
 | Gallery updates slowly | Expected: 15-minute cache. Restart the API to clear it now. |
 | Token stopped working after ~60 days | It was not refreshed in time. Redo section 2 and set a refresh reminder. |

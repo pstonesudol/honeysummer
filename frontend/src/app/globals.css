@@ -564,18 +564,24 @@ textarea {
   color: white;
 }
 
-/* The Instagram entry is a button, so it keeps the control font and colour
-   instead of inheriting the larger serif footer-link styling. */
-.site-footer__links .site-footer__instagram {
-  margin-top: 0.35rem;
-  font-family: var(--font-geist), sans-serif;
-  font-size: 0.9rem;
-  color: var(--cocoa-dark);
+/* The Instagram entry is a quiet link centred in the footer's bottom bar,
+   kept on the bar's uppercase utility styling with the brand glyph. */
+.site-footer__instagram {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(246, 242, 234, 0.8);
+  transition: color 180ms ease;
+}
+
+.site-footer__instagram:hover {
+  color: white;
 }
 
 .site-footer__bottom {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
   gap: 2rem;
   border-top: 1px solid rgba(246, 242, 234, 0.17);
   padding-block: 1.25rem;
@@ -584,6 +590,10 @@ textarea {
   font-size: 0.85rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.site-footer__bottom > :last-child {
+  justify-self: end;
 }
 
 @media (max-width: 850px) {
@@ -708,8 +718,14 @@ textarea {
   }
 
   .site-footer__bottom {
-    flex-direction: column;
-    gap: 0.35rem;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 0.5rem;
+    text-align: center;
+  }
+
+  .site-footer__bottom > :last-child {
+    justify-self: center;
   }
 }
 

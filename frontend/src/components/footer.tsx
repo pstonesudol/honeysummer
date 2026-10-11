@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Camera } from "lucide-react";
 import type { SiteContent } from "@/lib/api";
 import { site } from "@/lib/site";
 import { BrandMark } from "./brand-mark";
+import { InstagramIcon } from "./instagram-icon";
 
 export function Footer({ content = {} }: { content?: SiteContent }) {
   return (
@@ -23,12 +23,24 @@ export function Footer({ content = {} }: { content?: SiteContent }) {
             <h2>Connect</h2>
             <Link href="/contact">Contact &amp; FAQ</Link>
             <Link href="/wholesale">Florist wholesale</Link>
-             {(content.instagram || site.instagram) ? <a className="button button--light site-footer__instagram" href={content.instagram || site.instagram} target="_blank" rel="noopener noreferrer"><Camera aria-hidden="true" size={16} strokeWidth={1.8} />Follow on Instagram</a> : <span>Instagram coming soon</span>}
           </div>
         </div>
       </div>
       <div className="site-footer__bottom section-wrap">
         <span>© {new Date().getFullYear()} Honey Summer</span>
+        {(content.instagram || site.instagram) ? (
+          <a
+            className="site-footer__instagram"
+            href={content.instagram || site.instagram}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <InstagramIcon size={16} strokeWidth={1.6} />
+            Follow on Instagram
+          </a>
+        ) : (
+          <span>Instagram coming soon</span>
+        )}
         <span>Made with care in Northeast PA</span>
       </div>
     </footer>
