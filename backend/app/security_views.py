@@ -87,7 +87,7 @@ def _safe_reauth_next(value: str) -> str:
 
 
 # Security modes that belong inside the shared admin chrome when an operator is signed in.
-_SHELL_MODES = {"account", "access", "privacy", "reauth", "link", "codes"}
+_SHELL_MODES = {"account", "access", "privacy", "reauth", "link", "codes", "done"}
 
 
 def _template_for(user, mode: str) -> str:
@@ -188,7 +188,7 @@ async def accessible_errors(request, response):
                 selected=str(request.form.get("action", "")),
                 pending=await _account_pending(viewer.id),
             )
-        return _page(request, mode="done", status=response.status, error=detail)
+        return _page(request, template=_template_for(viewer, "done"), mode="done", status=response.status, error=detail)
 
 
 @bp.route("/mfa", methods=["GET", "POST"])
@@ -483,7 +483,7 @@ async def account_change(request):
         return _page(request, template=_template_for(user, "codes"), mode="codes", codes=codes)
     if action == "mfa_start":
         return redirect("/admin/security/")
-    return _page(request, mode="done", message=message)
+    return _page(request, template=_template_for(user, "done"), mode="done", message=message)
 
 
 def _row_actions(account, profile) -> list[tuple[str, str, str]]:

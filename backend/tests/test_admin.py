@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -768,3 +769,15 @@ async def test_duplicate_listing_does_not_copy_stock_and_bulk_price_updates():
     async with session_scope() as db:
         assert (await db.get(FlowerListing, flower_id)).price == Decimal("5.25")
         assert (await db.get(FlowerListing, clone_id)).price == Decimal("5.25")
+
+
+def test_admin_templates_extend_the_shared_base():
+    """Every admin page must render inside the shared shell, not a bespoke layout."""
+    root = Path(__file__).resolve().parents[1] / "templates" / "admin"
+    names = sorted(path.name for path in root.glob("*.html"))
+    assert "base.html" in names and "dashboard.html" in names
+    for name in names:
+        if name == "base.html" or name.startswith("_"):  # layout and include-only partials
+            continue
+        first = (root / name).read_text().lstrip().splitlines()[0]
+        assert first == '{% extends "admin/base.html" %}', f"{name} does not extend the admin shell"
