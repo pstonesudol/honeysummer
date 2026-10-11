@@ -19,7 +19,13 @@ from ..cart_checkout import checkout_key, existing_attempt, payload
 from ..db import session_scope
 from ..models import Order, WeddingInvoice
 from ..orders import StockError, load_order, release_order, reserve_order
-from ..payments import apply_checkout_event, complete_without_stripe, create_checkout, expire_checkout
+from ..payments import (
+    apply_checkout_event,
+    complete_without_stripe,
+    create_checkout,
+    expire_checkout,
+    reconcile_order,
+)
 from ..proposals import apply_invoice_event
 from ..settings import get_settings
 from ..weddings import apply_wedding_invoice_event
@@ -145,10 +151,21 @@ async def cart_checkout_status(request, key):
             if not user or user.id != order.customer_id or not user.profile or not user.profile.approved:
                 return json({"detail": "Wholesale approval is required."}, status=403)
         order_id = order.id
-        if request.method == "GET":
-            response = json(payload(order))
-            response.headers["Cache-Control"] = "no-store"
-            return response
+    if request.method == "GET":
+        # Heal a completed Stripe session so an order whose webhook was missed
+        # or delayed never appears stuck pending. Redirects still never count
+        # as payment: only Stripe's own session state can settle the order.
+        await reconcile_order(order_id)
+        async with session_scope() as session:
+            order = await session.scalar(select(Order).where(Order.id == order_id))
+        response = json(payload(order))
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    if await reconcile_order(order_id) == "paid":
+        # Already paid on Stripe: report it rather than block a stale cancel.
+        async with session_scope() as session:
+            order = await session.scalar(select(Order).where(Order.id == order_id))
+        return json(payload(order))
     outcome = await expire_checkout(order_id)
     if outcome != "safe":
         return json(

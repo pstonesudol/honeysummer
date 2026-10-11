@@ -22,6 +22,16 @@ def local_payments(monkeypatch):
     monkeypatch.setattr(emails, "send_email", lambda **kwargs: None)
 
 
+class StripeObject(dict):
+    """Mimic a Stripe SDK object: attribute and item access, plus ``.get()``."""
+
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError as exc:
+            raise AttributeError(name) from exc
+
+
 async def listing(channel="both", quantity=5):
     async with session_scope() as db:
         flower = FlowerListing(name="Dahlias", price=Decimal("5.00"), quantity_available=quantity, channel=channel)
@@ -81,7 +91,8 @@ async def test_pending_retry_cancel_and_release_are_safe(monkeypatch):
         _, again = await retail(flower, key)
     assert create.call_count == 1
     assert first.json["checkout_url"] == again.json["checkout_url"]
-    _, status = await app.asgi_client.get(f"/api/cart/checkout/{key}/?checkout=success")
+    with mock.patch("stripe.checkout.Session.retrieve", return_value=SimpleNamespace(status="open")):
+        _, status = await app.asgi_client.get(f"/api/cart/checkout/{key}/?checkout=success")
     assert status.json["status"] == "pending"  # Redirects never establish payment.
     with mock.patch("stripe.checkout.Session.retrieve", return_value=SimpleNamespace(status="complete")):
         _, blocked = await app.asgi_client.delete(f"/api/cart/checkout/{key}/")
@@ -129,7 +140,9 @@ async def test_signed_delayed_payment_only_clears_when_paid(monkeypatch):
         event = {"id": f"evt_{kind}", "type": kind, "data": {"object": obj}}
         with mock.patch("stripe.Webhook.construct_event", return_value=event):
             await app.asgi_client.post("/api/stripe/webhook/", json=event, headers={"stripe-signature": "synthetic"})
-        _, status = await app.asgi_client.get(f"/api/cart/checkout/{key}/")
+        # The status poll now also inspects Stripe (an open session stays pending).
+        with mock.patch("stripe.checkout.Session.retrieve", return_value=SimpleNamespace(status="open")):
+            _, status = await app.asgi_client.get(f"/api/cart/checkout/{key}/")
         assert status.json["status"] == expected
 
 
@@ -181,6 +194,74 @@ async def test_wholesale_attempt_is_scoped_to_active_approved_account():
         await db.commit()
     _, me = await app.asgi_client.get("/api/auth/me/")
     assert me.json["authenticated"] is False
+
+
+@pytest.mark.asyncio
+async def test_status_poll_settles_a_completed_session_without_a_webhook(monkeypatch):
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", "sk_test_cart")
+    flower, key = await listing(), str(uuid4())
+    with mock.patch(
+        "stripe.checkout.Session.create",
+        return_value=SimpleNamespace(id="cs_cart", url="https://checkout.stripe.com/synthetic"),
+    ):
+        _, checkout = await retail(flower, key)
+    paid = StripeObject(
+        id="cs_cart",
+        status="complete",
+        payment_status="paid",
+        currency="usd",
+        amount_total=1000,
+        payment_intent="pi_cart",
+        metadata={"order_id": str(checkout.json["order_id"])},
+    )
+    with mock.patch("stripe.checkout.Session.retrieve", return_value=paid):
+        _, status = await app.asgi_client.get(f"/api/cart/checkout/{key}/")
+    assert status.json["status"] == "paid"
+    async with session_scope() as db:
+        assert (await db.get(Order, checkout.json["order_id"])).status == "paid"
+        assert (await db.get(FlowerListing, flower)).quantity_available == 3
+
+
+@pytest.mark.asyncio
+async def test_status_poll_releases_an_expired_session(monkeypatch):
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", "sk_test_cart")
+    flower, key = await listing(), str(uuid4())
+    with mock.patch(
+        "stripe.checkout.Session.create",
+        return_value=SimpleNamespace(id="cs_cart", url="https://checkout.stripe.com/synthetic"),
+    ):
+        _, checkout = await retail(flower, key)
+    assert checkout.status == 201
+    with mock.patch("stripe.checkout.Session.retrieve", return_value=SimpleNamespace(status="expired")):
+        _, status = await app.asgi_client.get(f"/api/cart/checkout/{key}/")
+    assert status.json["status"] == "expired"
+    async with session_scope() as db:
+        assert (await db.get(FlowerListing, flower)).quantity_available == 5
+
+
+@pytest.mark.asyncio
+async def test_cancel_reports_an_already_paid_order_instead_of_blocking(monkeypatch):
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", "sk_test_cart")
+    flower, key = await listing(), str(uuid4())
+    with mock.patch(
+        "stripe.checkout.Session.create",
+        return_value=SimpleNamespace(id="cs_cart", url="https://checkout.stripe.com/synthetic"),
+    ):
+        _, checkout = await retail(flower, key)
+    paid = StripeObject(
+        id="cs_cart",
+        status="complete",
+        payment_status="paid",
+        currency="usd",
+        amount_total=1000,
+        payment_intent="pi_cart",
+        metadata={"order_id": str(checkout.json["order_id"])},
+    )
+    with mock.patch("stripe.checkout.Session.retrieve", return_value=paid):
+        _, cancelled = await app.asgi_client.delete(f"/api/cart/checkout/{key}/")
+    assert cancelled.status == 200 and cancelled.json["status"] == "paid"
+    async with session_scope() as db:
+        assert (await db.get(Order, checkout.json["order_id"])).status == "paid"
 
 
 @pytest.mark.asyncio

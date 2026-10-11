@@ -34,7 +34,7 @@ export function CartLines({ channel }: { channel: Channel }) {
       <button className="cart-remove" aria-label={`Remove ${flower?.name ?? `item ${id}`}`} onClick={() => cart.quantity(channel, Number(id), 0)}><Trash2 size={18} aria-hidden="true" /></button>
     </li>;
   })}</ul><p className="cart-subtotal"><span>Subtotal</span><strong>${subtotal.toFixed(2)}</strong></p>
-  {cartIssues(cart.carts[channel].items, flowers).map((issue) => <p className="form-status--error" key={issue}>{issue}</p>)}</>;
+  {cartIssues(cart.carts[channel].items, flowers).map((issue) => <p className="form-status form-status--error" key={issue}>{issue}</p>)}</>;
 }
 
 export function CartPanel() {

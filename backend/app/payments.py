@@ -292,6 +292,54 @@ async def apply_checkout_event(event: dict) -> str:
         return outcome
 
 
+async def reconcile_order(order_id: int) -> str:
+    """Settle or expire one pending order from its Stripe session, on demand.
+
+    Returns the resulting order status. This lets a status poll heal an order
+    whose ``checkout.session.completed`` webhook was missed or delayed, without
+    waiting for the periodic sweep. It only ever moves a *pending* order: a
+    completed, paid session becomes paid and an expired session is released. An
+    open or unverifiable session is left pending for the buyer or the webhook.
+    """
+    settings = get_settings()
+    async with session_scope() as db:
+        order = await load_order(db, order_id)
+        if not order or order.status != "pending":
+            return order.status if order else "review"
+        session_id = order.stripe_session_id
+    if not session_id:
+        # No hosted session was persisted. Release only a keyless local hold,
+        # where no payment could ever have been taken.
+        if settings.debug and not settings.stripe_secret_key:
+            async with session_scope() as db:
+                current = await load_order(db, order_id, for_update=True)
+                if current and current.status == "pending" and not current.stripe_session_id:
+                    await release_order(db, current)
+                    current.status = "expired"
+                    await db.commit()
+            return "expired"
+        return "pending"
+    if not settings.stripe_secret_key:
+        return "pending"
+    stripe.api_key = settings.stripe_secret_key
+    try:
+        remote = await asyncio.to_thread(stripe.checkout.Session.retrieve, session_id)
+    except Exception:
+        return "pending"
+    if remote.status == "complete" and getattr(remote, "payment_status", None) == "paid":
+        await apply_checkout_event({"type": "checkout.session.completed", "data": {"object": remote}})
+    elif remote.status == "expired":
+        async with session_scope() as db:
+            current = await load_order(db, order_id, for_update=True)
+            if current and current.status == "pending" and current.stripe_session_id == session_id:
+                await release_order(db, current)
+                current.status = "expired"
+                await db.commit()
+    async with session_scope() as db:
+        order = await load_order(db, order_id)
+        return order.status if order else "review"
+
+
 async def reconcile(*, apply: bool = False, full: bool = False) -> list[str]:
     """Audit every balance and inspect overdue reservations against Stripe."""
     findings: list[str] = []

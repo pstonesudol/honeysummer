@@ -78,6 +78,51 @@ services:
       backend:
         condition: service_healthy
 
+  # Auto-heals orders and refunds whose Stripe webhook was missed or delayed
+  # (settles paid-but-pending orders, releases stale holds). Mirrors the
+  # Railway reconciler job; it never charges, refunds or emails from here.
+  payments-reconciler:
+    build:
+      context: ./backend
+    environment:
+      SECRET_KEY: local-docker-development-key
+      DEBUG: "true"
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/honeysummer
+    command: ["sh", "-c", "while true; do uv run --no-sync python -m app.reconcile --apply; sleep 300; done"]
+    volumes:
+      - ./backend:/app
+      - backend_venv:/app/.venv
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Optional: forward Stripe test-mode webhooks to the API so local checkouts
+  # can reach "paid" without a browser return. Needs STRIPE_SECRET_KEY in
+  # backend/.env; the signing secret stays stable across restarts, so copy the
+  # value printed below into STRIPE_WEBHOOK_SECRET in the same file. Start with:
+  #   docker compose --profile stripe up
+  stripe-listen:
+    profiles: ["stripe"]
+    image: stripe/stripe-cli:latest
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -z "$$STRIPE_SECRET_KEY" ]; then
+          echo "STRIPE_SECRET_KEY is empty in backend/.env; cannot forward Stripe webhooks." >&2
+          exit 1
+        fi
+        exec stripe listen \
+          --events checkout.session.completed,checkout.session.expired,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,charge.refunded,invoice.paid,invoice.payment_failed,invoice.voided \
+          --forward-to http://backend:8000/api/stripe/webhook/ \
+          --api-key "$$STRIPE_SECRET_KEY"
+    env_file:
+      - ./backend/.env
+    environment:
+      STRIPE_DEVICE_NAME: honeysummer-local
+    depends_on:
+      backend:
+        condition: service_healthy
+
   frontend:
     build:
       context: .
