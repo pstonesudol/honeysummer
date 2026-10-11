@@ -1,0 +1,37 @@
+{% extends "admin/base.html" %}
+{% block title %}Account security · Honey Summer admin{% endblock %}
+{% block head %}
+<style>
+.page-head{margin:.4rem 0 .4rem}.page-head h2{margin:.3rem 0}.eyebrow{text-transform:uppercase;letter-spacing:.15em;font-weight:700;font-size:.72rem;color:#9a857a}.subtitle{color:#7a6557;margin:.3rem 0 0}
+.panel{background:#fff9f3;border:1px solid #c8b6a6;border-radius:14px;margin:20px 0;overflow:hidden}
+.panel__head{padding:14px 20px;border-bottom:1px solid #e7dacb;display:flex;justify-content:space-between;align-items:center;gap:12px}.panel__head h3{margin:.15rem 0 0}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding:16px 20px;border-bottom:1px solid #eadfd2}.toolbar .grow{flex:1 1 220px}.toolbar label{display:block;font-size:.72rem;color:#7a6557;margin:0 0 3px}
+.notice{display:flex;gap:8px;align-items:center;margin:16px 0 0;padding:10px 14px;border-radius:10px;background:#f6e3c7;color:#7a5320;text-decoration:none;font-weight:600}
+.utable__head,.utable__row{display:grid;grid-template-columns:2.1fr .55fr .7fr .75fr .7fr 1.5fr;gap:14px;align-items:center;padding:12px 20px;border-bottom:1px solid #efe4d8}
+.utable__row:last-child{border-bottom:0}.utable__head{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:#a08c81;background:#fbf6ef}
+.utable__account{display:flex;align-items:center;gap:.65rem;min-width:0}.utable__account>span{display:flex;flex-direction:column;min-width:0}.utable__account small{color:#8a7a70;overflow-wrap:anywhere}
+.avatar{width:36px;height:36px;border-radius:50%;background:#e7d3cf;color:#4c342d;display:grid;place-items:center;font-weight:700;flex:0 0 auto}
+.pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:.72rem;font-weight:700;text-transform:capitalize}
+.pill--ok{background:#dcecdc;color:#2f5a3a}.pill--warn{background:#f6e3c7;color:#7a5320}.pill--off{background:#ecdcdc;color:#7a3a3a}
+.role{text-transform:capitalize}
+.utable__row .actions{display:flex;flex-wrap:nowrap;gap:6px;justify-content:flex-end}
+.btn{min-height:32px;padding:.35rem .6rem;font-size:.74rem;border-radius:9px;border:1px solid #c8b6a6;background:#fff;color:#4c342d;cursor:pointer;font-weight:600;text-decoration:none}
+.btn--primary{background:#4c342d;color:#fff;border-color:#4c342d}.btn--danger{background:#f8dede;color:#763c3c;border-color:#e2b9b9}.btn--secondary{background:#efe2d3;border-color:#d9c6b2}.btn--quiet{background:transparent}
+.empty{padding:24px 20px;color:#8a7a70}.muted{color:#8a7a70;font-size:.85rem}
+.invite-form{padding:16px 20px;margin:0}.invite-form .row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}.invite-form .row>div{flex:1 1 220px}
+dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 24px 60px #4c342d4d}dialog::backdrop{background:#2c1f1aa6}
+.modal-form{padding:20px;background:#fff9f3;margin:0}.modal-form h3{margin-top:0}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.share-box{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff9f3;border:1px solid #c8b6a6;border-radius:10px;padding:10px}.share-box code{overflow-wrap:anywhere;flex:1;min-width:200px}
+/* Account settings: the self-service form reads as a card in the admin shell. */
+form[data-account-form]{background:#fff9f3;border:1px solid #c8b6a6;border-radius:14px;padding:20px;margin:20px 0}
+form[data-account-form] label{margin-top:12px}
+code{overflow-wrap:anywhere}
+@media (max-width:760px){.utable__head{display:none}.utable__row{grid-template-columns:1fr;gap:6px;padding:14px 20px}.utable__row .actions{justify-content:flex-start}}
+</style>
+{% endblock %}
+{% block content %}
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if message %}<p role="status">{{ message }}</p>{% endif %}
+<h1>Account security</h1>
+{% include "partials/security_body.html" %}
+{% endblock %}

@@ -218,6 +218,7 @@
   document.addEventListener('submit', async event => {
     const form = event.target;
     if (event.defaultPrevented || !(form instanceof HTMLFormElement) || form.method.toLowerCase() !== 'post' ||
+        form.hasAttribute('data-native-submit') ||
         new URL(form.action).origin !== location.origin || !new URL(form.action).pathname.startsWith('/admin/')) return;
     event.preventDefault();
     for (const error of [...form.querySelectorAll('[data-inline-field-error]')]) {

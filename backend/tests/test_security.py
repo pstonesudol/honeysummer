@@ -438,6 +438,31 @@ async def test_users_table_lists_and_filters_accounts():
 
 
 @pytest.mark.asyncio
+async def test_operator_security_pages_render_in_admin_shell():
+    await admin_session()
+    _, account = await app.asgi_client.get("/admin/security/")
+    assert account.status == 200
+    assert 'class="admin-menu"' in account.text
+    assert "data-account-form" in account.text
+    # Account settings has no matching nav entry, so nothing is highlighted.
+    assert 'aria-current="page"' not in account.text
+    _, users = await app.asgi_client.get("/admin/security/access")
+    assert 'class="admin-menu"' in users.text
+    assert 'href="/admin/security/access" class="is-active" aria-current="page"' in users.text
+
+
+@pytest.mark.asyncio
+async def test_florist_security_page_stays_standalone():
+    uid = await make_user(role="florist")
+    app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
+    _, page = await app.asgi_client.get("/admin/security/")
+    assert page.status == 200
+    assert 'class="admin-menu"' not in page.text
+    assert "<h1>Account security</h1>" in page.text
+    assert 'href="/wholesale"' in page.text
+
+
+@pytest.mark.asyncio
 async def test_admin_can_send_password_reset_link(monkeypatch):
     sent = []
     monkeypatch.setattr(emails, "send_email", lambda **kwargs: sent.append(kwargs))

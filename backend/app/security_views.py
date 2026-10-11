@@ -86,6 +86,17 @@ def _safe_reauth_next(value: str) -> str:
     return candidate
 
 
+# Security modes that belong inside the shared admin chrome when an operator is signed in.
+_SHELL_MODES = {"account", "access", "privacy", "reauth", "link", "codes"}
+
+
+def _template_for(user, mode: str) -> str:
+    """Render operator-facing security pages inside the admin shell; keep public/auth pages standalone."""
+    if mode in _SHELL_MODES and user and user.role in {"admin", "staff"} and user.is_admin:
+        return "admin/security_shell.html"
+    return "security.html"
+
+
 def _page(request, *, status=200, template="security.html", **context):
     token = request.cookies.get(CSRF_COOKIE) or secrets.token_urlsafe(32)
     context.setdefault("reauth_seconds", reauth_seconds(request))
@@ -103,7 +114,8 @@ def _page(request, *, status=200, template="security.html", **context):
         context.setdefault("admin", viewer)
         context.setdefault("operator", viewer)
         context.setdefault("models", REGISTRY)
-        context.setdefault("active_href", "/admin/security/access")
+        # Account settings has no matching nav entry, so nothing is highlighted there.
+        context.setdefault("active_href", "" if context.get("mode") == "account" else "/admin/security/access")
     response = html(_env.get_template(template).render(csrf_token=token, **context), status=status)
     response.add_cookie(CSRF_COOKIE, token, httponly=True, secure=not get_settings().debug, samesite="Strict")
     if admin_shell:
@@ -153,20 +165,22 @@ async def accessible_errors(request, response):
         and "text/html" in request.headers.get("accept", "")
     ):
         detail = json_module.loads(response.body).get("detail", "Unable to save.")
+        viewer = await _user(request)
         if response.status == 403 and "Recently authenticated" in detail:
             return _page(
                 request,
+                template=_template_for(viewer, "reauth"),
                 mode="reauth",
                 status=response.status,
                 error=detail,
-                user=await _user(request),
+                user=viewer,
                 reauth_next=_safe_reauth_next(request.path) or "/admin/security/access",
             )
-        viewer = await _user(request)
         if viewer and request.path.rstrip("/") == "/admin/security/change":
             # Keep self-service form errors on the form, with the chosen action still selected.
             return _page(
                 request,
+                template=_template_for(viewer, "account"),
                 mode="account",
                 status=response.status,
                 error=detail,
@@ -348,6 +362,7 @@ async def account(request):
         return _page(request, mode="done", message="Sign in to manage your account.", status=401)
     return _page(
         request,
+        template=_template_for(user, "account"),
         mode="account",
         user=user,
         pending=await _account_pending(user.id),
@@ -465,7 +480,7 @@ async def account_change(request):
     if action == "reauth":
         return redirect(_safe_reauth_next(str(request.form.get("next", ""))) or "/admin/security/")
     if codes:
-        return _page(request, mode="codes", codes=codes)
+        return _page(request, template=_template_for(user, "codes"), mode="codes", codes=codes)
     if action == "mfa_start":
         return redirect("/admin/security/")
     return _page(request, mode="done", message=message)
@@ -554,7 +569,7 @@ async def access(request):
         requests = (await db.scalars(select(PrivacyRequest).order_by(PrivacyRequest.id.desc()).limit(100))).all()
     return _page(
         request,
-        template="admin/security_access.html",
+        template=_template_for(user, "access"),
         mode="access",
         user=user,
         rows=rows,
@@ -705,7 +720,7 @@ async def manage_access(request):
         await db.commit()
     await deliver_security_mail()
     if link:
-        return _page(request, mode="link", link=link, link_email=link_email)
+        return _page(request, template=_template_for(actor, "link"), mode="link", link=link, link_email=link_email)
     return redirect("/admin/security/access")
 
 
@@ -720,7 +735,7 @@ async def review_privacy(request, pk: int):
         if not item:
             return json({"detail": "Request not found."}, status=404)
         if request.method == "GET":
-            return _page(request, mode="privacy", item=item)
+            return _page(request, template=_template_for(actor, "privacy"), mode="privacy", item=item)
         notes = str(request.form.get("notes", "")).strip()
         decision = str(request.form.get("decision", ""))
         if item.status != "requested" or not notes or len(notes) > 2000 or decision not in {"approve", "deny"}:
