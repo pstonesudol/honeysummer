@@ -60,7 +60,19 @@ pre-commit install
 
 After that the hooks run automatically on `git commit`. Run them against everything with `pre-commit run --all-files`. The hooks use the project's own toolchain (`uv run ruff …` and the frontend workspace's `eslint`), so versions always match the checked-in config.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the same gates on every push and pull request: `uv lock --check`, `ruff check`, `ruff format --check`, and `uv run pytest` (including Postgres inventory and reset/MFA concurrency tests against a service database), plus `eslint` and cart unit tests for the frontend.
+GitHub Actions (`.github/workflows/ci.yml`) runs the same gates on every push and pull request: `uv lock --check`, `ruff check`, `ruff format --check`, and `uv run pytest` (including Postgres inventory and reset/MFA concurrency tests against a service database), plus `eslint` and cart unit tests for the frontend and the release-gate Node tests (`npm run test:release`).
+
+### Pull request titles
+
+Every pull request title must follow [Conventional Commits](https://www.conventionalcommits.org) — `<type>(<scope>)!: <description>` — so pull requests stay readable and `main`'s history stays machine-readable. `.github/workflows/pr-title.yml` validates the title whenever a pull request is opened, edited, reopened or pushed to, running `node scripts/pr-title.mjs` against it; the rules live in `scripts/pr-title-lib.mjs` and are covered by `scripts/tests/pr-title.test.mjs`.
+
+```text
+feat: gate backend releases on staging and production approval
+fix(api): reject expired staging tokens
+refactor(inventory)!: drop the legacy stock column
+```
+
+Allowed types are `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` and `test`. The scope is optional and `!` marks a breaking change. Mark the **Conventional Commits title** check as required in the `main` branch protection rules so a pull request cannot merge without it.
 
 ### Content and inquiries
 
