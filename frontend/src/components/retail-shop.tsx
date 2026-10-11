@@ -11,9 +11,13 @@ export function ProductGrid({ flowers, channel }: { flowers: FlowerListing[]; ch
 }
 
 export function RetailShop({ flowers, checkoutStatus = null }: { flowers: FlowerListing[]; checkoutStatus?: "success" | "cancelled" | null; pickupWindow?: string }) {
+  const { catalogues } = useCart();
+  // The cart independently refreshes the live catalogue from the same API.
+  // Use it when the server-rendered read failed and supplied its empty fallback.
+  const offerings = flowers.length ? flowers : catalogues.retail;
   return <div className="retail-shop">
     {checkoutStatus && <CheckoutNotice channel="retail" checkoutStatus={checkoutStatus} />}
-    {flowers.length ? <ProductGrid flowers={flowers} channel="retail" /> : <p className="retail-shop__empty">Nothing is listed for online ordering this week. Send a custom request below and we will make something just for you.</p>}
+    {offerings.length ? <ProductGrid flowers={offerings} channel="retail" /> : <p className="retail-shop__empty">Nothing is listed for online ordering this week. Send a custom request below and we will make something just for you.</p>}
   </div>;
 }
 
