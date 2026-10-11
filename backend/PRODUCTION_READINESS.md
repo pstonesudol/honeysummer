@@ -161,6 +161,16 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
 
 ### Staging operator login defect — October 11, 2026
 
+- Access follow-up: user created the staging custom-domain application with the
+  CI Service Auth policy and the two-address human Allow policy, added One-time
+  PIN and confirmed human email-code login. User also confirmed the custom domain
+  still works and workers.dev no longer serves staging with both URL toggles off.
+  Preparing a persistent staging-only workers_dev=false setting and a manual
+  read-only positive/negative CI token check. Hosted CI after activation remains
+  unverified until that workflow runs; direct Railway origin review remains open.
+  User reported approving the production backend release; final job success has
+  not been independently confirmed here. No production frontend cutover claimed.
+
 - Follow-up: user confirmed hosted admin sign-in, logout/protected-page recheck
   and fresh sign-in after PR #3. This verifies the reported login loop is fixed;
   it does not complete the wider deployed security acceptance checklist.

@@ -10,6 +10,7 @@ test("staging targets its own Worker, self-binding and Railway backend", () => {
   assert.equal(vars.API_URL, "https://honeysummer-staging.up.railway.app");
   assert.equal(vars.DEPLOYMENT_ENVIRONMENT, "staging");
   assert.equal(target.preview_urls, false);
+  assert.equal(target.workers_dev, false);
 });
 
 test("production fails closed until its backend is supplied", () => {
