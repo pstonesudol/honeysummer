@@ -36,9 +36,9 @@ const steps = [
 export default async function OrderFlowersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ checkout?: string }>;
+  searchParams: Promise<{ checkout?: string; checkout_key?: string }>;
 }) {
-  const [{ checkout }, flowers, content] = await Promise.all([
+  const [{ checkout, checkout_key: checkoutKey }, flowers, content] = await Promise.all([
     searchParams,
     getRetailFlowers(),
     getSiteContent(),
@@ -92,7 +92,7 @@ export default async function OrderFlowersPage({
             weather and changes week to week.
           </p>
         </div>
-         <RetailShop flowers={flowers} checkoutStatus={checkoutStatus} pickupWindow={content.pickupWindow || pickup.window} />
+         <RetailShop flowers={flowers} checkoutStatus={checkoutStatus} checkoutKey={checkoutKey} pickupWindow={content.pickupWindow || pickup.window} />
       </section>
 
       <section className="steps section-wrap" aria-label="How custom orders work">

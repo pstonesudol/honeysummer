@@ -190,7 +190,7 @@ async function api(path: string, options?: RequestInit) {
   return data;
 }
 
-export function WholesaleShop({ checkoutStatus = null }: { checkoutStatus?: "success" | "cancelled" | null }) {
+export function WholesaleShop({ checkoutStatus = null, checkoutKey }: { checkoutStatus?: "success" | "cancelled" | null; checkoutKey?: string }) {
   const { account, refreshAccount, logout } = useCart();
   const [catalogue, setCatalogue] = useState<{ owner: number | null; flowers: Flower[] }>({ owner: null, flowers: [] });
   const flowers = catalogue.owner === account.id ? catalogue.flowers : [];
@@ -253,7 +253,7 @@ export function WholesaleShop({ checkoutStatus = null }: { checkoutStatus?: "suc
   </section>;
 
   return <section className="wholesale-shop section-wrap" aria-labelledby="shop-title">
-    {checkoutStatus && <CheckoutNotice channel="wholesale" checkoutStatus={checkoutStatus} />}
+    {checkoutStatus && <CheckoutNotice channel="wholesale" checkoutStatus={checkoutStatus} checkoutKey={checkoutKey} />}
     <div className="wholesale-shop__heading"><div><p className="eyebrow">Welcome, {account.business_name}</p><h2 id="shop-title">This week’s stems.</h2></div><div className="wholesale-shop__actions"><a className="text-link" href="/admin/security/">Account security</a><button className="button button--quiet button--sm" type="button" onClick={() => void logout()}>Sign out</button></div></div>
     {flowers.length === 0 ? <p>Nothing is listed today — check back soon.</p> : <ProductGrid flowers={flowers} channel="wholesale" />}
     {message && <p role="status" className="form-message">{message}</p>}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 import stripe
@@ -41,6 +42,18 @@ async def create_checkout(
     stripe.api_key = get_settings().stripe_secret_key
     async with session_scope() as db:
         order = await load_order(db, order_id)
+    # The return URL must identify the server-side attempt even if the browser
+    # loses its local cart storage while Stripe Checkout is open.
+    if order.checkout_key:
+
+        def with_checkout_key(url: str) -> str:
+            parts = urlsplit(url)
+            query = dict(parse_qsl(parts.query, keep_blank_values=True))
+            query["checkout_key"] = str(order.checkout_key)
+            return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+        success_url = with_checkout_key(success_url)
+        cancel_url = with_checkout_key(cancel_url)
     params = dict(
         mode="payment",
         success_url=success_url,

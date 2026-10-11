@@ -3,6 +3,7 @@
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest import mock
+from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
 import pytest
@@ -91,6 +92,9 @@ async def test_pending_retry_cancel_and_release_are_safe(monkeypatch):
         _, again = await retail(flower, key)
     assert create.call_count == 1
     assert first.json["checkout_url"] == again.json["checkout_url"]
+    params = create.call_args.kwargs
+    assert parse_qs(urlsplit(params["success_url"]).query)["checkout_key"] == [key]
+    assert parse_qs(urlsplit(params["cancel_url"]).query)["checkout_key"] == [key]
     with mock.patch("stripe.checkout.Session.retrieve", return_value=SimpleNamespace(status="open")):
         _, status = await app.asgi_client.get(f"/api/cart/checkout/{key}/?checkout=success")
     assert status.json["status"] == "pending"  # Redirects never establish payment.

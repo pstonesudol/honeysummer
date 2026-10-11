@@ -10,13 +10,17 @@ import type { Channel } from "@/lib/cart";
  * confirmed order once the cart has polled the server and seen a paid status —
  * and a confirmed payment surfaces as a top-of-page toast, not this banner.
  */
-export function CheckoutNotice({ channel, checkoutStatus }: { channel: Channel; checkoutStatus: "success" | "cancelled" }) {
-  const { checkouts, notify } = useCart();
+export function CheckoutNotice({ channel, checkoutStatus, checkoutKey }: { channel: Channel; checkoutStatus: "success" | "cancelled"; checkoutKey?: string }) {
+  const { checkouts, notify, checkPayment } = useCart();
   const announced = useRef(false);
   const cancelledMessage = `Your cart is saved. Resume your existing checkout or cancel the unpaid reservation from ${channel} checkout.`;
 
   // A cancelled checkout never reaches checkPayment, so announce it as a toast
   // once; the inline notice stays for the detail and the recovery action.
+  useEffect(() => {
+    if (checkoutStatus === "success" && checkoutKey) void checkPayment(channel, checkoutKey).catch(() => undefined);
+  }, [checkoutStatus, checkoutKey, channel, checkPayment]);
+
   useEffect(() => {
     if (announced.current) return;
     announced.current = true;
