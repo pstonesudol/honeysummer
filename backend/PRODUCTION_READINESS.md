@@ -227,6 +227,22 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   verifies one admin happy path only; MFA enrollment/recovery, session cookie
   attributes, CSRF and proxy-header behavior, role boundaries/revocation,
   throttles and token replay tests remain open.
+- Resend staging setup — October 11, 2026: user verified
+  `staging-updates.hellohoneysummer.com` in Resend. Its dedicated sending DNS
+  records were added to Cloudflare without changing root Google mail records;
+  all required records resolved and the domain became verified. The staging
+  Railway service now has `RESEND_API_KEY` and
+  `DEFAULT_FROM_EMAIL=Honey Summer Staging <hello@staging-updates.hellohoneysummer.com>`;
+  deployment `38b9ebc5-004d-4220-a031-7e344cf16c50` succeeded. Production was
+  untouched. User confirmed a deliberate staging retail order test generated an
+  order-confirmation email that arrived in the recipient's spam folder. This
+  verifies application-triggered provider acceptance and inbox delivery, but not
+  inbox placement. Message headers showed SPF pass, aligned DKIM pass, Microsoft
+  DMARC `bestguesspass`/`action=none`, and composite authentication pass, while
+  the message was still classified as junk (SCL 5). No explicit DMARC record is
+  published for the staging sending subdomain. Authentication-result review is
+  complete; optional staging DMARC monitoring, spam placement/reputation work,
+  Resend event review, and broader email workflow coverage remain open.
 - Zero Trust Free activated by the user. Staging CI service-token secret names
   confirmed present in GitHub, with raw values kept private. Preparing fixed-origin,
   no-redirect Access-authenticated smoke requests and stripping Access credentials

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import resend
 
+from .email_templates import LOGO_CONTENT_ID, logo_attachment, render_email
 from .models import Inquiry
 from .settings import get_settings
 
@@ -44,8 +45,9 @@ def send_email(
         }
         if reply_to:
             params["reply_to"] = reply_to
-        if html_body:
-            params["html"] = html_body
+        params["html"] = html_body or render_email(title=subject, body=body)
+        if f"cid:{LOGO_CONTENT_ID}" in params["html"]:
+            params["attachments"] = [logo_attachment()]
         if idempotency_key:
             resend.Emails.send(params, {"idempotency_key": idempotency_key})
         else:
@@ -207,12 +209,38 @@ def send_order_emails(
         "\n\nWith warmth,\nHoney Summer"
     )
     try:
+        fee = max(Decimal(str(delivery_fee or 0)), Decimal(0))
+    except InvalidOperation:
+        fee = Decimal(0)
+    summary_items = [
+        {
+            "name": item["name"],
+            "quantity": item["quantity"],
+            "unit_price": f"{Decimal(str(item['price'])):.2f}",
+            "amount": f"{Decimal(str(item['price'])) * item['quantity']:.2f}",
+        }
+        for item in items
+    ]
+    order = {
+        "reference": reference,
+        "label": label,
+        "customer_name": customer_name,
+        "customer_email": customer_email,
+        "items": summary_items,
+        "delivery_fee": f"{fee:.2f}" if fee > 0 else "",
+        "total": f"{sum(Decimal(item['amount']) for item in summary_items) + fee:.2f}",
+        "fulfillment": FULFILLMENT_LABELS.get(fulfillment, fulfillment),
+        "pickup_window": pickup_window,
+        "delivery_address": delivery_address,
+    }
+    try:
         if recipient in (None, "customer"):
             send_email(
                 subject=f"Honey Summer {label} {reference}",
                 body=body,
                 to=customer_email,
                 reply_to=settings.inquiry_notification_email,
+                html_body=render_email(title="Thank you for your order", body=body, order={**order, "farm": False}),
             )
         if recipient in (None, "farm"):
             send_email(
@@ -220,6 +248,7 @@ def send_order_emails(
                 body=body,
                 to=settings.inquiry_notification_email,
                 reply_to=customer_email,
+                html_body=render_email(title="A new order has arrived", body=body, order={**order, "farm": True}),
             )
     except Exception:  # pragma: no cover - defensive
         logger.exception("Unable to send order emails for order %s", order_id)

@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 24px;color:#6a4e42;font:30px/1.25 Georgia,'Times New Roman',serif;">{{ title }}</h1>
+{% for paragraph in paragraphs %}
+<p style="margin:0 0 18px;">{% for line in paragraph.split('\n') %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{% endfor %}
+{% endblock %}
