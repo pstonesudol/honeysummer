@@ -92,6 +92,22 @@ merge and its first Actions rehearsal; it has not been deployed by this edit.
 
 ## Staging Cloudflare Access rollout
 
+User confirmed the custom-domain email-code login works and the alternate
+workers.dev URL no longer serves staging after disabling both Worker/preview URLs
+in the dashboard. Staging Wrangler now declares `workers_dev: false` to preserve
+that choice on redeploy; production settings are unchanged. Direct Railway access
+is still an open boundary, not covered by the custom-domain Access application.
+
+After this change merges, run **Actions → Verify staging Access (read-only) →
+Run workflow**, selecting **main**. This workflow has no deployment commands or
+production job. It checks anonymous and deliberately invalid service-token
+requests are denied on the homepage/API health, then runs all existing smoke
+probes with the valid staging service token. It prints only a sanitized result.
+The expected Access login redirect is pinned to the current Zero Trust team
+`cool-thunder-025c`; update the validator if that team domain changes. A successful
+run proves the tested custom-domain requests are gated, not all alternate origins
+or human-account permission combinations.
+
 1. Zero Trust Free is active in the owner's account. The user saved raw service
    token values as staging environment secrets `CF_ACCESS_CLIENT_ID` and
    `CF_ACCESS_CLIENT_SECRET` (names confirmed, values not read). The token is named
