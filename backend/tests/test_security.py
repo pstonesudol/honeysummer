@@ -387,6 +387,112 @@ async def test_operator_can_opt_into_mfa_from_account_security():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["admin", "staff", "florist"])
+@pytest.mark.parametrize("proof", ["authenticator", "recovery"])
+async def test_account_can_disable_mfa_and_revoke_all_sessions(role, proof, monkeypatch):
+    uid = await make_user(role=role, mfa=True)
+    recovery = "single-use-recovery-code"
+    async with session_scope() as db:
+        user = await db.get(User, uid)
+        secret = decrypt(user.mfa_secret)
+        user.mfa_pending = encrypt(pyotp.random_base32())
+        user.recovery_codes = [token_digest(recovery)]
+        await db.commit()
+    kind = "florist" if role == "florist" else "admin"
+    cookie = COOKIE_NAME if role == "florist" else ADMIN_COOKIE
+    tokens = [await create_session_token(uid, kind) for _ in range(2)]
+    app.asgi_client.cookies.set(cookie, tokens[0])
+    _, page = await app.asgi_client.get("/admin/security/?action=mfa_disable")
+    assert page.status == 200
+    assert 'name="action" value="mfa_disable"' in page.text
+    assert 'name="current_password"' in page.text and 'name="code"' in page.text
+    assert "protected by your password only" in page.text
+    sent = []
+    monkeypatch.setattr(emails, "send_email", lambda **kwargs: sent.append(kwargs))
+    code = pyotp.TOTP(secret).now() if proof == "authenticator" else recovery
+    _, disabled = await change({"action": "mfa_disable", "code": code})
+    assert disabled.status == 200 and "Two-step verification turned off" in disabled.text
+    async with session_scope() as db:
+        user = await db.get(User, uid)
+        assert not user.mfa_secret and not user.mfa_pending and not user.recovery_codes
+        assert user.mfa_last_step == 0 and user.security_version == 1
+        assert not verify_mfa(user, code)
+        event = await db.scalar(select(SecurityEvent).where(SecurityEvent.action == "mfa_disable"))
+        assert event.actor_id == event.target_id == uid
+    assert any(mail["subject"].endswith("MFA disabled") for mail in sent)
+    for token in tokens:
+        app.asgi_client.cookies.set(cookie, token)
+        _, blocked = await app.asgi_client.get("/admin/security/")
+        assert blocked.status == 401
+    app.asgi_client.cookies.clear()
+    if role == "florist":
+        _, login = await app.asgi_client.post(
+            "/api/auth/login/", json={"email": f"{role}@example.com", "password": PASSWORD}
+        )
+        assert login.status == 200
+    else:
+        await app.asgi_client.get("/admin/login")
+        _, login = await app.asgi_client.post(
+            "/admin/login",
+            data={
+                "csrf_token": app.asgi_client.cookies.get(ADMIN_CSRF_COOKIE),
+                "email": f"{role}@example.com",
+                "password": PASSWORD,
+            },
+        )
+        assert login.status == 302 and login.headers["location"].endswith("/admin/")
+    _, account = await app.asgi_client.get("/admin/security/")
+    assert "Two-step verification off" in account.text
+    assert 'href="/admin/security/?action=mfa_disable"' not in account.text
+    _, started = await change({"action": "mfa_start"})
+    assert started.status == 302
+    async with session_scope() as db:
+        secret = decrypt((await db.get(User, uid)).mfa_pending)
+    _, enrolled = await change({"action": "mfa_confirm", "code": pyotp.TOTP(secret).now()})
+    assert enrolled.status == 200 and "Save your recovery codes" in enrolled.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "data, status",
+    [
+        ({"current_password": "wrong", "code": "recovery-code"}, 400),
+        ({"code": "wrong"}, 400),
+        ({}, 400),
+        ({"csrf_token": "wrong", "code": "recovery-code"}, 403),
+    ],
+)
+async def test_disable_mfa_requires_password_mfa_and_csrf(data, status):
+    uid = await make_user(role="admin", mfa=True)
+    async with session_scope() as db:
+        user = await db.get(User, uid)
+        secret = user.mfa_secret
+        user.recovery_codes = [token_digest("recovery-code")]
+        await db.commit()
+    app.asgi_client.cookies.set(ADMIN_COOKIE, await create_session_token(uid, "admin"))
+    _, rejected = await change({"action": "mfa_disable", **data})
+    assert rejected.status == status
+    async with session_scope() as db:
+        user = await db.get(User, uid)
+        assert user.mfa_secret == secret and user.security_version == 0
+        assert user.recovery_codes == [token_digest("recovery-code")]
+        assert not await db.scalar(select(SecurityEvent).where(SecurityEvent.action == "mfa_disable"))
+        assert not await db.scalar(select(SecurityMail).where(SecurityMail.subject.endswith("MFA disabled")))
+
+
+@pytest.mark.asyncio
+async def test_disable_mfa_requires_signed_in_enrolled_account():
+    _, anonymous = await change({"action": "mfa_disable"})
+    assert anonymous.status == 401
+    uid = await make_user(role="admin")
+    app.asgi_client.cookies.set(ADMIN_COOKIE, await create_session_token(uid, "admin"))
+    _, rejected = await change({"action": "mfa_disable"})
+    assert rejected.status == 400 and "not enabled" in rejected.json["detail"]
+    async with session_scope() as db:
+        assert (await db.get(User, uid)).security_version == 0
+
+
+@pytest.mark.asyncio
 async def test_password_reset_does_not_remove_operator_mfa():
     uid = await make_user(role="admin", mfa=True)
     _, response = await reset_token(await token_for(uid))
