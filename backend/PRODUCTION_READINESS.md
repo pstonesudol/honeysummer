@@ -61,6 +61,25 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   access. Confirm the final staging frontend URL and align Railway `PUBLIC_ORIGIN`
   and payment return URLs before hosted testing. All acceptance rows remain open.
 
+### Production Railway provisioning — October 11, 2026 UTC
+
+- After explicit user approval, reviewed and applied the production IaC plan:
+  three additions (Postgres, volume and backend), no changes/deletions to existing
+  resources. This supersedes the earlier snapshot describing production as empty.
+- MCP confirmed production Postgres 18 successfully deployed
+  (`8dc9fb4b-2eea-434e-bb08-27167f91176f`) and its 500 MB volume mounted in `iad`.
+  The backend build was triggered (`29bef210-19f5-46a9-bce3-dce2af5a5d99`).
+- Railway service/volume IDs are project-level and can match staging; the actual
+  service and volume instances are scoped to separate environments. No database
+  data or staging secrets were intentionally copied by this apply.
+- User reported saving production backend variables and generated
+  `https://honeysummer-production.up.railway.app`. The assistant fetched
+  `/api/health/` over HTTPS and received
+  `{"status":"ok","service":"honey-summer-api"}`. Direct production API
+  liveness is verified; key isolation/backup, schema state, proxy/security,
+  provider flows and backup/restore still require evidence. No live transaction,
+  custom-domain route, DNS cutover or launch was authorized/performed.
+
 - [ ] A1 — Workers/OpenNext, Railway and Postgres provisioned; owners, regions, versions, budgets and environment URLs documented; staging/test/live credentials and data isolated.
 - [ ] A2 — Real HTTPS same-origin `/api/`, `/admin/`, public media and protected private-media routing, headers, upload limits and health endpoints verified.
 - [ ] A3 — Repeatable builds/tests/deploys, protected credentials, release approval and post-deploy checks exercised; debug payment bypasses disabled.
