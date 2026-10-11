@@ -21,7 +21,7 @@ export function Footer({ content = {} }: { content?: SiteContent }) {
           </div>
           <div>
             <h2>Connect</h2>
-            <Link href="/contact">Contact &amp; FAQ</Link>
+            <Link href="/contact#faq">Contact &amp; FAQ</Link>
             <Link href="/wholesale">Florist wholesale</Link>
           </div>
         </div>

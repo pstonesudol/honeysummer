@@ -155,7 +155,7 @@ export default async function ContactPage() {
         <InquiryForm kind="contact" submitLabel="Send message" />
       </section>
 
-      <section className="faq-section section-wrap" aria-labelledby="faq-title">
+      <section className="faq-section section-wrap" id="faq" aria-labelledby="faq-title">
         <div className="faq-section__intro">
           <p className="eyebrow">Questions</p>
           <h2 id="faq-title">Frequently asked.</h2>
