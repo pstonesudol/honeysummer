@@ -1,4 +1,4 @@
-# Backend release: main → staging → approval → production
+# Release: full staging → approval → production backend
 
 ## What is enforced
 
@@ -15,6 +15,13 @@
    database-backed catalogue checks must pass. A receipt records SHA, archive
    digest, deployment identity and smoke result. No secret or customer data is
    included in the source artifact/receipt.
+   The same staging job then installs locked frontend dependencies, builds/deploys
+   `honey-summer-staging` from the same checkout, and verifies the custom-domain
+   homepage/order page, noindex metadata, API health/DB catalogue proxy and admin
+   login form/secure CSRF cookie attributes. It saves a redacted
+   `staging-frontend.json` receipt in the release artifact. Any frontend deploy or
+   proxy failure blocks the production approval job. This is an HTTP smoke check,
+   not authenticated browser, payment/email or private-media acceptance.
 4. Production waits for approval in GitHub environment **`production`**. Required
    reviewer: `pstonesudol`. Administrator bypass is disabled. Self-review is
    permitted deliberately: the sole operator may approve a release they merged;
@@ -47,25 +54,35 @@ Authorized administrators can still manually deploy through Railway/CLI. Treat
 that as audited break-glass, not a normal release path. This workflow does not
 prevent someone with administrative access from changing infrastructure policies.
 
-## Activation still required
+## Activation and evidence
 
-The workflow/scripts are prepared locally, but no end-to-end release is claimed.
+The backend-only release was successfully rehearsed in run
+[38109825138](https://github.com/pstonesudol/honeysummer/actions/runs/38109825138)
+after user approval. Staging Worker/custom-domain deployment was separately
+performed by the user. The frontend staging workflow extension still needs PR
+merge and its first Actions rehearsal; it has not been deployed by this edit.
 
 1. **Create two Railway project tokens manually:** open Honey Summer project
    settings → Tokens and create one restricted to `staging`, one to `production`.
-   The authenticated Railway API returned `Not Authorized` for token creation,
-   so no tokens were stored by the agent. If the dashboard also denies creation,
-   resolve the account/permission restriction; don't use a broader personal token
-   as a silent fallback.
+    Completed by the user after resolving account verification. The earlier API
+    `Not Authorized` error was an account-verification blocker. Don't use a broader
+    personal token as a silent fallback.
 2. In GitHub repository **Settings → Environments → staging**, add an environment
    secret named `RAILWAY_TOKEN` with the staging token. In **production**, add the
    same secret name with the production token. Do not put either in source, chat,
    workflow YAML or unscoped repository secrets. The environments were created
    with main-only deployment policies; production has the approval rule above.
-3. Review/commit these files on a branch and open a PR. After CI, merge to main.
-   No commit, push or PR was performed automatically. While this is pending,
-   existing apps stay online but new merges no longer trigger Railway directly.
-4. In **Actions → Release backend**, inspect the SHA, exact staging deployment
+3. In GitHub **staging**, configure environment secret `CLOUDFLARE_API_TOKEN` and
+   variable `CLOUDFLARE_ACCOUNT_ID=1b3166589a8439bce7657a8c372d2791`.
+   Both are confirmed present. The token is restricted to the owner's account,
+   with Workers Scripts Edit and Account Settings Read. The name "staging" does
+   not restrict its provider permissions to one Worker: it can edit other Workers
+   in that account. Keep it environment-scoped and audit workflow edits. Do not
+   store local OAuth credentials in Actions or silently broaden token permissions.
+   The staging custom domain must already be attached; this workflow does not
+   change DNS/routes, activate R2 or subscribe to a paid Workers plan.
+4. Review and merge the frontend extension PR after CI. In **Actions → Release
+   staging and production backend**, inspect the SHA, exact staging deployment
    and smoke receipt. Click **Review deployments → production → Approve and deploy**
    only after the production checklist below. Observe production completion and
    record the run/deployment evidence in `backend/PRODUCTION_READINESS.md`.
@@ -86,14 +103,22 @@ The workflow/scripts are prepared locally, but no end-to-end release is claimed.
 - No live payment/email fixture, public domain attachment or cutover is authorized
   merely by approving a backend maintenance release.
 
-## Frontend is not yet in this pipeline
+## Frontend production is not yet in this pipeline
 
-Cloudflare account verification/member access is blocked. The current workflow is
-explicitly **backend only**. After access is resolved, add frontend staging deploy
-and proxy/account smoke checks to the staging job, then deploy the same frontend
-SHA behind the same production approval. Do not enable independent production
-Workers Builds on `main`: that would bypass this sequence. Only after both sides
-are integrated and rehearsed can we claim the full-app release chain.
+Cloudflare access is resolved. The extension deploys/checks the frontend in
+**staging only**; production still promotes **only the backend**. Never interpret a
+green production job as a production frontend release or public cutover. A future
+approved change must add production frontend credentials/configuration, same-SHA
+deployment and proxy checks behind the existing approval. Do not enable independent
+production Workers Builds on `main`: that would bypass this sequence. Only after
+both sides are integrated and rehearsed can we claim the full-app release chain.
+
+Normal release jobs are serialized, but dashboard/local Wrangler deployments can
+still replace staging outside that lock. Do not deploy manually during release
+verification/approval. The frontend receipt identifies the CI checkout and probe
+results; it is not a runtime cryptographic attestation of the Worker version.
+There is no automatic rollback if frontend fails after a successful backend deploy;
+review both states and migration compatibility before retrying.
 
 Run local gate tests with `npm run test:release`. The frontend CI job includes them.
 Environment reviewer/branch protections/secrets are provider settings, not applied

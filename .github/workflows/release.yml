@@ -1,4 +1,4 @@
-name: Release backend
+name: Release staging and production backend
 
 on:
   workflow_run:
@@ -23,10 +23,10 @@ jobs:
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     environment:
       name: staging
-      url: https://honeysummer-staging.up.railway.app
+      url: https://staging.hellohoneysummer.com
     outputs:
       sha: ${{ steps.source.outputs.sha }}
     steps:
@@ -39,6 +39,15 @@ jobs:
           node-version: 22
       - name: Install pinned Railway CLI
         run: npm install --global @railway/cli@5.64.2
+      - name: Check staging deployment credentials
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$RAILWAY_TOKEN"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test "$CLOUDFLARE_ACCOUNT_ID" = "1b3166589a8439bce7657a8c372d2791"
       - name: Pin the CI-tested commit
         id: source
         env:
@@ -55,6 +64,19 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: node scripts/release.mjs staging release-artifact
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Build and deploy the staging Worker from the CI-tested checkout
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          API_URL: https://honeysummer-staging.up.railway.app
+          NEXT_PUBLIC_SITE_URL: https://staging.hellohoneysummer.com
+        run: npm run deploy:staging --workspace frontend
+      - name: Verify storefront, API proxy and admin entry through staging HTTPS
+        env:
+          RELEASE_SHA: ${{ steps.source.outputs.sha }}
+        run: node scripts/staging-smoke.mjs release-artifact
       - uses: actions/upload-artifact@v4
         with:
           name: backend-release-${{ steps.source.outputs.sha }}
@@ -63,6 +85,7 @@ jobs:
           if-no-files-found: error
 
   production:
+    # Backend only. No production Worker/domain deployment is enabled here.
     needs: staging
     runs-on: ubuntu-latest
     timeout-minutes: 25
