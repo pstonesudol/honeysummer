@@ -18,8 +18,9 @@
    The same staging job then installs locked frontend dependencies, builds/deploys
    `honey-summer-staging` from the same checkout, and verifies the custom-domain
    homepage/order page, noindex metadata, API health/DB catalogue proxy and admin
-   login form/secure CSRF cookie attributes. It saves a redacted
-   `staging-frontend.json` receipt in the release artifact. Any frontend deploy or
+   login form/secure CSRF cookie attributes. It requires anonymous `/admin/` to return its 302 login
+   redirect unchanged (detecting a Worker that follows auth redirects internally).
+   It saves a redacted `staging-frontend.json` receipt in the release artifact. Any frontend deploy or
    proxy failure blocks the production approval job. This is an HTTP smoke check,
    not authenticated browser, payment/email or private-media acceptance.
 4. Production waits for approval in GitHub environment **`production`**. Required

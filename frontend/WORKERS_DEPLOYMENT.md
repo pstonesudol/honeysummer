@@ -12,6 +12,26 @@ perform public cutover without separate approval.
 | staging | `honey-summer-staging` | `https://honeysummer-staging.up.railway.app` |
 | production | `honey-summer` | Must supply the production Railway HTTPS origin |
 
+## Backend proxy and authentication redirects
+
+`worker.mjs` is the supported custom Worker entry point. It delegates frontend
+pages/assets/images to the generated OpenNext handler, but streams `/api`,
+`/admin` and `/media` requests directly to the configured backend using
+`redirect: "manual"`. Redirect status/Location and all Set-Cookie fields must
+reach the browser; following an upstream login redirect inside the Worker loses
+the newly issued session cookie and silently returns the login page again.
+Absolute backend redirects become same-origin paths; external Stripe redirects
+are preserved without being fetched. Cookies, Origin, CSRF fields, backend error
+statuses and the 12 MiB streaming upload limit are retained. Auth/admin responses
+are no-store. No credentials or customer data are logged.
+
+Next rewrites remain for local Next development; the Worker wrapper handles these
+paths before OpenNext's external-rewrite fetch adapter on deployed Workers. The
+staging smoke gate additionally requires an anonymous `/admin/` request to return
+the backend's 302 to `/admin/login`, rather than a followed 200 login page. This
+regression check needs no seeded credentials. Actual login/logout still requires
+operator verification after deployment.
+
 The two named Wrangler environments explicitly declare their own non-inherited
 service bindings and variables. Database credentials, Stripe/Resend keys and R2
 credentials belong on Railway, **never** in frontend public variables.

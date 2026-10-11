@@ -1,10 +1,17 @@
 import { validateSmoke } from "./release-lib.mjs";
 
 export const stagingOrigin = "https://staging.hellohoneysummer.com";
-export const smokePaths = ["/", "/order-flowers", "/api/health/", "/api/retail/flowers/", "/admin/login"];
+export const smokePaths = ["/", "/order-flowers", "/api/health/", "/api/retail/flowers/", "/admin/login", "/admin/"];
 
 export function validateStagingResponse(path, response, body) {
   if (!smokePaths.includes(path)) throw new Error("Unknown staging smoke path.");
+  if (path === "/admin/") {
+    if (response.status !== 302 || response.headers.get("location") !== "/admin/login" ||
+        response.headers.get("cache-control") !== "no-store") {
+      throw new Error("Anonymous admin access must preserve the backend login redirect without caching it.");
+    }
+    return;
+  }
   if (response.status !== 200 || response.redirected) {
     throw new Error(`Staging ${path} must return HTTP 200 without redirects.`);
   }
