@@ -553,3 +553,54 @@ async def test_refund_of_final_paid_wedding_invoice_reduces_order_net_not_stock(
     async with session_scope() as db:
         assert (await db.get(Order, order_id)).status == "refunded"
         assert len((await db.scalars(select(OrderRefund))).all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_order_detail_links_invoice_orders_to_their_refund_page():
+    async with session_scope() as db:
+        db.add(User(email="owner@example.com", password_hash=hash_password("password"), is_admin=True))
+        wedding = Inquiry(kind="wedding", name="Ava", email="ava@example.com")
+        bouquet = Inquiry(kind="bouquet", name="Bea", email="bea@example.com")
+        db.add_all([wedding, bouquet])
+        await db.flush()
+        wedding_order = Order(status="paid", payment_method="stripe_invoice", payment_reference="in_wedding")
+        bouquet_order = Order(status="paid", payment_method="stripe_invoice", payment_reference="in_bouquet")
+        db.add_all([wedding_order, bouquet_order])
+        await db.flush()
+        quote = WeddingQuote(
+            inquiry_id=wedding.id,
+            order_id=wedding_order.id,
+            status="paid",
+            snapshot={"total_cents": 1000},
+            activity=[],
+        )
+        proposal = BouquetProposal(
+            inquiry_id=bouquet.id,
+            order_id=bouquet_order.id,
+            status="paid",
+            stripe_invoice_id="in_bouquet",
+            history=[{"draft": {"total_cents": 1000}}],
+            activity=[],
+        )
+        db.add_all([quote, proposal])
+        await db.flush()
+        db.add(
+            WeddingInvoice(
+                quote_id=quote.id, step="full", status="paid", stripe_invoice_id="in_wedding", amount_cents=1000
+            )
+        )
+        await db.commit()
+        wedding_order_id, bouquet_order_id = wedding_order.id, bouquet_order.id
+        quote_id, proposal_id = quote.id, proposal.id
+    await app.asgi_client.get("/admin/login")
+    token = app.asgi_client.cookies.get(CSRF_COOKIE)
+    await app.asgi_client.post(
+        "/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=token)
+    )
+    _, wedding_detail = await app.asgi_client.get(f"/admin/orders/{wedding_order_id}")
+    assert wedding_detail.status == 200
+    assert f"/admin/weddings/{quote_id}" in wedding_detail.text
+    assert f"wedding quote #{quote_id}" in wedding_detail.text
+    _, bouquet_detail = await app.asgi_client.get(f"/admin/orders/{bouquet_order_id}")
+    assert bouquet_detail.status == 200
+    assert f"/admin/proposals/{proposal_id}" in bouquet_detail.text

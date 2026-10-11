@@ -117,7 +117,7 @@
   <div><label for="refund_confirmed"><input id="refund_confirmed" type="checkbox" name="confirmed" required> I have already returned this amount to the customer</label></div>{% endif %}</div>
   <p><button type="submit">{{ 'Initiate Stripe refund' if obj.payment_method == 'stripe_checkout' else 'Record completed refund' }}</button></p>
 </form>
-{% elif obj.payment_method == 'stripe_invoice' %}<p class="error">Stripe invoice payments require invoice-level refund review; do not use a Checkout refund for these orders.</p>
+{% elif obj.payment_method == 'stripe_invoice' %}<p class="error">Stripe invoice payments require invoice-level refund review; do not use a Checkout refund for these orders.{% if invoice_refund %} Refund it on <a href="{{ invoice_refund.url }}">{{ invoice_refund.label }}</a>.{% endif %}</p>
 {% elif obj.status == 'refunded' and not refunds %}<p class="muted">This older refund has no payment journal here. Inspect its payment provider record before taking further action.</p>
 {% elif refunds and (refunds|selectattr('status', 'ne', 'succeeded')|list|length) %}<p class="error">A refund outcome is uncertain. Check Stripe before any further refund request.</p>{% endif %}
 {% endif %}

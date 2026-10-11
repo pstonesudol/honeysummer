@@ -1254,6 +1254,7 @@ async def model_edit(request, slug: str, pk: int):
     ]
     order_total = None
     order_proposal = None
+    invoice_refund = None
     refunds = []
     correspondence = []
     if slug == "inquiries":
@@ -1275,6 +1276,24 @@ async def model_edit(request, slug: str, pk: int):
             ).all()
         if order_proposal and order_proposal.history:
             order_total = Decimal(order_proposal.history[-1]["draft"]["total_cents"]) / 100
+        if obj.payment_method == "stripe_invoice" and obj.payment_reference:
+            # Invoice-funded orders are refunded on their invoice page, where the
+            # invoice -> payment -> charge chain can be verified. Link straight there.
+            if order_proposal:
+                invoice_refund = {
+                    "url": f"/admin/proposals/{order_proposal.id}",
+                    "label": f"bouquet proposal #{order_proposal.id}",
+                }
+            else:
+                async with session_scope() as db:
+                    quote_id = await db.scalar(
+                        select(WeddingInvoice.quote_id).where(WeddingInvoice.stripe_invoice_id == obj.payment_reference)
+                    )
+                if quote_id:
+                    invoice_refund = {
+                        "url": f"/admin/weddings/{quote_id}",
+                        "label": f"wedding quote #{quote_id}",
+                    }
     gallery_options = []
     if slug == "flowers":
         async with session_scope() as db:
@@ -1289,6 +1308,7 @@ async def model_edit(request, slug: str, pk: int):
         rows=rows,
         order_total=order_total,
         order_proposal=order_proposal,
+        invoice_refund=invoice_refund,
         refunds=refunds,
         gallery_options=gallery_options,
         correspondence=correspondence,
