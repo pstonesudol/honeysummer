@@ -52,8 +52,8 @@ export default async function Home() {
         <article className="pathway-card pathway-card--pink">
           <div className="pathway-card__photo">
             <Image
-              src="/images/photography/flower-bucket-portrait.jpg"
-              alt="A bucket of freshly gathered seasonal flowers"
+              src="/images/photography/garden-arrangement-portrait.jpg"
+              alt="A garden-style arrangement of dahlias and other blooms"
               fill
               sizes="(max-width: 850px) 92vw, 30vw"
               {...sitePhoto(content, "homeFlowers")}
@@ -72,8 +72,8 @@ export default async function Home() {
         <article className="pathway-card pathway-card--gold">
           <div className="pathway-card__photo">
             <Image
-              src="/images/photography/garden-arrangement-portrait.jpg"
-              alt="A garden-style arrangement of dahlias and other blooms"
+              src="/images/photography/flower-bucket-portrait.jpg"
+              alt="A bucket of freshly gathered seasonal flowers"
               fill
               sizes="(max-width: 850px) 92vw, 30vw"
               {...sitePhoto(content, "homeWeddings")}
