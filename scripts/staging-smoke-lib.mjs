@@ -44,10 +44,25 @@ export function validateStagingResponse(path, response, body) {
   }
 }
 
-export async function checkStaging(fetcher = fetch) {
+export function stagingAccessHeaders({ clientId, clientSecret } = {}) {
+  for (const value of [clientId, clientSecret]) {
+    if (typeof value !== "string" || !value || /[\s:"']/.test(value)) {
+      throw new Error("Access credentials must be raw nonempty values, without header prefixes or whitespace.");
+    }
+  }
+  return {
+    "Cache-Control": "no-cache",
+    "CF-Access-Client-Id": clientId,
+    "CF-Access-Client-Secret": clientSecret,
+  };
+}
+
+export async function checkStaging(fetcher = fetch, access) {
+  const headers = stagingAccessHeaders(access);
   for (const path of smokePaths) {
     const response = await fetcher(`${stagingOrigin}${path}`, {
-      redirect: "manual", headers: { "Cache-Control": "no-cache" },
+      // Fixed staging origin only. Never follow a redirect with these secrets.
+      redirect: "manual", headers: { ...headers },
       signal: AbortSignal.timeout(20_000),
     });
     validateStagingResponse(path, response, await response.text());

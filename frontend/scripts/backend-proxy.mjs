@@ -27,7 +27,10 @@ export async function proxyBackend(request, apiOrigin, fetcher = fetch) {
   destination.search = incoming.search;
   const headers = new Headers(request.headers);
   for (const header of ["host", "connection", "keep-alive", "transfer-encoding",
-    "upgrade", "proxy-authorization", "proxy-authenticate", "cf-connecting-ip"]) {
+    "upgrade", "proxy-authorization", "proxy-authenticate", "cf-connecting-ip",
+    // Access service credentials/JWT authenticate at Cloudflare's edge only.
+    // Never forward them to Railway or any redirect target.
+    "cf-access-client-id", "cf-access-client-secret", "cf-access-jwt-assertion"]) {
     headers.delete(header);
   }
   const hasBody = request.method !== "GET" && request.method !== "HEAD";

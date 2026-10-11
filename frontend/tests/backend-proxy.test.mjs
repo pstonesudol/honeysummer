@@ -85,6 +85,22 @@ test("invalid origins and non-backend paths cannot become arbitrary upstream req
   await assert.rejects(proxyBackend(new Request(`${site}/order-flowers`), backend, fail), /Not a backend route/);
 });
 
+test("Cloudflare Access service credentials are stripped before forwarding to Railway", async () => {
+  await proxyBackend(new Request(`${site}/api/health/`, {
+    headers: { "CF-Access-Client-Id": "synthetic.access", "CF-Access-Client-Secret": "synthetic-secret",
+      "CF-Access-Jwt-Assertion": "synthetic-jwt", Cookie: "honeysummer_admin=synthetic",
+      Origin: site, Authorization: "Bearer synthetic" },
+  }), backend, async forwarded => {
+    for (const header of ["CF-Access-Client-Id", "CF-Access-Client-Secret", "CF-Access-Jwt-Assertion"]) {
+      assert.equal(forwarded.headers.get(header), null);
+    }
+    assert.equal(forwarded.headers.get("cookie"), "honeysummer_admin=synthetic");
+    assert.equal(forwarded.headers.get("origin"), site);
+    assert.equal(forwarded.headers.get("authorization"), "Bearer synthetic");
+    return new Response("ok");
+  });
+});
+
 test("12 MiB upload limit remains enforced for declared and streaming bodies", async () => {
   const declared = await proxyBackend(new Request(`${site}/admin/upload`, {
     method: "POST", headers: { "Content-Length": String(maxProxyBodyBytes + 1) }, body: "synthetic",

@@ -161,6 +161,15 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
 
 ### Staging operator login defect — October 11, 2026
 
+- Follow-up: user confirmed hosted admin sign-in, logout/protected-page recheck
+  and fresh sign-in after PR #3. This verifies the reported login loop is fixed;
+  it does not complete the wider deployed security acceptance checklist.
+- Zero Trust Free activated by the user. Staging CI service-token secret names
+  confirmed present in GitHub, with raw values kept private. Preparing fixed-origin,
+  no-redirect Access-authenticated smoke requests and stripping Access credentials
+  before Railway. Application/policies and alternate-origin protection remain
+  pending; staging is not yet accepted as Access-protected.
+
 - User reported sign-in returning to the login page without an error. Read-only
   Railway HTTP logs show POST `/admin/login` returning 302, then backend GET
   `/admin/` returning 302 back to GET `/admin/login` (200); no runtime exceptions.
