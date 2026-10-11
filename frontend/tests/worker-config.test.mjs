@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { workerConfig } from "../scripts/worker-config.mjs";
 
 test("staging targets its own Worker, self-binding and Railway backend", () => {
-  const { target, vars } = workerConfig("staging");
+  const { config, target, vars } = workerConfig("staging");
+  assert.equal(config.main, "worker.mjs");
   assert.equal(target.name, "honey-summer-staging");
   assert.equal(target.services[0].service, target.name);
   assert.equal(vars.API_URL, "https://honeysummer-staging.up.railway.app");

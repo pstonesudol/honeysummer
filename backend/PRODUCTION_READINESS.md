@@ -159,6 +159,27 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   still returned ENOTFOUND. CI uses normal DNS without a bypass. Workflow extension
   still requires merge/first Actions deployment evidence; A3 remains open.
 
+### Staging operator login defect — October 11, 2026
+
+- User reported sign-in returning to the login page without an error. Read-only
+  Railway HTTP logs show POST `/admin/login` returning 302, then backend GET
+  `/admin/` returning 302 back to GET `/admin/login` (200); no runtime exceptions.
+  Inspection of the installed OpenNext fetch proxy found no `redirect: "manual"`:
+  it follows the login redirect inside the Worker, losing the session Set-Cookie
+  response before it reaches the browser. No passwords/session tokens were read.
+- Prepared a supported custom Worker entry point that proxies backend paths with
+  manual redirects, preserves separate cookie fields, Origin/body/CSRF/error
+  statuses, no-store admin/auth and the existing 12 MiB streaming upload limit.
+  Backend absolute redirects become same-origin paths; external payment redirects
+  are returned without fetching them. Frontend handling remains OpenNext-managed.
+- Regression coverage includes login/logout redirects/cookies, API/media routing,
+  external redirects, invalid origins, and declared/chunked upload limits. Added
+  anonymous admin 302 preservation to the staging smoke gate so this defect can be
+  caught without login credentials. Local staging OpenNext build and Wrangler
+  dry-run passed, along with eighteen frontend tests, eight release tests, ESLint
+  and `git diff --check`. Actual corrected hosted sign-in/logout must be retested after
+  the fix merges/deploys; A2/A3/F2/F3 remain open. No account/security bypass added.
+
 - [ ] A1 — Workers/OpenNext, Railway and Postgres provisioned; owners, regions, versions, budgets and environment URLs documented; staging/test/live credentials and data isolated.
 - [ ] A2 — Real HTTPS same-origin `/api/`, `/admin/`, public media and protected private-media routing, headers, upload limits and health endpoints verified.
 - [ ] A3 — Repeatable builds/tests/deploys, protected credentials, release approval and post-deploy checks exercised; debug payment bypasses disabled.

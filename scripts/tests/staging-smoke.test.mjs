@@ -40,6 +40,14 @@ test("proxy responses must be real health and DB-backed catalogue JSON", () => {
   assert.throws(() => validateStagingResponse("/api/retail/flowers/", response("{}", "application/json"), "{}"));
 });
 
+test("anonymous admin redirect is not followed inside the Worker", () => {
+  validateStagingResponse("/admin/", new Response(null, { status: 302,
+    headers: { Location: "/admin/login", "Cache-Control": "no-store" } }), "");
+  assert.throws(() => validateStagingResponse("/admin/", response(login), login));
+  assert.throws(() => validateStagingResponse("/admin/", new Response(null, { status: 302,
+    headers: { Location: "https://wrong.example/admin/login" } }), ""));
+});
+
 test("only fixed staging URLs are fetched with redirects disabled; failure blocks completion", async () => {
   const urls = [];
   const fetcher = async (url, options) => {
@@ -49,6 +57,8 @@ test("only fixed staging URLs are fetched with redirects disabled; failure block
     if (url.endsWith("/api/health/")) return response('{"status":"ok","service":"honey-summer-api"}', "application/json");
     if (url.endsWith("/api/retail/flowers/")) return response("[]", "application/json");
     if (url.endsWith("/admin/login")) return response(login, "text/html", 200, cookies);
+    if (url.endsWith("/admin/")) return new Response(null, { status: 302,
+      headers: { Location: "/admin/login", "Cache-Control": "no-store" } });
     return response(page);
   };
   assert.deepEqual(await checkStaging(fetcher), smokePaths);
