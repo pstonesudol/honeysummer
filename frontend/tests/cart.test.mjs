@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { consumePurchased, quantityChange, readCart, cartIssues } from "../src/lib/cart.ts";
+import { consumePurchased, checkoutOutcome, quantityChange, readCart, cartIssues } from "../src/lib/cart.ts";
 
 test("restoration validates stored IDs and quantities without storing product/contact data", () => {
   const restored = readCart(JSON.stringify({ items: { 1: { quantity: 2, added: 2 }, 2: { quantity: -1, added: 1 }, 3: { quantity: 1.5, added: 2 } } }));
@@ -24,6 +24,15 @@ test("independent retail and wholesale carts can contain the same listing withou
   const retail = quantityChange({}, 1, 2), wholesale = quantityChange({}, 1, 4);
   assert.equal(consumePurchased(retail, retail)[1].quantity, 0);
   assert.equal(wholesale[1].quantity, 4);
+});
+test("checkout outcomes separate confirmed payment from a closed or still-pending attempt", () => {
+  assert.equal(checkoutOutcome("paid"), "paid");
+  assert.equal(checkoutOutcome("fulfilled"), "paid");
+  assert.equal(checkoutOutcome("refunded"), "paid");
+  assert.equal(checkoutOutcome("expired"), "closed");
+  assert.equal(checkoutOutcome("cancelled"), "closed");
+  assert.equal(checkoutOutcome("pending"), "pending");
+  assert.equal(checkoutOutcome("unknown"), "pending");
 });
 test("revalidation flags missing, sold-out and reduced stock instead of silently removing purchases", () => {
   const items = { 1: { quantity: 3, added: 3 }, 2: { quantity: 1, added: 1 }, 3: { quantity: 1, added: 1 } };

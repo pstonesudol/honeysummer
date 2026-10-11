@@ -1556,6 +1556,18 @@ textarea {
 .checkout-page h1 { font-size: clamp(2.5rem, 5vw, 4rem); margin-bottom: 2rem; }
 .checkout-layout { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 2rem; }
 .checkout-layout .text-link { display: block; margin-top: 1rem; }
+/* Checkout and payment updates surface above the page as brief, dismissible toasts. */
+.toast-stack { position: fixed; top: 1rem; left: 50%; z-index: 200; display: grid; gap: .5rem; width: min(100% - 2rem, 40rem); transform: translateX(-50%); pointer-events: none; }
+.toast { display: flex; align-items: center; gap: .6rem; border-radius: 1rem; padding: .9rem 1.1rem; box-shadow: var(--shadow); font: 1rem/1.5 var(--font-geist), sans-serif; pointer-events: auto; animation: toast-in .25s ease; }
+.toast--success { background: #e4efe2; color: #2f5d3a; }
+.toast--info { background: var(--pink-light); color: var(--cocoa-dark); }
+.toast--error { background: #f6dede; color: #7a2f2f; }
+.toast__icon { flex-shrink: 0; }
+.toast__message { flex: 1; margin: 0; }
+.toast__close { flex-shrink: 0; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.toast__close:hover { background: #00000014; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-.5rem); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 @media (max-width: 850px) {
   .header-actions { gap: .4rem; }
   .cart-panel { width: 100%; }

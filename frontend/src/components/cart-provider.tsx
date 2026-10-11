@@ -3,9 +3,11 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { FlowerListing } from "@/lib/api";
-import { cartIssues, consumePurchased, quantityChange, readCart, type Channel, type SavedCart } from "@/lib/cart";
+import { cartIssues, checkoutOutcome, consumePurchased, quantityChange, readCart, type Channel, type CheckoutOutcome, type SavedCart } from "@/lib/cart";
 
 export type Account = { id: number | null; authenticated: boolean; approved: boolean; business_name: string; must_change_password: boolean };
+/** A short-lived, non-modal message shown at the top of the viewport. */
+export type CartToast = { id: string; tone: "success" | "info" | "error"; message: string };
 const anonymous: Account = { id: null, authenticated: false, approved: false, business_name: "", must_change_password: false };
 const blank = (): SavedCart => ({ items: {} });
 const keyFor = (channel: Channel, id: number | null) => `hs-cart-v1:${channel === "retail" ? "retail" : `wholesale:${id}`}`;
@@ -35,6 +37,16 @@ function useCartState() {
   const [message, setMessage] = useState("");
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Latest server-verified outcome of each channel's checkout attempt, so a
+  // return page can show a confirmed order instead of only "we are checking".
+  const [checkouts, setCheckouts] = useState<Record<Channel, { outcome: CheckoutOutcome; reference: string }>>({
+    retail: { outcome: "pending", reference: "" },
+    wholesale: { outcome: "pending", reference: "" },
+  });
+  // Order and payment updates stack briefly above the page, then clear on their
+  // own so a Stripe return still reaches the customer even if they land anywhere.
+  const [toasts, setToasts] = useState<CartToast[]>([]);
+  const toastTimers = useRef(new Map<string, number>());
   // Fulfillment/contact fields survive navigation only in memory, never storage.
   const [details, setDetails] = useState<Record<Channel, Record<string, string>>>({ retail: { fulfillment: "pickup" }, wholesale: { fulfillment: "pickup" } });
   const submitting = useRef(false);
@@ -43,13 +55,32 @@ function useCartState() {
   const selectionRestored = useRef(false);
   const invalidateRequests = useCallback(() => { mounted.current = false; generation.current++; }, []);
 
+  const dismissToast = useCallback((id: string) => {
+    const timer = toastTimers.current.get(id);
+    if (timer !== undefined) { window.clearTimeout(timer); toastTimers.current.delete(id); }
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  const pushToast = useCallback((message: string, tone: CartToast["tone"] = "info") => {
+    if (!message) return;
+    const id = crypto.randomUUID();
+    // Keep a small stack; the oldest falls off once a fourth arrives.
+    setToasts((current) => [...current, { id, tone, message }].slice(-3));
+    const timer = window.setTimeout(() => { toastTimers.current.delete(id); setToasts((current) => current.filter((toast) => toast.id !== id)); }, 9000);
+    toastTimers.current.set(id, timer);
+  }, []);
+
   const save = useCallback((channel: Channel, value: SavedCart) => {
     value = { ...value, items: Object.fromEntries(Object.entries(value.items).filter(([id, line]) => line.quantity > 0 || value.attempt?.items[Number(id)]?.quantity)) };
     state.current = { ...state.current, [channel]: value };
     setCarts(state.current);
     try { localStorage.setItem(keyFor(channel, accountRef.current.id), JSON.stringify(value)); }
-    catch { setMessage("Browser storage is unavailable. Keep this tab open to preserve your cart."); }
-  }, []);
+    catch {
+      const message = "Browser storage is unavailable. Keep this tab open to preserve your cart.";
+      setMessage(message);
+      pushToast(message, "error");
+    }
+  }, [pushToast]);
 
   const setIdentity = useCallback((next: Account) => {
     const previous = accountRef.current;
@@ -100,17 +131,22 @@ function useCartState() {
     const data = await cartApi(`cart/checkout/${attempt.key}/`);
     if (channel === "wholesale" && owner !== accountRef.current.id) return;
     if (state.current[channel].attempt?.key !== attempt.key) return;
-    if (["paid", "fulfilled", "refunded"].includes(data.status)) {
+    const outcome = checkoutOutcome(data.status);
+    const reference = data.order_reference ?? "";
+    setCheckouts((current) => (current[channel].outcome === outcome && current[channel].reference === reference ? current : { ...current, [channel]: { outcome, reference } }));
+    if (outcome === "paid") {
       const latest = readCart(localStorage.getItem(keyFor(channel, owner)));
       if (latest.attempt?.key !== attempt.key) return data;
       save(channel, { items: consumePurchased(latest.items, attempt.items) });
       setMessage(`Order ${data.order_reference} payment confirmed. Your other cart and new additions are saved.`);
-    } else if (["expired", "cancelled"].includes(data.status)) {
+      pushToast(`Thank you. Payment confirmed${reference ? ` for order ${reference}` : ""}; your cart has been updated.`, "success");
+    } else if (outcome === "closed") {
       save(channel, { items: state.current[channel].items });
       setMessage("Checkout expired or was cancelled. Your cart is saved; review availability before trying again.");
+      pushToast("That checkout closed before payment was confirmed. Your cart is saved; review availability before trying again.", "info");
     } else setMessage("Payment is not yet confirmed. Resume your existing checkout, or wait while payment is processing.");
     return data;
-  }, [save]);
+  }, [save, pushToast]);
 
   useEffect(() => {
     mounted.current = true;
@@ -140,6 +176,11 @@ function useCartState() {
     const timer = window.setInterval(onFocus, 15000);
     return () => { active = false; invalidateRequests(); clearInterval(timer); window.removeEventListener("focus", onFocus); window.removeEventListener("storage", onStorage); document.removeEventListener("visibilitychange", onVisibility); };
   }, [refreshAccount, checkPayment, validate, invalidateRequests]);
+
+  useEffect(() => () => {
+    for (const timer of toastTimers.current.values()) window.clearTimeout(timer);
+    toastTimers.current.clear();
+  }, []);
 
   const show = useCallback((channel?: Channel) => {
     const next = channel ?? (pathname.startsWith("/wholesale") && accountRef.current.approved ? "wholesale" : pathname.startsWith("/order-flowers") ? "retail" : selected);
@@ -209,7 +250,11 @@ function useCartState() {
     try {
       if (navigator.locks) await navigator.locks.request(`hs-checkout:${channel}:${accountRef.current.id}`, run);
       else await run();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to start checkout. Your cart is saved."); }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to start checkout. Your cart is saved.";
+      setMessage(message);
+      pushToast(message, "error");
+    }
     finally { submitting.current = false; setBusy(false); }
   };
 
@@ -218,17 +263,25 @@ function useCartState() {
     if (!attempt) return;
     setBusy(true);
     try { await cartApi(`cart/checkout/${attempt.key}/`, { method: "DELETE" }); await checkPayment(channel); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "Unable to cancel checkout."); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to cancel checkout.";
+      setMessage(message);
+      pushToast(message, "error");
+    }
     finally { setBusy(false); }
   };
   const logout = async () => {
     // Hide gated state immediately, including while logout is in flight.
     setIdentity(anonymous);
     try { await cartApi("auth/logout/", { method: "POST" }); }
-    catch { setMessage("Sign-out could not reach the server. Your wholesale cart was cleared; reconnect and sign out again."); }
+    catch {
+      const message = "Sign-out could not reach the server. Your wholesale cart was cleared; reconnect and sign out again.";
+      setMessage(message);
+      pushToast(message, "error");
+    }
   };
   const updateDetails = (channel: Channel, name: string, value: string) => setDetails((current) => ({ ...current, [channel]: { ...current[channel], [name]: value } }));
-  return { account, refreshAccount, logout, carts, catalogues, selected, open, setOpen, show, add, quantity, checkout, cancel, validate, details, updateDetails, message, ready, busy };
+  return { account, refreshAccount, logout, carts, catalogues, selected, open, setOpen, show, add, quantity, checkout, cancel, validate, details, updateDetails, message, checkouts, toasts, notify: pushToast, dismissToast, ready, busy };
 }
 
 type CartContext = ReturnType<typeof useCartState>;

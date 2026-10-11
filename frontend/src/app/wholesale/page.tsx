@@ -46,8 +46,14 @@ const steps = [
   },
 ];
 
-export default async function WholesalePage() {
-  const content = await getSiteContent();
+export default async function WholesalePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ checkout?: string }>;
+}) {
+  const [{ checkout }, content] = await Promise.all([searchParams, getSiteContent()]);
+  const checkoutStatus =
+    checkout === "success" || checkout === "cancelled" ? checkout : null;
   return (
     <>
       <section className="page-hero section-wrap" aria-labelledby="wholesale-title">
@@ -75,7 +81,7 @@ export default async function WholesalePage() {
         </div>
       </section>
 
-      <WholesaleShop />
+      <WholesaleShop checkoutStatus={checkoutStatus} />
 
       <section className="value-grid section-wrap" aria-label="Why florists work with us">
         {benefits.map((benefit) => (

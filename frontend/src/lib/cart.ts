@@ -24,6 +24,17 @@ export function quantityChange(items: Basket, id: number, quantity: number): Bas
   return { ...items, [id]: { quantity, added: old.added + Math.max(0, quantity - old.quantity) } };
 }
 
+export const PAID_ORDER_STATUSES = ["paid", "fulfilled", "refunded"] as const;
+export const CLOSED_ORDER_STATUSES = ["expired", "cancelled"] as const;
+export type CheckoutOutcome = "paid" | "closed" | "pending";
+
+/** Classify a checkout attempt's server status for the cart and return notices. */
+export function checkoutOutcome(status: string): CheckoutOutcome {
+  if ((PAID_ORDER_STATUSES as readonly string[]).includes(status)) return "paid";
+  if ((CLOSED_ORDER_STATUSES as readonly string[]).includes(status)) return "closed";
+  return "pending";
+}
+
 export function consumePurchased(current: Basket, submitted: Basket): Basket {
   return Object.fromEntries(Object.entries(current).map(([id, line]) => {
     const paid = submitted[Number(id)];

@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import type { FlowerListing } from "@/lib/api";
 import Image from "next/image";
 import { useCart } from "./cart-provider";
+import { CheckoutNotice } from "./checkout-notice";
 
 export function ProductGrid({ flowers, channel }: { flowers: FlowerListing[]; channel: "retail" | "wholesale" }) {
   return <div className="flower-grid">{flowers.map((flower) => <ProductCard flower={flower} channel={channel} key={flower.id} />)}</div>;
@@ -11,7 +12,7 @@ export function ProductGrid({ flowers, channel }: { flowers: FlowerListing[]; ch
 
 export function RetailShop({ flowers, checkoutStatus = null }: { flowers: FlowerListing[]; checkoutStatus?: "success" | "cancelled" | null; pickupWindow?: string }) {
   return <div className="retail-shop">
-    {checkoutStatus && <p className="retail-notice" role="status">{checkoutStatus === "success" ? "Thank you. We are checking payment confirmation; your cart updates only after verified payment." : "Your cart is saved. Resume your existing checkout or cancel the unpaid reservation from retail checkout."}</p>}
+    {checkoutStatus && <CheckoutNotice channel="retail" checkoutStatus={checkoutStatus} />}
     {flowers.length ? <ProductGrid flowers={flowers} channel="retail" /> : <p className="retail-shop__empty">Nothing is listed for online ordering this week. Send a custom request below and we will make something just for you.</p>}
   </div>;
 }

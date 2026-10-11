@@ -6,6 +6,7 @@ import { AlertCircle, Loader2, Lock } from "lucide-react";
 import { submitInquiry } from "@/lib/actions";
 import type { FlowerListing } from "@/lib/api";
 import { useCart } from "./cart-provider";
+import { CheckoutNotice } from "./checkout-notice";
 import { ProductGrid } from "./retail-shop";
 import {
   inquiryFields,
@@ -189,7 +190,7 @@ async function api(path: string, options?: RequestInit) {
   return data;
 }
 
-export function WholesaleShop() {
+export function WholesaleShop({ checkoutStatus = null }: { checkoutStatus?: "success" | "cancelled" | null }) {
   const { account, refreshAccount, logout } = useCart();
   const [catalogue, setCatalogue] = useState<{ owner: number | null; flowers: Flower[] }>({ owner: null, flowers: [] });
   const flowers = catalogue.owner === account.id ? catalogue.flowers : [];
@@ -252,6 +253,7 @@ export function WholesaleShop() {
   </section>;
 
   return <section className="wholesale-shop section-wrap" aria-labelledby="shop-title">
+    {checkoutStatus && <CheckoutNotice channel="wholesale" checkoutStatus={checkoutStatus} />}
     <div className="wholesale-shop__heading"><div><p className="eyebrow">Welcome, {account.business_name}</p><h2 id="shop-title">This week’s stems.</h2></div><div className="wholesale-shop__actions"><a className="text-link" href="/admin/security/">Account security</a><button className="button button--quiet button--sm" type="button" onClick={() => void logout()}>Sign out</button></div></div>
     {flowers.length === 0 ? <p>Nothing is listed today — check back soon.</p> : <ProductGrid flowers={flowers} channel="wholesale" />}
     {message && <p role="status" className="form-message">{message}</p>}

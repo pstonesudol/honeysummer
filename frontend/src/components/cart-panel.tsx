@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { ShoppingBag, X, Trash2 } from "lucide-react";
+import { ShoppingBag, X, Trash2, Check, AlertCircle, Info } from "lucide-react";
 import Image from "next/image";
 import { useCart } from "./cart-provider";
 import { cartIssues, type Channel } from "@/lib/cart";
@@ -67,8 +67,7 @@ export function CartPanel() {
   </dialog></>;
 }
 
-export function ChannelCheckout({ channel }: { channel: Channel }) {
-  const cart = useCart();
+export function ChannelCheckout({ channel }: { channel: Channel }) {  const cart = useCart();
   const { validate } = cart;
   const fulfillment = cart.details[channel].fulfillment;
   const field = (name: string) => ({ name, value: cart.details[channel][name] ?? "", onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => cart.updateDetails(channel, name, event.target.value) });
@@ -97,5 +96,26 @@ export function ChannelCheckout({ channel }: { channel: Channel }) {
       {pending && <button type="button" className="text-link" disabled={cart.busy} onClick={() => void cart.cancel(channel)}>Cancel unpaid checkout and release reserved flowers</button>}
       <p className="cart-explanation">A payment return URL is not confirmation. Only a verified paid order clears purchased quantities. New additions remain in your cart.</p>
     </form>
+  </div>;
+}
+
+/**
+ * Order and payment updates from checkout, shown above the page so a Stripe
+ * return is visible no matter where the customer lands. Dismissible, and each
+ * message clears on its own.
+ */
+export function CartToasts() {
+  const cart = useCart();
+  if (!cart.toasts.length) return null;
+  return <div className="toast-stack" role="region" aria-label="Order updates">
+    {cart.toasts.map((toast) => (
+      <div key={toast.id} className={`toast toast--${toast.tone}`} role="status" aria-live="polite">
+        {toast.tone === "success" && <Check className="toast__icon" aria-hidden="true" size={18} strokeWidth={2} />}
+        {toast.tone === "error" && <AlertCircle className="toast__icon" aria-hidden="true" size={18} strokeWidth={2} />}
+        {toast.tone === "info" && <Info className="toast__icon" aria-hidden="true" size={18} strokeWidth={2} />}
+        <p className="toast__message">{toast.message}</p>
+        <button type="button" className="toast__close" aria-label="Dismiss order update" onClick={() => cart.dismissToast(toast.id)}><X aria-hidden="true" size={16} /></button>
+      </div>
+    ))}
   </div>;
 }

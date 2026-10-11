@@ -4,7 +4,7 @@ import localFont from "next/font/local";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
 import { CartProvider } from "@/components/cart-provider";
-import { CartPanel } from "@/components/cart-panel";
+import { CartPanel, CartToasts } from "@/components/cart-panel";
 import { getSiteContent } from "@/lib/api";
 import "./globals.css";
 
@@ -67,7 +67,7 @@ export default async function RootLayout({
           <Header />
           <main id="main-content">{children}</main>
            <Footer content={content} />
-        </div><CartPanel /></CartProvider>
+        </div><CartPanel /><CartToasts /></CartProvider>
       </body>
     </html>
   );
