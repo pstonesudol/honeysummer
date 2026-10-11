@@ -14,8 +14,13 @@ export function backendAuthHeaders(): Record<string, string> {
   try {
     env = getCloudflareContext().env;
   } catch {
-    // Build/local Node context has no Worker secret. Never bake one into a build.
-    env = { DEPLOYMENT_ENVIRONMENT: process.env.DEPLOYMENT_ENVIRONMENT };
+    // Some OpenNext server execution paths may not expose the synchronous
+    // request context. Runtime Worker vars are populated into process.env by
+    // OpenNext; never provide these as build-time/public variables.
+    env = {
+      DEPLOYMENT_ENVIRONMENT: process.env.DEPLOYMENT_ENVIRONMENT,
+      STAGING_ORIGIN_SECRET: process.env.STAGING_ORIGIN_SECRET,
+    };
   }
   return originAuthHeaders(env);
 }
