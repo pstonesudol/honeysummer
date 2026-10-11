@@ -70,7 +70,7 @@ from .orders import StockError, change_stock, load_order, release_order
 from .payments import deliver_notifications, expire_checkout
 from .proposals import send_invoice, update_sent_invoice, validate_draft
 from .refunds import issue_refund
-from .security import SECURITY_CSRF_COOKIE, audit, reauth_seconds, recent, throttle
+from .security import ADMIN_CSRF_COOKIE, SECURITY_CSRF_COOKIE, audit, reauth_seconds, recent, throttle
 from .security_views import begin_admin_mfa
 from .settings import BASE_DIR, get_settings
 from .site_content import PHOTO_SLOTS, validate_content
@@ -90,7 +90,7 @@ from .weddings import (
 bp = Blueprint("admin", url_prefix="/admin")
 
 ADMIN_COOKIE = "honeysummer_admin"
-CSRF_COOKIE = "honeysummer_csrf"
+CSRF_COOKIE = ADMIN_CSRF_COOKIE
 ADMIN_SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
 
 _env = Environment(
@@ -414,6 +414,7 @@ _NAV_HREFS = (
     "/admin/customers",
     "/admin/activity",
     "/admin/account",
+    "/admin/security/access",
 ) + tuple(f"/admin/{entry.slug}" for entry in REGISTRY)
 
 

@@ -25,6 +25,7 @@ from .auth import (
 from .db import session_scope
 from .models import FloristProfile, Order, User
 from .security import (
+    ADMIN_CSRF_COOKIE,
     SECURITY_CSRF_COOKIE,
     audit,
     consume_token,
@@ -85,15 +86,29 @@ def _safe_reauth_next(value: str) -> str:
     return candidate
 
 
-def _page(request, *, status=200, **context):
+def _page(request, *, status=200, template="security.html", **context):
     token = request.cookies.get(CSRF_COOKIE) or secrets.token_urlsafe(32)
     context.setdefault("reauth_seconds", reauth_seconds(request))
     context.setdefault("reauth_csrf", token)
     context.setdefault("reauth_next", request.path)
     viewer = context.get("user")
     context.setdefault("reauth_mfa", bool(viewer and getattr(viewer, "mfa_secret", "")))
-    response = html(_env.get_template("security.html").render(csrf_token=token, **context), status=status)
+    admin_shell = template.startswith("admin/")
+    if admin_shell:
+        # Render inside the shared admin chrome: the catalogue nav needs the model
+        # registry, and the "Users" entry should read as active on this page.
+        # Imported lazily because app.admin imports this module at load time.
+        from .admin import REGISTRY  # noqa: PLC0415
+
+        context.setdefault("admin", viewer)
+        context.setdefault("operator", viewer)
+        context.setdefault("models", REGISTRY)
+        context.setdefault("active_href", "/admin/security/access")
+    response = html(_env.get_template(template).render(csrf_token=token, **context), status=status)
     response.add_cookie(CSRF_COOKIE, token, httponly=True, secure=not get_settings().debug, samesite="Strict")
+    if admin_shell:
+        # The admin shell's sign-out form is validated against this cookie.
+        response.add_cookie(ADMIN_CSRF_COOKIE, token, httponly=True, secure=not get_settings().debug, samesite="Lax")
     response.headers["Cache-Control"] = "no-store"
     response.headers["Referrer-Policy"] = "strict-origin"
     response.headers["X-Frame-Options"] = "DENY"
@@ -539,6 +554,7 @@ async def access(request):
         requests = (await db.scalars(select(PrivacyRequest).order_by(PrivacyRequest.id.desc()).limit(100))).all()
     return _page(
         request,
+        template="admin/security_access.html",
         mode="access",
         user=user,
         rows=rows,

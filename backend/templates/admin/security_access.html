@@ -1,0 +1,120 @@
+{% extends "admin/base.html" %}
+{% block title %}Account security · Honey Summer admin{% endblock %}
+{% block head %}
+<style>
+.page-head{margin:.4rem 0 .4rem}.page-head h2{margin:.3rem 0}.eyebrow{text-transform:uppercase;letter-spacing:.15em;font-weight:700;font-size:.72rem;color:#9a857a}.subtitle{color:#7a6557;margin:.3rem 0 0}
+.panel{background:#fff9f3;border:1px solid #c8b6a6;border-radius:14px;margin:20px 0;overflow:hidden}
+.panel__head{padding:14px 20px;border-bottom:1px solid #e7dacb;display:flex;justify-content:space-between;align-items:center;gap:12px}.panel__head h3{margin:.15rem 0 0}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding:16px 20px;border-bottom:1px solid #eadfd2}.toolbar .grow{flex:1 1 220px}.toolbar label{display:block;font-size:.72rem;color:#7a6557;margin:0 0 3px}
+.notice{display:flex;gap:8px;align-items:center;margin:16px 0 0;padding:10px 14px;border-radius:10px;background:#f6e3c7;color:#7a5320;text-decoration:none;font-weight:600}
+.utable__head,.utable__row{display:grid;grid-template-columns:2.1fr .55fr .7fr .75fr .7fr 1.5fr;gap:14px;align-items:center;padding:12px 20px;border-bottom:1px solid #efe4d8}
+.utable__row:last-child{border-bottom:0}.utable__head{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:#a08c81;background:#fbf6ef}
+.utable__account{display:flex;align-items:center;gap:.65rem;min-width:0}.utable__account>span{display:flex;flex-direction:column;min-width:0}.utable__account small{color:#8a7a70;overflow-wrap:anywhere}
+.avatar{width:36px;height:36px;border-radius:50%;background:#e7d3cf;color:#4c342d;display:grid;place-items:center;font-weight:700;flex:0 0 auto}
+.pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:.72rem;font-weight:700;text-transform:capitalize}
+.pill--ok{background:#dcecdc;color:#2f5a3a}.pill--warn{background:#f6e3c7;color:#7a5320}.pill--off{background:#ecdcdc;color:#7a3a3a}
+.role{text-transform:capitalize}
+.utable__row .actions{display:flex;flex-wrap:nowrap;gap:6px;justify-content:flex-end}
+.btn{min-height:32px;padding:.35rem .6rem;font-size:.74rem;border-radius:9px;border:1px solid #c8b6a6;background:#fff;color:#4c342d;cursor:pointer;font-weight:600;text-decoration:none}
+.btn--primary{background:#4c342d;color:#fff;border-color:#4c342d}.btn--danger{background:#f8dede;color:#763c3c;border-color:#e2b9b9}.btn--secondary{background:#efe2d3;border-color:#d9c6b2}.btn--quiet{background:transparent}
+.empty{padding:24px 20px;color:#8a7a70}.muted{color:#8a7a70;font-size:.85rem}
+.invite-form{padding:16px 20px;margin:0}.invite-form .row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}.invite-form .row>div{flex:1 1 220px}
+dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 24px 60px #4c342d4d}dialog::backdrop{background:#2c1f1aa6}
+.modal-form{padding:20px;background:#fff9f3;margin:0}.modal-form h3{margin-top:0}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.share-box{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff9f3;border:1px solid #c8b6a6;border-radius:10px;padding:10px}.share-box code{overflow-wrap:anywhere;flex:1;min-width:200px}
+@media (max-width:760px){.utable__head{display:none}.utable__row{grid-template-columns:1fr;gap:6px;padding:14px 20px}.utable__row .actions{justify-content:flex-start}}
+</style>
+{% endblock %}
+{% block content %}
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if message %}<p role="status">{{ message }}</p>{% endif %}
+<h1>Account security</h1>
+<div class="page-head">
+<span class="eyebrow">Access control</span>
+<h2>Users</h2>
+<p class="subtitle">Provision accounts, review wholesale requests and manage access. Changes revoke existing sessions, and you cannot change your own role.</p>
+</div>
+{% if pending_count %}<a class="notice" href="/admin/security/access?approval=pending">⏳ {{ pending_count }} wholesale request{{ 's' if pending_count != 1 }} awaiting review</a>{% endif %}
+<section class="panel">
+<form method="get" class="toolbar" aria-label="Filter users">
+<div class="grow"><label for="q">Search email or business</label><input id="q" name="q" type="search" value="{{ q }}" maxlength="254"></div>
+<div><label for="role">Role</label><select id="role" name="role"><option value="">All</option><option value="admin"{% if role == 'admin' %} selected{% endif %}>Admin</option><option value="staff"{% if role == 'staff' %} selected{% endif %}>Staff</option><option value="florist"{% if role == 'florist' %} selected{% endif %}>Florist</option></select></div>
+<div><label for="status">Status</label><select id="status" name="status"><option value="">All</option><option value="active"{% if status_filter == 'active' %} selected{% endif %}>Active</option><option value="inactive"{% if status_filter == 'inactive' %} selected{% endif %}>Inactive</option></select></div>
+<div><label for="approval">Wholesale</label><select id="approval" name="approval"><option value="">All</option><option value="pending"{% if approval == 'pending' %} selected{% endif %}>Pending</option><option value="approved"{% if approval == 'approved' %} selected{% endif %}>Approved</option><option value="denied"{% if approval == 'denied' %} selected{% endif %}>Denied</option></select></div>
+<div><button class="btn btn--secondary">Filter</button> <a class="btn btn--quiet" href="/admin/security/access">Reset</a></div>
+</form>
+<div class="utable">
+<div class="utable__head"><span>Account</span><span>Role</span><span>Status</span><span>Wholesale</span><span>Created</span><span class="actions">Actions</span></div>
+{% for row in rows %}
+{% set name = row.profile.business_name if row.profile and row.profile.business_name else row.user.email %}
+<div class="utable__row">
+<span class="utable__account"><span class="avatar">{{ (name or '?')[0]|upper }}</span><span><strong>{{ row.profile.business_name if row.profile and row.profile.business_name else row.user.email.split('@')[0] }}</strong><small>{{ row.user.email }}{% if row.user.id == user.id %} · you{% endif %}</small></span></span>
+<span class="role">{{ row.user.role }}</span>
+<span><span class="pill {% if row.user.is_active %}pill--ok{% else %}pill--off{% endif %}">{{ 'active' if row.user.is_active else 'inactive' }}</span></span>
+<span>{% if row.profile %}<span class="pill {% if row.profile.application_state == 'approved' %}pill--ok{% elif row.profile.application_state == 'pending' %}pill--warn{% else %}pill--off{% endif %}">{{ row.profile.application_state }}</span>{% else %}<span class="muted">—</span>{% endif %}</span>
+<span class="muted">{{ row.user.created_at.strftime('%Y-%m-%d') if row.user.created_at else '—' }}</span>
+<span class="actions">
+{% if row.user.id == user.id %}<span class="muted">Current account</span>
+{% elif row.actions %}
+{% if row.profile and row.profile.application_state == 'pending' %}<button type="button" class="btn btn--primary" data-open="user-{{ row.user.id }}" data-preset="approve">Approve</button>{% endif %}
+<button type="button" class="btn btn--quiet" data-open="user-{{ row.user.id }}">Manage</button>
+<dialog id="user-{{ row.user.id }}">
+<form method="post" action="/admin/security/access" class="modal-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="user_id" value="{{ row.user.id }}">
+<h3>Manage {{ name }}</h3>
+<p class="muted">{{ row.user.email }} · a recorded reason is required; the change revokes existing sessions.</p>
+<label for="act-{{ row.user.id }}">Action</label>
+<select id="act-{{ row.user.id }}" name="action">{% for value, label, kind in row.actions %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+<div data-password hidden><label for="pw-{{ row.user.id }}">New temporary password</label><input id="pw-{{ row.user.id }}" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password"><label for="pw2-{{ row.user.id }}">Confirm temporary password</label><input id="pw2-{{ row.user.id }}" name="password_confirm" type="password" minlength="12" maxlength="1024" autocomplete="new-password"></div>
+<label for="reason-{{ row.user.id }}">Recorded reason</label>
+<textarea id="reason-{{ row.user.id }}" name="reason" required maxlength="2000"></textarea>
+<div class="modal-actions"><button type="button" class="btn btn--quiet" data-close>Cancel</button><button class="btn btn--primary">Apply</button></div>
+</form>
+</dialog>
+{% else %}<span class="muted">—</span>{% endif %}
+</span>
+</div>
+{% else %}
+<div class="empty">No accounts match these filters.</div>
+{% endfor %}
+</div>
+</section>
+<section class="panel">
+<div class="panel__head"><div><span class="eyebrow">Provision</span><h3>Invite a staff member</h3></div></div>
+<form method="post" class="invite-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="invite">
+<div class="row"><div><label for="invite_email">Email</label><input id="invite_email" name="email" type="email" required></div><div><label for="invite_reason">Recorded reason</label><input id="invite_reason" name="reason" required maxlength="2000"></div><div style="flex:0 0 auto"><button class="btn btn--primary">Send invitation</button></div></div>
+</form>
+</section>
+<script>
+(function(){
+  function syncPassword(dlg){
+    var sel=dlg.querySelector('select[name=action]'),box=dlg.querySelector('[data-password]');
+    if(!sel||!box) return;
+    var on=sel.value==='temp_password';
+    box.hidden=!on;
+    box.querySelectorAll('input').forEach(function(input){input.required=on;});
+  }
+  document.querySelectorAll('dialog').forEach(function(dlg){
+    var sel=dlg.querySelector('select[name=action]');
+    if(sel) sel.addEventListener('change',function(){syncPassword(dlg);});
+    syncPassword(dlg);
+  });
+  document.querySelectorAll('[data-open]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var dlg=document.getElementById(btn.getAttribute('data-open'));
+      if(!dlg||typeof dlg.showModal!=='function') return;
+      var preset=btn.getAttribute('data-preset'),sel=dlg.querySelector('select[name=action]');
+      if(preset&&sel) sel.value=preset;
+      syncPassword(dlg);
+      dlg.showModal();
+    });
+  });
+  document.querySelectorAll('dialog [data-close]').forEach(function(b){b.addEventListener('click',function(){b.closest('dialog').close();});});
+  document.querySelectorAll('dialog').forEach(function(d){d.addEventListener('click',function(e){if(e.target===d)d.close();});});
+})();
+</script>
+<h2>Security mail awaiting provider acceptance</h2><p>Console mail is local evidence only. Provider acceptance is not inbox delivery.</p><ul>{% for mail in failures %}<li>#{{ mail.id }} · {{ mail.subject }} · {{ mail.attempts }} attempts</li>{% else %}<li>No queued mail.</li>{% endfor %}</ul>
+<h2>Privacy requests</h2><ul>{% for item in requests %}<li>#{{ item.id }} · account {{ item.user_id }} · {{ item.kind }} · {{ item.status }} · {{ item.notes }} <a href="/admin/security/privacy/{{ item.id }}">Review</a></li>{% else %}<li>No requests.</li>{% endfor %}</ul>
+<h2>Security events</h2><form method="get"><label for="filter">Action filter</label><input id="filter" name="action"><button>Filter</button></form>
+<div class="scroll table-scroll"><table><thead><tr><th>Time</th><th>Actor</th><th>Target</th><th>Action</th><th>Outcome</th></tr></thead><tbody>{% for event in events %}<tr><td>{{ event.created_at }}</td><td>{{ event.actor_id or '—' }}</td><td>{{ event.target_id or '—' }}</td><td>{{ event.action }}</td><td>{{ event.outcome }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

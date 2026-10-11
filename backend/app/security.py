@@ -28,6 +28,10 @@ COMMON_PASSWORDS = {"password1234", "password12345", "123456789012", "qwerty1234
 # inline reauthentication form works from anywhere in the admin.
 SECURITY_CSRF_COOKIE = "honeysummer_security_csrf"
 
+# CSRF cookie bound to the admin shell; the security workspace sets it too when
+# it renders a page inside the admin layout so shared chrome (sign out) works.
+ADMIN_CSRF_COOKIE = "honeysummer_csrf"
+
 # Sensitive admin changes require password reauthentication within this window.
 REAUTH_WINDOW = timedelta(minutes=10)
 
