@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Camera, Mail, MapPin } from "lucide-react";
 
 import { InquiryForm } from "@/components/inquiry-form";
+import { InstagramGallery } from "@/components/instagram-gallery";
 import { getSiteContent, sitePhoto } from "@/lib/api";
 import { inquiryIntros } from "@/lib/inquiry-fields";
 import { pickup, site } from "@/lib/site";
@@ -141,7 +142,7 @@ export default async function ContactPage() {
         <article className="contact-card">
           <Camera aria-hidden="true" size={20} strokeWidth={1.5} />
           <h2>Follow along</h2>
-           <p>{(content.instagram || site.instagram) ? <a href={content.instagram || site.instagram} target="_blank" rel="noopener noreferrer">Instagram</a> : "Instagram coming soon — we will link it here."}</p>
+           <InstagramGallery variant="card" profile={content.instagram || site.instagram} />
         </article>
       </section>
 

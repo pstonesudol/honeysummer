@@ -1,7 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { InstagramGallery } from "@/components/instagram-gallery";
 import { getSiteContent, sitePhoto } from "@/lib/api";
+import { site } from "@/lib/site";
 
 export default async function Home() {
   const content = await getSiteContent();
@@ -142,6 +144,8 @@ export default async function Home() {
           what makes locally grown flowers so special.
         </p>
       </section>
+
+      <InstagramGallery variant="strip" profile={content.instagram || site.instagram} />
     </>
   );
 }

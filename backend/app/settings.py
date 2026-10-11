@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     default_from_email: str = "Honey Summer <hello@hellohoneysummer.com>"
     inquiry_notification_email: str = "hello@hellohoneysummer.com"
 
+    # Instagram "Follow along" gallery. Paste a long-lived access token for the
+    # Instagram Business/Creator account (see OWNER_OPERATIONS.md); leave empty
+    # to hide the gallery and keep the plain profile link.
+    instagram_access_token: str = ""
+    instagram_api_version: str = "v26.0"
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     checkout_hold_minutes: int = 45

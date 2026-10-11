@@ -95,6 +95,26 @@ export async function getGallery(): Promise<GalleryImage[]> {
   return apiGet<GalleryImage[]>("/api/gallery/", []);
 }
 
+export type InstagramPost = {
+  id: string;
+  image: string;
+  permalink: string;
+  caption: string;
+  media_type: string;
+};
+
+/**
+ * The account's most recent Instagram posts for the follow-along gallery.
+ *
+ * The backend caches the feed for ~15 minutes, so this revalidation window is
+ * intentionally aligned with it. Instagram media URLs are signed CDN links,
+ * which is why posts are never persisted and the list degrades to empty.
+ */
+export async function getInstagramPosts(): Promise<InstagramPost[]> {
+  const data = await apiGet<{ posts: InstagramPost[] }>("/api/instagram/", { posts: [] }, 900);
+  return data.posts ?? [];
+}
+
 /**
  * Standard offerings available to retail customers.
  *

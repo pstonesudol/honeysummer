@@ -1,4 +1,4 @@
-"""Public read endpoints: the announcement banner and the wedding gallery."""
+"""Public read endpoints: the announcement banner, gallery, and Instagram feed."""
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -8,6 +8,7 @@ from sanic.response import json
 from sqlalchemy import or_, select
 
 from ..db import session_scope
+from ..instagram import fetch_recent_posts
 from ..media import public_media_url
 from ..models import Announcement, GalleryImage, SiteContent
 from ..schemas import AnnouncementOut, GalleryImageOut
@@ -68,3 +69,9 @@ async def gallery(request):
         )
         images = result.scalars().all()
     return json([_gallery_payload(image) for image in images])
+
+
+@bp.get("/instagram/")
+async def instagram_feed(request):
+    """Return the account's most recent Instagram posts for the follow-along gallery."""
+    return json({"posts": await fetch_recent_posts()})
