@@ -14,6 +14,32 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
 
 ## A. Hosting, routing and release — Phases 1–4
 
+### Initial Railway configuration preparation — October 10, 2026
+
+- Read-only CLI inspection confirmed Honey Summer staging has a running Postgres
+  18 service and its 500 MB volume in `iad`; production has no deployed resources.
+  The backend exists as a pending dashboard change, not a deployed service.
+- Imported staging infrastructure with variables unmanaged (no secret values)
+  and created `.railway/railway.ts` for both environments. Replaced the deprecated
+  per-service `railway.json`; installed the pinned Railway TypeScript SDK.
+- Read-only CLI plans: staging adds one backend; production adds Postgres, its
+  volume and one backend. Both report zero changes/deletions to existing resources.
+  Existing staging database/volume match the imported configuration.
+- Following explicit user approval, applied **staging only** using the Railway
+  CLI. The backend instance now exists with the declared build, migration,
+  start and health-check settings; Railway triggered a GitHub build at revision
+  `49454ca129348199f858698b2a3560a76796ef16` (deployment
+  `e7de0706-3465-441c-b6f1-6a15fee4f255`, created `2026-10-11T02:54:42.401Z`).
+  The existing staging Postgres/volume were unchanged; production remains empty.
+- Staging deployment `1372843b-c902-4792-aa68-2a52629f7adc` ran the initial
+  migrations through `b2e5a8d1c3f4` after correcting the database reference,
+  but failed health checks: Sanic received literal `$PORT`. Corrected the IaC
+  start command to use `sh -c` with `exec` and applied staging configuration
+  again. Successful application startup/health remains unverified.
+- **Successful build, migration, health, production acceptance and launch are
+  not yet verified.** Backend variables, Workers routing, providers,
+  backups/restore and all checks below remain open.
+
 - [ ] A1 — Workers/OpenNext, Railway and Postgres provisioned; owners, regions, versions, budgets and environment URLs documented; staging/test/live credentials and data isolated.
 - [ ] A2 — Real HTTPS same-origin `/api/`, `/admin/`, public media and protected private-media routing, headers, upload limits and health endpoints verified.
 - [ ] A3 — Repeatable builds/tests/deploys, protected credentials, release approval and post-deploy checks exercised; debug payment bypasses disabled.

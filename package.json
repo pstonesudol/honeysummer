@@ -12,5 +12,8 @@
     "deploy": "npm run deploy --workspace frontend",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "railway": "3.13.1"
   }
 }
