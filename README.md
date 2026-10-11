@@ -113,7 +113,7 @@ Backend dependencies are declared in `backend/pyproject.toml` and reproducibly l
 
 Cloudflare Pages only supports a static Next.js export, while this application's session-auth architecture needs server-side rewrites and wholesale route checks. The frontend therefore uses Cloudflare Workers with OpenNext.
 
-From the repository root, use `npm run preview` to test the Workers build locally and `npm run deploy` after authenticating Wrangler. Set `API_URL` in the Cloudflare build environment to the public Railway backend URL.
+Use explicit staging/production commands; for example, `npm run build:staging --workspace frontend` prepares the staging Worker locally without deploying. Named preview/deploy commands rebuild for their selected backend and preserve environment-specific self-bindings. Production requires its own HTTPS `API_URL`; bare deploy commands fail closed. See [`frontend/WORKERS_DEPLOYMENT.md`](frontend/WORKERS_DEPLOYMENT.md) for build/runtime variables, generated Workers URLs, dashboard setup and approval gates.
 
 ## Brand assets
 

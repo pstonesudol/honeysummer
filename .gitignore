@@ -20,4 +20,6 @@ frontend/.wrangler/
 frontend/.open-next/
 frontend/.dev.vars
 frontend/cloudflare-env.d.ts
+frontend/.wrangler-release.json
+frontend/.worker-build-lock/
 *.tsbuildinfo

@@ -35,10 +35,31 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   migrations through `b2e5a8d1c3f4` after correcting the database reference,
   but failed health checks: Sanic received literal `$PORT`. Corrected the IaC
   start command to use `sh -c` with `exec` and applied staging configuration
-  again. Successful application startup/health remains unverified.
-- **Successful build, migration, health, production acceptance and launch are
-  not yet verified.** Backend variables, Workers routing, providers,
-  backups/restore and all checks below remain open.
+   again. Subsequent user dashboard evidence showed an active successful
+   staging deployment; runtime logs confirmed a ready Sanic worker on port 8080.
+- The user generated `https://honeysummer-staging.up.railway.app` targeting
+  port 8080. The assistant fetched `/api/health/` over HTTPS and received
+  `{"status":"ok","service":"honey-summer-api"}`. This proves direct API
+  liveness only, not Workers proxy/security or database/provider readiness.
+- **Production acceptance and launch are not verified.** Workers routing,
+  providers, backups/restore and all checks below remain open.
+
+### Worker configuration preparation — October 10–11, 2026
+
+- Prepared named staging/production environments in `frontend/wrangler.jsonc`,
+  independent self-bindings, explicit build/preview/deploy scripts and
+  `frontend/WORKERS_DEPLOYMENT.md`. Production requires its own HTTPS backend;
+  staging uses the verified Railway API origin. No custom-domain routes added.
+- Build and deploy use identical generated runtime configuration. Both rebuild
+  per environment, reject ambiguous targets, and avoid concurrent shared outputs.
+  Staging emits noindex/nofollow metadata; this is not access control.
+- Local verification: 11 frontend tests, ESLint, staging Next/OpenNext build and
+  `wrangler deploy --dry-run --env staging` passed. Checked compiled API/admin/media
+  rewrites, staging self-binding and rendered noindex metadata. No hosted Worker,
+  production build/provider acceptance or DNS cutover was performed.
+- Cloudflare deployment remains blocked on account email verification/member
+  access. Confirm the final staging frontend URL and align Railway `PUBLIC_ORIGIN`
+  and payment return URLs before hosted testing. All acceptance rows remain open.
 
 - [ ] A1 — Workers/OpenNext, Railway and Postgres provisioned; owners, regions, versions, budgets and environment URLs documented; staging/test/live credentials and data isolated.
 - [ ] A2 — Real HTTPS same-origin `/api/`, `/admin/`, public media and protected private-media routing, headers, upload limits and health endpoints verified.

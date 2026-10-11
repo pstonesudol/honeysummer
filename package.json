@@ -10,6 +10,12 @@
     "lint": "npm run lint --workspace frontend",
     "preview": "npm run preview --workspace frontend",
     "deploy": "npm run deploy --workspace frontend",
+    "build:staging": "npm run build:staging --workspace frontend",
+    "build:production": "npm run build:production --workspace frontend",
+    "preview:staging": "npm run preview:staging --workspace frontend",
+    "preview:production": "npm run preview:production --workspace frontend",
+    "deploy:staging": "npm run deploy:staging --workspace frontend",
+    "deploy:production": "npm run deploy:production --workspace frontend",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down"
   },

@@ -38,7 +38,10 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://hellohoneysummer.com"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://hellohoneysummer.com"),
+  ...(process.env.DEPLOYMENT_ENVIRONMENT === "staging"
+    ? { robots: { index: false, follow: false } }
+    : {}),
   title: {
     default: "Honey Summer | Locally Grown Flowers in NEPA",
     template: "%s | Honey Summer",

@@ -19,5 +19,41 @@
   ],
   "observability": {
     "enabled": true
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+  "env": {
+    "staging": {
+      "name": "honey-summer-staging",
+      "workers_dev": true,
+      "preview_urls": false,
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "honey-summer-staging"
+        }
+      ],
+      "vars": {
+        "DEPLOYMENT_ENVIRONMENT": "staging",
+        "API_URL": "https://honeysummer-staging.up.railway.app",
+        "NEXT_PUBLIC_SITE_URL": "https://staging.hellohoneysummer.com"
+      }
+    },
+    "production": {
+      "name": "honey-summer",
+      "workers_dev": true,
+      "preview_urls": false,
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "honey-summer"
+        }
+      ],
+      "vars": {
+        "DEPLOYMENT_ENVIRONMENT": "production",
+        "API_URL": "",
+        "NEXT_PUBLIC_SITE_URL": "https://hellohoneysummer.com"
+      }
+    }
   }
 }
