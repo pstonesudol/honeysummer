@@ -7,6 +7,13 @@ The CLI imported the existing staging Postgres and volume without secret values.
 name `honeysummer` to avoid creating a second, differently named backend.
 The same resource names resolve independently within each selected environment.
 
+**Release ownership:** backend GitHub source triggers are now disconnected in
+both environments. The IaC file preserves that empty source with build root
+`/backend`; GitHub Actions uploads the CI-tested backend archive, stages it first,
+then waits for a protected production-environment approval. See
+[`RELEASE_RUNBOOK.md`](../RELEASE_RUNBOOK.md) for token setup and activation.
+Do not reconnect the repository source or reapply an old revision that does so.
+
 Install local dependencies with `npm ci`. Authenticate with `railway login`,
 then `railway link` to Honey Summer (skip the optional service selection).
 Always specify the environment when reviewing or applying:
@@ -46,10 +53,10 @@ panel before attempting a successful release:
   Stripe test/live credentials and separate storage; staging mail goes only to
   controlled test recipients. Do not test purchases/uploads before setup.
 
-Applying the GitHub service configuration may trigger a deployment before these
-variables exist; that initial failure is not permission to enable debug mode.
-Set the variables and redeploy after configuration. No domain or public launch
-is configured by this file.
+The initial GitHub-connected service configuration triggered deployment before
+these variables existed. That historical failure was not permission to enable
+debug mode. The current upload-based release workflow requires variables to be
+configured before release. No domain or public launch is configured by this file.
 
 The backend uses Railpack with a locked uv install, migrations in the pre-deploy
 step, and one Sanic replica in `iad`. Migration failure stops the release;

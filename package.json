@@ -8,6 +8,7 @@
     "dev": "npm run dev --workspace frontend",
     "build": "npm run build --workspace frontend",
     "lint": "npm run lint --workspace frontend",
+    "test:release": "node --test scripts/tests/*.test.mjs",
     "preview": "npm run preview --workspace frontend",
     "deploy": "npm run deploy --workspace frontend",
     "build:staging": "npm run build:staging --workspace frontend",

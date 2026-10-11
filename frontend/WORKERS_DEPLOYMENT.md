@@ -80,10 +80,14 @@ restrict staging access and use synthetic data, not real customer records.
 they point to the chosen hosted backend and mutations can affect it. `upload:*`
 rebuilds and uploads a version to Cloudflare (not a read-only local action).
 
-For dashboard GitHub Builds, use repository root `/`, staging build command
+The backend approval chain is in `RELEASE_RUNBOOK.md`. Frontend integration is
+still blocked; do not enable independent production GitHub Builds, which would
+bypass staging/manual approval. When integrating approved staging Builds, use
+repository root `/`, staging build command
 `npm run build:staging --workspace frontend` and deploy command
 `npm run deploy:staging --workspace frontend` (the latter rebuilds deliberately).
-Set `NEXT_PUBLIC_SITE_URL` in the build environment. Production uses the matching
-production commands plus its `API_URL`; keep credentials environment-scoped.
+Set `NEXT_PUBLIC_SITE_URL` in the build environment. Production must use the
+matching commands plus its `API_URL` **behind the same release approval gate**;
+keep credentials environment-scoped.
 Review this setup after account verification; no dashboard build was configured
 as part of this local preparation.

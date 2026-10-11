@@ -73,3 +73,5 @@ jobs:
         run: npm run lint --workspace frontend
       - name: Cart unit tests
         run: npm run test --workspace frontend
+      - name: Release gate unit tests
+        run: npm run test:release
