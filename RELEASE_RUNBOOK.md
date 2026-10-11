@@ -90,6 +90,31 @@ merge and its first Actions rehearsal; it has not been deployed by this edit.
 5. Rehearse a staging failure/rejected approval and a successful approved release
    before marking the release gate accepted. Unit tests are not that rehearsal.
 
+## Staging Cloudflare Access rollout
+
+1. Zero Trust Free is active in the owner's account. The user saved raw service
+   token values as staging environment secrets `CF_ACCESS_CLIENT_ID` and
+   `CF_ACCESS_CLIENT_SECRET` (names confirmed, values not read). The token is named
+   **Honey Summer staging CI** and has no expiration by user choice. Track manual
+   rotation/revocation; never paste values or prefixed headers into source/chat.
+2. Merge/deploy the CI preparation before enabling the Access application. The
+   frontend smoke client sends the token headers only to the fixed staging origin
+   and never follows redirects. Missing/malformed credentials fail before deploy.
+   Worker forwarding strips both service headers and the Access JWT before Railway.
+   Receipts record only that headers were sent, not credentials or proof of an
+   active Access policy. Sending a token to a public site does not verify Access.
+3. Create a staging-only self-hosted Access application with an explicit human
+   email allowlist and a **Service Auth** policy selecting only this service token.
+   Do not use Bypass/Everyone. Confirm allowed addresses with the owner first.
+4. Before claiming staging is private, close/protect the alternate workers.dev
+   entry point and review direct Railway access. Protecting only the custom domain
+   does not protect either alternate origin. Do not blanket-block signed sandbox
+   webhooks; define their narrow provider delivery route separately.
+5. After activation verify unauthenticated denial, allowed/denied human access,
+   service-token CI success and denial without/with an invalid token. Re-run the
+   staging smoke step using its environment secrets; do not print token headers.
+   This rollout is pending; production policy/domains are unchanged.
+
 ## Production approval checklist
 
 - Confirm the SHA/source digest and staging evidence match the intended release.

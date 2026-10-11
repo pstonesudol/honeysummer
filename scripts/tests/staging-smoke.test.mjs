@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkStaging, smokePaths, stagingOrigin, validateStagingResponse } from "../staging-smoke-lib.mjs";
+import { checkStaging, smokePaths, stagingOrigin, stagingAccessHeaders, validateStagingResponse } from "../staging-smoke-lib.mjs";
+
+const access = { clientId: "synthetic.access", clientSecret: "synthetic-secret" };
 
 const page = '<title>Honey Summer</title><meta content="noindex, nofollow" name="robots">';
 const login = '<title>Sign in · Honey Summer admin</title><input type="password"><input name="csrf_token">';
@@ -53,6 +55,8 @@ test("only fixed staging URLs are fetched with redirects disabled; failure block
   const fetcher = async (url, options) => {
     urls.push(url);
     assert.equal(options.redirect, "manual");
+    assert.equal(options.headers["CF-Access-Client-Id"], access.clientId);
+    assert.equal(options.headers["CF-Access-Client-Secret"], access.clientSecret);
     assert.ok(options.signal);
     if (url.endsWith("/api/health/")) return response('{"status":"ok","service":"honey-summer-api"}', "application/json");
     if (url.endsWith("/api/retail/flowers/")) return response("[]", "application/json");
@@ -61,7 +65,31 @@ test("only fixed staging URLs are fetched with redirects disabled; failure block
       headers: { Location: "/admin/login", "Cache-Control": "no-store" } });
     return response(page);
   };
-  assert.deepEqual(await checkStaging(fetcher), smokePaths);
+  assert.deepEqual(await checkStaging(fetcher, access), smokePaths);
   assert.deepEqual(urls, smokePaths.map(path => stagingOrigin + path));
-  await assert.rejects(checkStaging(async () => response("unavailable", "text/html", 503)));
+  await assert.rejects(checkStaging(async () => response("unavailable", "text/html", 503), access));
+});
+
+test("Access credentials reject missing, partial or pasted header values without echoing secrets", () => {
+  assert.equal(stagingAccessHeaders(access)["CF-Access-Client-Secret"], access.clientSecret);
+  for (const invalid of [undefined, {}, { clientId: access.clientId }, { clientSecret: access.clientSecret },
+    { ...access, clientSecret: "CF-Access-Client-Secret: synthetic-secret" },
+    { ...access, clientId: " synthetic.access" }, { ...access, clientSecret: "secret\r\nInjected: value" }]) {
+    assert.throws(() => stagingAccessHeaders(invalid), error => {
+      assert.ok(!error.message.includes("synthetic"));
+      return true;
+    });
+  }
+});
+
+test("an Access login redirect or denied token fails rather than following with credentials", async () => {
+  for (const status of [302, 401, 403]) {
+    let calls = 0;
+    await assert.rejects(checkStaging(async (_url, options) => {
+      calls++;
+      assert.equal(options.redirect, "manual");
+      return new Response("Denied", { status, headers: { Location: "https://access.example/login" } });
+    }, access));
+    assert.equal(calls, 1);
+  }
 });

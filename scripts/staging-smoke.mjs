@@ -13,10 +13,13 @@ try {
   if (backend.sha !== sha || backend.environment !== "staging" || backend.smoke !== "passed") {
     throw new Error("Staging proxy checks require this commit's successful backend receipt.");
   }
-  const paths = await checkStaging();
+  const paths = await checkStaging(fetch, {
+    clientId: process.env.CF_ACCESS_CLIENT_ID,
+    clientSecret: process.env.CF_ACCESS_CLIENT_SECRET,
+  });
   writeFileSync(join(artifact, "staging-frontend.json"), JSON.stringify({
     sha, environment: "staging", worker: "honey-summer-staging", origin: stagingOrigin,
-    smoke: "passed", paths, verifiedAt: new Date().toISOString(),
+    smoke: "passed", paths, serviceTokenHeadersSent: true, verifiedAt: new Date().toISOString(),
   }, null, 2));
   if (process.env.GITHUB_STEP_SUMMARY) {
     writeFileSync(process.env.GITHUB_STEP_SUMMARY,
