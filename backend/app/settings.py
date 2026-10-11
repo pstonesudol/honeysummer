@@ -7,6 +7,7 @@ Environment variables are unprefixed (``SECRET_KEY``, ``DEBUG``,
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,6 +22,8 @@ class Settings(BaseSettings):
     secret_key: str = "insecure-local-development-key"
     security_encryption_key: str = ""
     public_origin: str = "http://localhost:3000"
+    staging_origin_gate_enabled: bool = False
+    staging_origin_secret: SecretStr = Field(default=SecretStr(""), repr=False)
     trusted_proxy_cidrs: str = ""
     database_url: str = "postgresql://postgres:postgres@localhost:5432/honeysummer"
     media_root: Path = BASE_DIR / "media"

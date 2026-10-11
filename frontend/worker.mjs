@@ -1,5 +1,6 @@
 import nextWorker from "./.open-next/worker.js";
 import { isBackendPath, proxyBackend } from "./scripts/backend-proxy.mjs";
+import { originAuthHeaders } from "./src/lib/origin-auth.ts";
 
 // Keep OpenNext's generated exports/handlers; intercept backend routes before
 // its external-rewrite fetch proxy can follow redirects and lose Set-Cookie.
@@ -11,7 +12,7 @@ const worker = {
       return nextWorker.fetch(request, env, ctx);
     }
     try {
-      return await proxyBackend(request, env.API_URL);
+      return await proxyBackend(request, env.API_URL, fetch, originAuthHeaders(env));
     } catch {
       // Never include request bodies, cookies, credentials or provider errors.
       return new Response("Backend unavailable.", {

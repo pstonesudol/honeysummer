@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as wait } from "node:timers/promises";
+import { releaseOriginHeaders } from "./origin-auth.mjs";
 import { digest, projectId, serviceId, targets, validateDeployment, validatePromotion,
   validateSmoke } from "./release-lib.mjs";
 
@@ -31,6 +32,7 @@ try {
     throw new Error("Usage: RELEASE_SHA=<40-character SHA> node scripts/release.mjs staging|production artifact-directory");
   }
   if (!process.env.RAILWAY_TOKEN) throw new Error("Missing environment-scoped RAILWAY_TOKEN.");
+  const originHeaders = releaseOriginHeaders(environment, process.env.STAGING_ORIGIN_SECRET);
   const head = command(["git", "rev-parse", "HEAD"]).trim();
   if (head !== sha) throw new Error("Checkout does not match the CI-tested commit.");
   const artifact = resolve(directory);
@@ -62,7 +64,7 @@ try {
   // Read-only smoke checks: health plus a real DB-backed catalogue query.
   for (const path of ["/api/health/", "/api/retail/flowers/"]) {
     const response = await fetch(`${target.origin}${path}`, {
-      headers: { "Cache-Control": "no-cache" },
+      headers: { ...originHeaders },
       redirect: "error", signal: AbortSignal.timeout(15_000),
     });
     validateSmoke(path, response.status, await response.json());

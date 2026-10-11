@@ -24,3 +24,8 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: node scripts/staging-access.mjs
+      - name: Check direct staging origin gate after activation
+        if: vars.STAGING_ORIGIN_GATE_ENABLED == 'true'
+        env:
+          STAGING_ORIGIN_SECRET: ${{ secrets.STAGING_ORIGIN_SECRET }}
+        run: node scripts/origin-gate-smoke.mjs

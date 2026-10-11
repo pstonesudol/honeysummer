@@ -46,11 +46,13 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          STAGING_ORIGIN_SECRET: ${{ secrets.STAGING_ORIGIN_SECRET }}
         run: |
           test -n "$RAILWAY_TOKEN"
           test -n "$CLOUDFLARE_API_TOKEN"
           test "$CLOUDFLARE_ACCOUNT_ID" = "1b3166589a8439bce7657a8c372d2791"
           node --input-type=module -e 'import {stagingAccessHeaders} from "./scripts/staging-smoke-lib.mjs"; stagingAccessHeaders({clientId: process.env.CF_ACCESS_CLIENT_ID, clientSecret: process.env.CF_ACCESS_CLIENT_SECRET})'
+          node --input-type=module -e 'import {releaseOriginHeaders} from "./scripts/origin-auth.mjs"; releaseOriginHeaders("staging", process.env.STAGING_ORIGIN_SECRET)'
       - name: Pin the CI-tested commit
         id: source
         env:
@@ -65,6 +67,7 @@ jobs:
       - name: Deploy staging and verify its exact deployment
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          STAGING_ORIGIN_SECRET: ${{ secrets.STAGING_ORIGIN_SECRET }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: node scripts/release.mjs staging release-artifact
       - name: Install locked frontend dependencies
