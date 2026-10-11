@@ -80,6 +80,34 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   provider flows and backup/restore still require evidence. No live transaction,
   custom-domain route, DNS cutover or launch was authorized/performed.
 
+### Sequential backend release preparation — October 11, 2026 UTC
+
+- User explicitly selected manual production approval. Prepared
+  `.github/workflows/release.yml`: successful main push CI → exact-SHA staging
+  upload → deployment-ID verification and read-only health/catalogue checks →
+  protected production approval → same source archive/SHA deployment and checks.
+  Serialization includes the approval wait; stale queued main revisions fail closed.
+- Applied empty backend sources in staging/production IaC. Live API inspection
+  confirmed zero Railway deployment triggers in both environments, so main cannot
+  independently deploy production. Existing backend deployments remain successful;
+  direct HTTPS catalogue endpoints returned empty arrays in both environments.
+- Configured GitHub environments `staging` and `production` with main-only policies.
+  Production requires `pstonesudol` approval, disallows admin bypass and permits
+  self-review for the sole operator. Protected main requires both CI checks and a
+  PR merge with up-to-date checks; admin bypass/force pushes/deletion are disabled.
+- Local release gate tests: 3 passed. Actionlint validated the final CI/release
+  YAML, including the stale-main check; `git diff --check` passed.
+  No workflow has been committed/merged or exercised against Railway by this work.
+- Railway project-token creation returned `Not Authorized` (trace
+  `4125898916101255932`). No deploy tokens were stored. Create separate
+  environment-scoped project tokens and store each as `RAILWAY_TOKEN` in its
+  matching GitHub environment. See `../RELEASE_RUNBOOK.md` for activation,
+  approval, migration and recovery steps. New merges no longer autodeploy while
+  the workflow/token setup is pending.
+- This is backend-only preparation; Cloudflare access/frontend orchestration,
+  successful/rejected release rehearsals and backup/restore remain open. A3/A4
+  and all launch acceptance checkboxes remain unchecked.
+
 - [ ] A1 — Workers/OpenNext, Railway and Postgres provisioned; owners, regions, versions, budgets and environment URLs documented; staging/test/live credentials and data isolated.
 - [ ] A2 — Real HTTPS same-origin `/api/`, `/admin/`, public media and protected private-media routing, headers, upload limits and health endpoints verified.
 - [ ] A3 — Repeatable builds/tests/deploys, protected credentials, release approval and post-deploy checks exercised; debug payment bypasses disabled.

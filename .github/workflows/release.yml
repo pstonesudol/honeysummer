@@ -1,0 +1,96 @@
+name: Release backend
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+
+# Serialize the entire release, including the approval wait. Another merge
+# cannot overwrite staging while this commit is awaiting production approval.
+concurrency:
+  group: backend-release
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: staging
+      url: https://honeysummer-staging.up.railway.app
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned Railway CLI
+        run: npm install --global @railway/cli@5.64.2
+      - name: Pin the CI-tested commit
+        id: source
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$RELEASE_SHA"
+          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          mkdir release-artifact
+          git archive --format=tar "$RELEASE_SHA" backend > release-artifact/backend.tar
+      - name: Deploy staging and verify its exact deployment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/release.mjs staging release-artifact
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-release-${{ steps.source.outputs.sha }}
+          path: release-artifact/
+          retention-days: 14
+          if-no-files-found: error
+
+  production:
+    needs: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Required reviewer on this environment is the actual approval gate.
+    environment:
+      name: production
+      url: https://honeysummer-production.up.railway.app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.staging.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned Railway CLI
+        run: npm install --global @railway/cli@5.64.2
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-release-${{ needs.staging.outputs.sha }}
+          path: release-artifact
+      - name: Promote the staging-verified source and check production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RELEASE_SHA: ${{ needs.staging.outputs.sha }}
+        run: node scripts/release.mjs production release-artifact
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-receipt-${{ needs.staging.outputs.sha }}
+          path: release-artifact/production.json
+          if-no-files-found: error

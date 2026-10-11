@@ -1,4 +1,4 @@
-import { defineRailway, github, postgres, project, service, volume } from "railway/iac";
+import { defineRailway, empty, postgres, project, service, volume } from "railway/iac";
 
 export default defineRailway((ctx) => {
   if (ctx.projectName !== "Honey Summer" || !["staging", "production"].includes(ctx.environment)) {
@@ -17,11 +17,12 @@ export default defineRailway((ctx) => {
   });
 
   const backend = service("honeysummer", {
-    source: github("pstonesudol/honeysummer", {
-      branch: "main",
+    // GitHub Actions owns deployment order and uploads the approved commit.
+    // No GitHub source/branch: Railway webhooks must not bypass staging/approval.
+    source: {
+      ...empty(),
       rootDirectory: "/backend",
-      checkSuites: true,
-    }),
+    },
     build: {
       builder: "RAILPACK",
       buildCommand: "uv sync --locked --no-dev",
