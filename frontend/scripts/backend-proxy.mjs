@@ -12,7 +12,7 @@ export function isBackendPath(path) {
   return prefixes.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
 }
 
-export async function proxyBackend(request, apiOrigin, fetcher = fetch) {
+export async function proxyBackend(request, apiOrigin, fetcher = fetch, originHeaders = {}) {
   const incoming = new URL(request.url);
   if (!isBackendPath(incoming.pathname)) throw new Error("Not a backend route.");
   const backend = new URL(apiOrigin);
@@ -26,6 +26,9 @@ export async function proxyBackend(request, apiOrigin, fetcher = fetch) {
   destination.pathname = incoming.pathname;
   destination.search = incoming.search;
   const headers = new Headers(request.headers);
+  // A browser must never choose this trust credential, including in production.
+  headers.delete("X-HoneySummer-Origin-Secret");
+  for (const [name, value] of Object.entries(originHeaders)) headers.set(name, value);
   for (const header of ["host", "connection", "keep-alive", "transfer-encoding",
     "upgrade", "proxy-authorization", "proxy-authenticate", "cf-connecting-ip",
     // Access service credentials/JWT authenticate at Cloudflare's edge only.

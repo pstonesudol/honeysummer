@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { getApiBaseUrl } from "@/lib/api";
+import { backendAuthHeaders } from "@/lib/backend-auth";
 import { inquiryFields, type InquiryKind, type InquiryState } from "@/lib/inquiry-fields";
 import { site } from "@/lib/site";
 
@@ -79,7 +80,8 @@ export async function submitInquiry(
     response = await fetch(`${getApiBaseUrl()}/api/inquiries/`, {
       method: "POST",
       body: payload,
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...backendAuthHeaders() },
+      redirect: "error",
       cache: "no-store",
     });
   } catch {

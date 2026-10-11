@@ -1,3 +1,5 @@
+import { backendAuthHeaders } from "./backend-auth";
+
 const DEFAULT_API_URL = "http://localhost:8000";
 
 export function getApiBaseUrl(): string {
@@ -17,9 +19,13 @@ export async function apiGet<T>(
   revalidate = 300,
 ): Promise<T> {
   try {
+    const authHeaders = backendAuthHeaders();
     const response = await fetch(`${getApiBaseUrl()}${path}`, {
-      headers: { Accept: "application/json" },
-      next: { revalidate },
+      headers: { Accept: "application/json", ...authHeaders },
+      // Staging runtime secrets must not enter Next's persistent fetch cache.
+      ...(process.env.DEPLOYMENT_ENVIRONMENT === "staging" || Object.keys(authHeaders).length > 0
+        ? { cache: "no-store" as const } : { next: { revalidate } }),
+      redirect: "error",
       signal: AbortSignal.timeout(4000),
     });
     if (!response.ok) {

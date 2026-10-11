@@ -8,6 +8,7 @@ from sanic.response import json
 from sanic_ext import Extend
 
 from .admin import bp as admin_bp
+from .origin_gate import protect_origin, validate_origin_gate
 from .request_security import protect_request, secure_response
 from .routes.auth import bp as auth_bp
 from .routes.catalog import bp as catalog_bp
@@ -20,6 +21,7 @@ from .security_views import bp as security_bp
 from .settings import get_settings
 
 settings = get_settings()
+validate_origin_gate(settings)
 if not settings.debug:
     if len(settings.secret_key) < 32 or settings.secret_key == "insecure-local-development-key":
         raise RuntimeError("Production SECRET_KEY must be a unique high-entropy secret of at least 32 characters.")
@@ -31,6 +33,7 @@ app.config.SECRET = settings.secret_key
 app.config.CORS = False
 app.config.ACCESS_LOG = False  # Recovery query strings must never enter access logs.
 Extend(app)
+app.register_middleware(protect_origin, "request", priority=100)
 app.register_middleware(protect_request, "request")
 app.register_middleware(secure_response, "response")
 # The interactive API docs are a development convenience only.

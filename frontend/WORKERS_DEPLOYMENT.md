@@ -14,6 +14,24 @@ perform public cutover without separate approval.
 
 ## Backend proxy and authentication redirects
 
+### Staging origin credential (pending activation)
+
+Store `STAGING_ORIGIN_SECRET` only as a runtime **Secret** on
+`honey-summer-staging`, matching Railway staging and GitHub staging. Never put the
+value in Wrangler `vars`, NEXT_PUBLIC variables, a build env file or source.
+`worker.mjs` strips browser-supplied `X-HoneySummer-Origin-Secret` and injects the
+trusted staging binding. Server reads/actions obtain the same binding through
+OpenNext's Cloudflare request context; reads with this credential are no-store and
+all credential-bearing upstream fetches refuse to follow redirects. Production
+does not receive the staging header. Existing auth/CSRF controls remain intact.
+
+Enable the backend gate only after all three holders have the same secret and the
+new Worker/backend code has been deployed and verified. See the ordered rollout
+in `RELEASE_RUNBOOK.md`. Without the binding after backend activation, API/admin
+proxy calls fail and server reads fall back; don't mistake fallback marketing
+pages for a healthy authenticated backend. Build/dry-run tests do not prove the
+runtime binding or hosted activation.
+
 `worker.mjs` is the supported custom Worker entry point. It delegates frontend
 pages/assets/images to the generated OpenNext handler, but streams `/api`,
 `/admin` and `/media` requests directly to the configured backend using

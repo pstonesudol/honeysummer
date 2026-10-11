@@ -131,6 +131,60 @@ or human-account permission combinations.
    staging smoke step using its environment secrets; do not print token headers.
    This rollout is pending; production policy/domains are unchanged.
 
+## Staging direct-origin gate (pending activation)
+
+This local change adds an opt-in application-layer gate, not a private Railway
+network. The Railway domain stays reachable, but all routes/methods require
+`X-HoneySummer-Origin-Secret` except exact GET/HEAD `/api/health/` (minimal
+liveness) and exact POST `/api/stripe/webhook/` when sandbox `sk_test_` and `whsec_`
+credentials are configured. The latter still requires a valid Stripe body
+signature in the existing handler; an arbitrary signature header cannot bypass
+the gate for other paths. No new Access Bypass policy is created. Sandbox webhook
+delivery can use the direct Railway endpoint, outside the custom-domain Access
+gate. Provider configuration and real webhook acceptance remain separate tasks.
+
+The gate is disabled by default. When enabled, startup requires DEBUG=false,
+PUBLIC_ORIGIN exactly `https://staging.hellohoneysummer.com` and a 43–128 character
+URL-safe secret. Production/local startup rejects an enabled staging gate. User
+authentication, permissions, CSRF and secure-cookie checks still apply after the
+origin gate. Client-supplied origin headers are stripped by the Worker and replaced
+only with its staging runtime secret. Server-rendered reads and server actions use
+the same runtime binding and reject redirects; staging reads are uncached so the
+secret does not enter persistent Next fetch cache. No secret goes in Wrangler vars,
+NEXT_PUBLIC variables, build environment/artifacts, receipts or source.
+
+Rollout (requires explicit approval; no provider/Git actions performed by this edit):
+
+1. Generate a random secret privately, e.g. 32 random bytes encoded base64url;
+   store it in a password manager. Do not paste it into chat or screenshots.
+2. Save the identical value as **STAGING_ORIGIN_SECRET** in GitHub environment
+   **staging** (secret), Cloudflare Worker **honey-summer-staging** (runtime secret,
+   not plaintext variable), and Railway backend **staging** variables. Do not add
+   it to production or local env files. Keep Railway's gate flag false initially.
+   Runtime-secret/variable changes may cause provider redeploys: approve/coordinate
+   them explicitly and do not change infrastructure during a release verification.
+3. Only after approval, publish/review/merge the code. CI staging credential
+   preflight now requires this secret before any release deploy. The staging
+   backend is still ungated until the flag is enabled; Worker/SSR/CI will already
+   send the secret. Wait for successful staging deployment and verify homepage
+   content, catalogue and admin login/logout before activation. Production code
+   may receive the maintenance change only via the existing manual approval;
+   the staging gate and credential must not be configured there.
+4. With explicit activation approval, set Railway staging
+   **STAGING_ORIGIN_GATE_ENABLED=true**, keeping DEBUG=false and the exact staging
+   PUBLIC_ORIGIN. Wait for the deployment; liveness remains available for Railway.
+5. Set GitHub staging environment **variable** STAGING_ORIGIN_GATE_ENABLED=true
+   to enable the additional direct-origin step in the manual read-only workflow.
+   Run **Verify staging Access (read-only)** on main. It must reject missing/wrong
+   origin secrets on admin/catalogue/media and accept the authorized catalogue,
+   as well as pass the existing custom-domain Access checks. If this step is
+   skipped, it is not origin-gate acceptance. Recheck rendered content/forms and
+   admin sessions; no payment/email mutations without separate provider approval.
+6. Investigate mismatches before retrying. Emergency gate disablement reopens the
+   direct origin and needs explicit operator approval; never treat it as accepted
+   protection. Rotate matching values in a coordinated maintenance window; there
+   is no dual-key grace period. Keep infrastructure variable ownership unmanaged.
+
 ## Production approval checklist
 
 - Confirm the SHA/source digest and staging evidence match the intended release.

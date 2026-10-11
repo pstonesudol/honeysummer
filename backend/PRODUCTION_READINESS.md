@@ -161,6 +161,19 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
 
 ### Staging operator login defect — October 11, 2026
 
+- User supplied successful **Verify staging Access (read-only) #1** evidence on
+  main `f33ae005f522c5c3470cc6fc506c9e1c164ecdd5`: anonymous/invalid-token
+  custom-domain requests denied, valid CI token passed all probes. This is
+  custom-domain Access evidence, not direct Railway origin acceptance.
+- With user approval, prepared local staging-only origin gate, Worker/runtime
+  server-fetch injection and staging CI direct-probe credentials. Gate is opt-in,
+  rejects production/debug scope and unsafe/missing secrets at startup, and leaves
+  only exact read-only health and signature-validated configured sandbox webhook
+  exceptions. Direct-origin positive/negative checks are opt-in after activation.
+  No secrets provisioned, provider settings changed or live code deployed here.
+  User explicitly prohibits all Git actions without approval; none performed for
+  this work. Hosted activation/retest remains open; rollout is in RELEASE_RUNBOOK.md.
+
 - Access follow-up: user created the staging custom-domain application with the
   CI Service Auth policy and the two-address human Allow policy, added One-time
   PIN and confirmed human email-code login. User also confirmed the custom domain
