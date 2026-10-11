@@ -10,13 +10,13 @@ export function ProductGrid({ flowers, channel }: { flowers: FlowerListing[]; ch
   return <div className="flower-grid">{flowers.map((flower) => <ProductCard flower={flower} channel={channel} key={flower.id} />)}</div>;
 }
 
-export function RetailShop({ flowers, checkoutStatus = null }: { flowers: FlowerListing[]; checkoutStatus?: "success" | "cancelled" | null; pickupWindow?: string }) {
+export function RetailShop({ flowers, checkoutStatus = null, checkoutKey }: { flowers: FlowerListing[]; checkoutStatus?: "success" | "cancelled" | null; checkoutKey?: string; pickupWindow?: string }) {
   const { catalogues } = useCart();
   // The cart independently refreshes the live catalogue from the same API.
   // Use it when the server-rendered read failed and supplied its empty fallback.
   const offerings = flowers.length ? flowers : catalogues.retail;
   return <div className="retail-shop">
-    {checkoutStatus && <CheckoutNotice channel="retail" checkoutStatus={checkoutStatus} />}
+    {checkoutStatus && <CheckoutNotice channel="retail" checkoutStatus={checkoutStatus} checkoutKey={checkoutKey} />}
     {offerings.length ? <ProductGrid flowers={offerings} channel="retail" /> : <p className="retail-shop__empty">Nothing is listed for online ordering this week. Send a custom request below and we will make something just for you.</p>}
   </div>;
 }

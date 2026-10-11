@@ -47,6 +47,7 @@ function useCartState() {
   // own so a Stripe return still reaches the customer even if they land anywhere.
   const [toasts, setToasts] = useState<CartToast[]>([]);
   const toastTimers = useRef(new Map<string, number>());
+  const notifiedPayments = useRef(new Set<string>());
   // Fulfillment/contact fields survive navigation only in memory, never storage.
   const [details, setDetails] = useState<Record<Channel, Record<string, string>>>({ retail: { fulfillment: "pickup" }, wholesale: { fulfillment: "pickup" } });
   const submitting = useRef(false);
@@ -124,24 +125,30 @@ function useCartState() {
     return flowers;
   }, [refreshAccount]);
 
-  const checkPayment = useCallback(async (channel: Channel) => {
+  const checkPayment = useCallback(async (channel: Channel, returnedKey?: string) => {
     const attempt = state.current[channel].attempt;
-    if (!attempt) return;
+    const key = returnedKey || attempt?.key;
+    if (!key) return;
     const owner = accountRef.current.id;
-    const data = await cartApi(`cart/checkout/${attempt.key}/`);
+    const data = await cartApi(`cart/checkout/${key}/`);
     if (channel === "wholesale" && owner !== accountRef.current.id) return;
-    if (state.current[channel].attempt?.key !== attempt.key) return;
+    if (attempt && state.current[channel].attempt?.key !== attempt.key) return;
     const outcome = checkoutOutcome(data.status);
     const reference = data.order_reference ?? "";
     setCheckouts((current) => (current[channel].outcome === outcome && current[channel].reference === reference ? current : { ...current, [channel]: { outcome, reference } }));
     if (outcome === "paid") {
-      const latest = readCart(localStorage.getItem(keyFor(channel, owner)));
-      if (latest.attempt?.key !== attempt.key) return data;
-      save(channel, { items: consumePurchased(latest.items, attempt.items) });
-      setMessage(`Order ${data.order_reference} payment confirmed. Your other cart and new additions are saved.`);
-      pushToast(`Thank you. Payment confirmed${reference ? ` for order ${reference}` : ""}; your cart has been updated.`, "success");
+      if (attempt) {
+        const latest = readCart(localStorage.getItem(keyFor(channel, owner)));
+        if (latest.attempt?.key === attempt.key) save(channel, { items: consumePurchased(latest.items, attempt.items) });
+      }
+      const notificationKey = `${channel}:${key}`;
+      if (!notifiedPayments.current.has(notificationKey)) {
+        notifiedPayments.current.add(notificationKey);
+        setMessage(`Order ${data.order_reference} payment confirmed. Your other cart and new additions are saved.`);
+        pushToast(`Thank you. Payment confirmed${reference ? ` for order ${reference}` : ""}; your cart has been updated.`, "success");
+      }
     } else if (outcome === "closed") {
-      save(channel, { items: state.current[channel].items });
+      if (attempt) save(channel, { items: state.current[channel].items });
       setMessage("Checkout expired or was cancelled. Your cart is saved; review availability before trying again.");
       pushToast("That checkout closed before payment was confirmed. Your cart is saved; review availability before trying again.", "info");
     } else setMessage("Payment is not yet confirmed. Resume your existing checkout, or wait while payment is processing.");
@@ -281,7 +288,7 @@ function useCartState() {
     }
   };
   const updateDetails = (channel: Channel, name: string, value: string) => setDetails((current) => ({ ...current, [channel]: { ...current[channel], [name]: value } }));
-  return { account, refreshAccount, logout, carts, catalogues, selected, open, setOpen, show, add, quantity, checkout, cancel, validate, details, updateDetails, message, checkouts, toasts, notify: pushToast, dismissToast, ready, busy };
+  return { account, refreshAccount, logout, carts, catalogues, selected, open, setOpen, show, add, quantity, checkout, cancel, validate, checkPayment, details, updateDetails, message, checkouts, toasts, notify: pushToast, dismissToast, ready, busy };
 }
 
 type CartContext = ReturnType<typeof useCartState>;
