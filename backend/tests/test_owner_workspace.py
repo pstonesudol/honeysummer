@@ -76,8 +76,15 @@ async def test_account_activity_and_photo_selection_require_admin_and_keep_secre
     assert saved.status == 302
     _, public = await app.asgi_client.get("/api/site-content/")
     assert public.json["content"]["photos"]["home"]["alt_text"] == "Pink flowers"
-    _, account = await app.asgi_client.get("/admin/account")
+    _, account_entry = await app.asgi_client.get("/admin/account")
+    assert account_entry.status == 302
+    assert account_entry.headers["location"] == "/admin/security/"
+    _, account = await app.asgi_client.get(account_entry.headers["location"])
     assert account.status == 200 and "owner@example.com" in account.text
+    assert "data-account-form" in account.text
+    assert 'aria-label="Account security settings"' in account.text
+    assert "Manage password, MFA, recovery codes and sessions" not in account.text
+    assert 'href="/admin/activity"' in account.text
     _, activity = await app.asgi_client.get("/admin/activity")
     assert activity.status == 200 and "/admin/site-content" in activity.text
     assert "Private form value" not in activity.text and "password_hash" not in account.text
