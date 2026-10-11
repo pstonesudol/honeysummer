@@ -227,6 +227,11 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   verifies one admin happy path only; MFA enrollment/recovery, session cookie
   attributes, CSRF and proxy-header behavior, role boundaries/revocation,
   throttles and token replay tests remain open.
+- MFA follow-up — October 11, 2026: user subsequently confirmed that MFA works
+  for the staging admin, including the sign-in flow. No password, authenticator
+  secret/code or recovery code was recorded. This addresses the single-account
+  MFA setup/sign-in check; recovery-code rehearsal, other roles, MFA recovery,
+  and the remaining F2–F5 deployed security checks remain open.
 - Zero Trust Free activated by the user. Staging CI service-token secret names
   confirmed present in GitHub, with raw values kept private. Preparing fixed-origin,
   no-redirect Access-authenticated smoke requests and stripping Access credentials
