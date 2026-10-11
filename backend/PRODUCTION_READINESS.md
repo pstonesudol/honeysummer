@@ -131,6 +131,25 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
 
 - [ ] G1 — Redacted logs, uptime/error/usage alerts, retention, incident owners, runbooks and manual reconciliation verified; escalation rehearsed.
 - [ ] G2 — Automated Postgres backups/retention and an actual restore to an isolated environment verified, including media recovery; successful backup alone is insufficient.
+  - **Blocked — October 11, 2026 UTC:** Railway API inspection found no volume
+    backup schedules for staging or production. Attempting production
+    daily/weekly/monthly schedules returned `BAD_USER_INPUT`: "Manual backups
+    and backup schedules are only available for Pro workspaces" (trace
+    `1630370919026007653`). No backup policy was enabled; no restore was run.
+    Production PITR inspection also reported disabled/unwired, not an active
+    substitute. No workspace upgrade or PITR-enabling redeploy was authorized.
+  - Choose an explicitly approved paid backup plan or a separately implemented
+    logical backup (`pg_dump`) job to encrypted/private durable storage, with
+    retention, failure monitoring and an isolated restore rehearsal. Cloudflare
+    R2/access is still blocked. Logical backup execution also needs an approved
+    database connection method: current Postgres has no public TCP proxy and
+    Railway SSH reports no registered keys. Do not expose the database or add
+    account keys silently just to make the rehearsal work.
+  - Railway native volume restores are limited to the same project/environment
+    and replace the service mount on apply; never test that operation against
+    the working production database. A logical restore to a disposable Postgres
+    verifies logical recovery, not native snapshot restore. Back up the separate
+    application encryption key and public/private media too. G2 remains open.
 - [ ] G3 — Intended domain, redirects, DNS/TLS, Workers routes, Railway origin and email DNS checked before cutover; TTL/rollback/contact plan approved.
 - [ ] G4 — All applicable checks pass with evidence; source feature/owner acceptance or explicit prior waivers reconciled, no unresolved launch blockers, operational sign-off recorded.
 - [ ] G5 — Handoff to Phase 13 for final assets/copy/licensing/SEO/accessibility approval, launch authorization, public cutover and post-cutover smoke/rollback checks.
