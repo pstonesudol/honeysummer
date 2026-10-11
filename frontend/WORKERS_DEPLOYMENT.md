@@ -1,9 +1,11 @@
 # Cloudflare Workers: staging and production
 
-This is local deployment preparation, not deployed acceptance. Cloudflare account
-verification/member access is still required. No DNS routes/custom domains are
-attached by `wrangler.jsonc`. Do not deploy production or perform public cutover
-without separate approval.
+Staging is deployed at `https://staging.hellohoneysummer.com` (October 11, 2026).
+Cloudflare account membership and local Wrangler authentication are confirmed.
+The user attached the staging custom domain in the dashboard; `wrangler.jsonc`
+does not yet manage that domain. Read-only storefront/API/admin-entry checks passed;
+full security/provider acceptance remains open. Do not deploy production or
+perform public cutover without separate approval.
 
 | Environment | Worker / self-reference | Backend |
 |---|---|---|
@@ -80,14 +82,13 @@ restrict staging access and use synthetic data, not real customer records.
 they point to the chosen hosted backend and mutations can affect it. `upload:*`
 rebuilds and uploads a version to Cloudflare (not a read-only local action).
 
-The backend approval chain is in `RELEASE_RUNBOOK.md`. Frontend integration is
-still blocked; do not enable independent production GitHub Builds, which would
-bypass staging/manual approval. When integrating approved staging Builds, use
-repository root `/`, staging build command
-`npm run build:staging --workspace frontend` and deploy command
-`npm run deploy:staging --workspace frontend` (the latter rebuilds deliberately).
-Set `NEXT_PUBLIC_SITE_URL` in the build environment. Production must use the
-matching commands plus its `API_URL` **behind the same release approval gate**;
-keep credentials environment-scoped.
-Review this setup after account verification; no dashboard build was configured
-as part of this local preparation.
+The release approval chain is in `RELEASE_RUNBOOK.md`. The workflow extension
+deploys staging from the CI-tested SHA after successful backend staging, then runs
+read-only storefront/API/admin-entry smoke checks before production approval can
+proceed. Its first CI deployment is still to be rehearsed. GitHub staging holds
+`CLOUDFLARE_API_TOKEN` as a secret and `CLOUDFLARE_ACCOUNT_ID` as a variable; local
+OAuth does not authenticate Actions. The custom domain remains dashboard-managed.
+Production is still **backend only**, with no production Worker deploy enabled.
+Do not enable independent production GitHub Builds, which would bypass approval.
+A future production frontend integration must use matching commands and its own
+`API_URL` **behind the same release approval gate**, with scoped credentials.

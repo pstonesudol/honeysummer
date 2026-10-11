@@ -108,6 +108,57 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   successful/rejected release rehearsals and backup/restore remain open. A3/A4
   and all launch acceptance checkboxes remain unchecked.
 
+### Backend release and hosted staging update — October 11, 2026 UTC
+
+- Supersedes the unmerged/token/access-blocked snapshots above. User merged PR
+  [#1](https://github.com/pstonesudol/honeysummer/pull/1), revision
+  `c9e0744cc04f998592ec9268ebbcc33697681215`, resolved Railway account verification
+  and stored separate `RAILWAY_TOKEN` environment secrets. The first staging run
+  failed closed for a missing token; retry succeeded. Release run
+  [38109825138](https://github.com/pstonesudol/honeysummer/actions/runs/38109825138)
+  completed successfully after the user's manual production approval.
+- Railway confirmed staging deployment `6cc7382b-e194-4ba5-a3f2-93b7b01228f3`
+  and production deployment `1bcb0d94-fca2-474e-ba63-762e0cb576dc` successful,
+  with one running/no crashed replicas. Backend health/catalogue checks passed.
+  This verifies one successful backend release sequence, not failure/rollback
+  recovery, frontend promotion or public launch acceptance.
+- User accepted Cloudflare account membership and authenticated Wrangler against
+  the owner's account `1b3166589a8439bce7657a8c372d2791`. User deployed
+  `honey-summer-staging`, attached only `staging.hellohoneysummer.com`, and rebuilt
+  with that exact frontend origin. Reported Worker version:
+  `89a14c62-69dc-45b5-9634-16d3789c5359`. Production frontend/domain remain unchanged.
+- Assistant read-only checks at approximately 14:14 UTC: custom-domain homepage,
+  `/api/health/`, `/api/retail/flowers/` and `/admin/login` returned HTTP 200.
+  Health identified `honey-summer-api`; catalogue returned an array. Browser
+  snapshots confirmed homepage, order-page empty catalogue state and admin login
+  rendering. Homepage robots metadata contains `noindex`. Admin login CSRF cookies
+  have Secure, HttpOnly and SameSite=Lax flags; authenticated session behavior,
+  actual CSRF/Origin enforcement and role/session revocation are still unverified.
+- No forms submitted, accounts created, payment/email fixtures run or customer
+  data changed. Browser reported an image-preload warning; no console errors.
+  User's Railway staging screenshot shows matching `PUBLIC_ORIGIN` and `DEBUG=false`.
+- Next: scoped Cloudflare CI credentials and frontend release orchestration,
+  protected staging access, operator sign-in/proxy/security checks, R2 activation
+  with approved usage billing and public/private storage verification. Local OAuth
+  is not a GitHub Actions credential. A1–A4/F2 remain open for their broader scope.
+
+### Staging frontend release extension — prepared October 11, 2026
+
+- Extended the existing release staging job to preflight both provider
+  credentials/account, deploy backend then build/deploy the staging Worker from
+  the same CI-tested SHA. Production still deploys the backend only after the
+  existing manual gate; no production Worker/domain or provider policies changed.
+- Added fixed-origin, read-only HTTPS smoke checks for homepage/order page with
+  noindex, API health/catalogue JSON and admin-entry HTML/secure CSRF cookies.
+  Redirects, bad status/type/body, missing noindex/form/cookie flags and network
+  errors fail closed. Sanitized evidence includes SHA, Worker, origin, paths and
+  verification timestamp; no cookies/customer bodies are retained.
+- GitHub metadata confirms staging Cloudflare token secret and correct account-ID
+  variable. Seven release tests, eleven frontend tests and frontend ESLint passed.
+  Actionlint and `git diff --check` passed. Live validators passed via a public-DNS IP override; normal local Node lookup
+  still returned ENOTFOUND. CI uses normal DNS without a bypass. Workflow extension
+  still requires merge/first Actions deployment evidence; A3 remains open.
+
 - [ ] A1 — Workers/OpenNext, Railway and Postgres provisioned; owners, regions, versions, budgets and environment URLs documented; staging/test/live credentials and data isolated.
 - [ ] A2 — Real HTTPS same-origin `/api/`, `/admin/`, public media and protected private-media routing, headers, upload limits and health endpoints verified.
 - [ ] A3 — Repeatable builds/tests/deploys, protected credentials, release approval and post-deploy checks exercised; debug payment bypasses disabled.
