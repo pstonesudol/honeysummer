@@ -167,9 +167,11 @@ async def test_user_management_uses_settings_pages_and_preserves_action_on_error
     uid = await make_user(role="staff")
     _, listing = await app.asgi_client.get("/admin/security/access")
     assert f'href="/admin/security/access/{uid}"' in listing.text
+    assert ">My account</a>" in listing.text and ">My security</a>" not in listing.text
     assert "<dialog" not in listing.text and 'name="full_name"' in listing.text
     _, page = await app.asgi_client.get(f"/admin/security/access/{uid}?action=temp_password")
     assert page.status == 200 and 'aria-label="User account settings"' in page.text
+    assert ">My account</a>" in page.text
     assert '<input type="hidden" name="action" value="temp_password">' in page.text
     assert 'name="password_confirm"' in page.text and "<select" not in page.text
     _, fallback = await app.asgi_client.get(f"/admin/security/access/{uid}?action=not-an-action")
@@ -972,6 +974,7 @@ async def test_account_page_defaults_florists_to_password_and_honors_action_quer
     _, admin_page = await app.asgi_client.get("/admin/security/")
     assert '<input type="hidden" name="action" value="reauth">' in admin_page.text
     assert 'aria-label="Security areas"' in admin_page.text
+    assert ">My account</a>" in admin_page.text
     assert 'href="/admin/account" class="is-active" aria-current="page"' in admin_page.text
     assert 'href="/admin/security/?action=deletion"' not in admin_page.text
 

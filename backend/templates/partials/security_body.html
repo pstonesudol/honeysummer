@@ -53,7 +53,7 @@
   <span class="security-status{% if user.mfa_secret %} security-status--enabled{% endif %}"><span aria-hidden="true">●</span> {{ 'Two-step verification on' if user.mfa_secret else 'Two-step verification off' }}</span>
 </div>
 {% if user.role == 'admin' %}
-<nav class="security-tabs" aria-label="Security areas"><a href="/admin/security/" aria-current="page">My security</a><a href="/admin/security/access">Users &amp; access</a><a href="/admin/activity">Activity</a></nav>
+<nav class="security-tabs" aria-label="Security areas"><a href="/admin/security/" aria-current="page">My account</a><a href="/admin/security/access">Users &amp; access</a><a href="/admin/activity">Activity</a></nav>
 {% endif %}
 <div class="security-layout">
 <nav class="security-settings" aria-label="Account security settings">
@@ -106,7 +106,7 @@
 {% endif %}{% endfor %}
 </div>
 {% elif mode == 'access' %}
-<nav class="security-tabs" aria-label="Security areas"><a href="/admin/security/">My security</a><a href="/admin/security/access" aria-current="page">Users &amp; access</a><a href="/admin/activity">Activity</a></nav>
+<nav class="security-tabs" aria-label="Security areas"><a href="/admin/security/">My account</a><a href="/admin/security/access" aria-current="page">Users &amp; access</a><a href="/admin/activity">Activity</a></nav>
 <div class="page-head">
 <span class="eyebrow">Access control</span>
 <h2>Users</h2>

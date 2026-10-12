@@ -12,7 +12,7 @@
   'password': 'Email a single-use password reset link and display it for secure hand-off. The link expires in 30 minutes.',
   'temp_password': 'Set a temporary password. The user must choose a new password on their next sign-in. Share it through a verified channel, not in the recorded reason.'
 } %}
-<nav class="security-tabs" aria-label="Security areas"><a href="/admin/security/">My security</a><a href="/admin/security/access" aria-current="page">Users &amp; access</a><a href="/admin/activity">Activity</a></nav>
+<nav class="security-tabs" aria-label="Security areas"><a href="/admin/security/">My account</a><a href="/admin/security/access" aria-current="page">Users &amp; access</a><a href="/admin/activity">Activity</a></nav>
 <a class="security-back" href="/admin/security/access">‹ Back to users</a>
 {% set name = target.full_name or (target.profile.contact_name if target.profile else '') or target.email %}
 <div class="security-summary">
