@@ -1,0 +1,21 @@
+{% extends "security.html" %}
+{% block title %}Two-step verification turned off · Honey Summer{% endblock %}
+{% block content %}
+<a class="security-confirmation-brand" href="/">Honey Summer</a>
+<section class="security-confirmation" aria-labelledby="confirmation-title">
+  <span class="security-confirmation-icon" aria-hidden="true">✓</span>
+  <p class="security-group-label">Account security · Change complete</p>
+  <h1 id="confirmation-title">Two-step verification turned off</h1>
+  <p class="security-confirmation-lead" role="status">You’re signed out of all browsers. Sign in again with your password to continue.</p>
+  <div class="security-confirmation-details">
+    <h2>What changed</h2>
+    <ul>
+      <li>Your authenticator and recovery codes no longer work.</li>
+      <li>Your account is now protected by your password only.</li>
+      <li>You can turn two-step verification back on in account security.</li>
+    </ul>
+  </div>
+  <a class="security-confirmation-action" href="{{ sign_in_url }}">Sign in again <span aria-hidden="true">→</span></a>
+  <p class="security-caption">Didn’t mean to make this change? <a href="/contact">Contact Honey Summer</a>.</p>
+</section>
+{% endblock %}
