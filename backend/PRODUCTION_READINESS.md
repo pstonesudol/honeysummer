@@ -252,9 +252,11 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   to use the configured Worker self-service proxy and deployed to staging as
   `9851eccb-5def-4819-8c47-ab4f26519400`; the subsequent inquiry reached Railway
   with HTTP 201. Staging persisted provider outcomes as accepted for both the
-  customer acknowledgment and farm notification; the user confirmed the customer
-  confirmation arrived. Farm-notification inbox delivery and Resend event details
-  remain unverified.
+  customer acknowledgment and farm notification. A Resend dashboard screenshot
+  showed both messages as `Delivered`; the user also confirmed the customer
+  confirmation arrived. `Delivered` confirms recipient-server acceptance, not
+  inbox placement, so farm-mailbox placement and broader Resend event review remain
+  open along with wholesale/invoice email workflows.
 - Zero Trust Free activated by the user. Staging CI service-token secret names
   confirmed present in GitHub, with raw values kept private. Preparing fixed-origin,
   no-redirect Access-authenticated smoke requests and stripping Access credentials
