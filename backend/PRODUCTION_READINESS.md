@@ -242,7 +242,17 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   the message was still classified as junk (SCL 5). No explicit DMARC record is
   published for the staging sending subdomain. Authentication-result review is
   complete; optional staging DMARC monitoring, spam placement/reputation work,
-  Resend event review, and broader email workflow coverage remain open.
+  Resend event review, and broader email workflow coverage remain open. A later
+  inquiry-email attempt was blocked by required form controls in browser
+  automation; read-only database count remained zero, so no inquiry or additional
+  email was created/sent. On October 12, 2026, a user-submitted staging contact
+  inquiry failed in the storefront-to-backend fetch before Railway received it;
+  redacted Worker diagnostics recorded a TypeError at the fetch stage with the
+  staging API URL and origin credential present. The server action was changed
+  to use the configured Worker self-service proxy and deployed to staging as
+  `9851eccb-5def-4819-8c47-ab4f26519400`; the subsequent inquiry reached Railway
+  with HTTP 201, and the user confirmed the generated customer confirmation email
+  arrived. Farm-notification delivery and Resend event details remain unverified.
 - Zero Trust Free activated by the user. Staging CI service-token secret names
   confirmed present in GitHub, with raw values kept private. Preparing fixed-origin,
   no-redirect Access-authenticated smoke requests and stripping Access credentials
