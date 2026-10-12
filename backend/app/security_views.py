@@ -88,7 +88,7 @@ def _safe_reauth_next(value: str) -> str:
 
 
 # Security modes that belong inside the shared admin chrome when an operator is signed in.
-_SHELL_MODES = {"account", "access", "privacy", "reauth", "link", "codes", "done"}
+_SHELL_MODES = {"account", "access", "manage", "privacy", "reauth", "link", "codes", "done"}
 
 
 def _template_for(user, mode: str) -> str:
@@ -190,6 +190,29 @@ async def accessible_errors(request, response):
                 selected=str(request.form.get("action", "")),
                 pending=await _account_pending(viewer.id),
             )
+        if viewer and viewer.role == "admin" and request.path.rstrip("/") == "/admin/security/access":
+            try:
+                uid = int(request.form.get("user_id", "0"))
+            except ValueError:
+                uid = 0
+            async with session_scope() as db:
+                target = await db.scalar(select(User).options(selectinload(User.profile)).where(User.id == uid))
+            if target and target.id != viewer.id:
+                actions = _row_actions(target, target.profile)
+                selected = str(request.form.get("action", ""))
+                if selected in {value for value, _, _ in actions}:
+                    return _page(
+                        request,
+                        template=_template_for(viewer, "manage"),
+                        mode="manage",
+                        status=response.status,
+                        error=detail,
+                        user=viewer,
+                        target=target,
+                        actions=actions,
+                        selected=selected,
+                        form_values=request.form,
+                    )
         return _page(request, template=_template_for(viewer, "done"), mode="done", status=response.status, error=detail)
 
 
@@ -448,6 +471,16 @@ async def account_change(request):
                 if field == "website" and value and not value.startswith("https://"):
                     return json({"detail": "Use an HTTPS website URL."}, status=400)
                 setattr(profile, field, value)
+            user.full_name = profile.contact_name
+        elif action == "name":
+            full_name = str(request.form.get("full_name", "")).strip()
+            if not full_name or len(full_name) > 200:
+                return json({"detail": "Enter a full name of up to 200 characters."}, status=400)
+            user.full_name = full_name
+            if user.role == "florist":
+                profile = await db.scalar(select(FloristProfile).where(FloristProfile.user_id == user.id))
+                if profile:
+                    profile.contact_name = full_name
         elif action in {"export", "deletion"}:
             db.add(PrivacyRequest(user_id=user.id, kind=action))
             message = "Request recorded for admin review. Financial records are retained as required."
@@ -516,7 +549,7 @@ async def account_change(request):
 
 def _row_actions(account, profile) -> list[tuple[str, str, str]]:
     """List the access actions valid for a single account row as (value, label, kind)."""
-    actions: list[tuple[str, str, str]] = []
+    actions: list[tuple[str, str, str]] = [("name", "Full name", "quiet")]
     if account.role == "florist":
         if profile and profile.application_state != "approved":
             actions.append(("approve", "Approve application", "primary"))
@@ -532,8 +565,6 @@ def _row_actions(account, profile) -> list[tuple[str, str, str]]:
     else:
         if account.role == "staff":
             actions.append(("admin", "Promote to admin", "secondary"))
-            if not account.is_active:
-                actions.append(("reinvite", "Reissue invitation", "secondary"))
         elif account.role == "admin":
             actions.append(("staff", "Change to staff", "quiet"))
         actions.append(
@@ -544,6 +575,8 @@ def _row_actions(account, profile) -> list[tuple[str, str, str]]:
         actions.append(("revoke", "Sign out all sessions", "quiet"))
         if account.role != "admin":
             actions.append(("reset_mfa", "Reset authenticator", "quiet"))
+    if not account.is_active:
+        actions.append(("reinvite", "Reissue invitation", "secondary"))
     if account.is_active:
         actions.append(("password", "Send password reset", "quiet"))
         actions.append(("temp_password", "Set temporary password", "quiet"))
@@ -570,7 +603,12 @@ async def access(request):
         )
         if search:
             user_query = user_query.where(
-                or_(User.email.ilike(f"%{search}%"), FloristProfile.business_name.ilike(f"%{search}%"))
+                or_(
+                    User.email.ilike(f"%{search}%"),
+                    User.full_name.ilike(f"%{search}%"),
+                    FloristProfile.contact_name.ilike(f"%{search}%"),
+                    FloristProfile.business_name.ilike(f"%{search}%"),
+                )
             )
         if role in {"admin", "staff", "florist"}:
             user_query = user_query.where(User.role == role)
@@ -612,6 +650,33 @@ async def access(request):
     )
 
 
+@bp.get("/access/<pk:int>")
+async def manage_user(request, pk: int):
+    """Show a single account with the same settings navigation as self-service."""
+    actor = await _user(request)
+    if not actor or actor.role != "admin":
+        return json({"detail": "Admin permission required."}, status=403)
+    if pk == actor.id:
+        return redirect("/admin/security/")
+    async with session_scope() as db:
+        target = await db.scalar(select(User).options(selectinload(User.profile)).where(User.id == pk))
+        if not target:
+            return json({"detail": "Account not found."}, status=404)
+        actions = _row_actions(target, target.profile)
+    selected = str(request.args.get("action", "name"))
+    if selected not in {value for value, _, _ in actions}:
+        selected = "name"
+    return _page(
+        request,
+        template=_template_for(actor, "manage"),
+        mode="manage",
+        user=actor,
+        target=target,
+        actions=actions,
+        selected=selected,
+    )
+
+
 @bp.post("/access")
 async def manage_access(request):
     """Admin-mediated lifecycle; serialized admin rows guard the last-admin invariant."""
@@ -633,22 +698,34 @@ async def manage_access(request):
         link_email = ""
         if action == "invite":
             email = str(request.form.get("email", "")).strip().lower()
+            full_name = str(request.form.get("full_name", "")).strip()
+            role = str(request.form.get("role", "staff"))
+            business = str(request.form.get("business_name", "")).strip()
+            if not full_name or len(full_name) > 200:
+                return json({"detail": "Enter a full name of up to 200 characters."}, status=400)
+            if role not in {"admin", "staff", "florist"}:
+                return json({"detail": "Choose a valid account role."}, status=400)
+            if role == "florist" and (not business or len(business) > 200):
+                return json({"detail": "Enter a business name of up to 200 characters."}, status=400)
             if not valid_email(email) or await db.scalar(select(User.id).where(User.email == email)):
                 return json({"detail": "Unable to invite this address."}, status=400)
             user = User(
                 email=email,
+                full_name=full_name,
                 password_hash=hash_password(secrets.token_urlsafe(40)),
-                role="staff",
-                is_admin=True,
+                role=role,
+                is_admin=role != "florist",
                 is_active=False,
             )
             db.add(user)
             await db.flush()
+            if role == "florist":
+                db.add(FloristProfile(user_id=user.id, contact_name=full_name, business_name=business))
             token = issue_token(db, user, "invite")
             queue_mail(
                 db,
                 email,
-                "Staff Invitation",
+                "Account Invitation",
                 "Set up your password within 30 minutes, then sign in. Authenticator setup is optional:\n"
                 + public_link(f"/admin/security/reset?kind=invite&token={token}"),
                 challenge=True,
@@ -665,7 +742,14 @@ async def manage_access(request):
             if user.role == "admin" and user.is_active and len(active_admins) <= 1 and action in {"suspend", "staff"}:
                 return json({"detail": "The last active admin must be retained."}, status=400)
             profile = await db.scalar(select(FloristProfile).where(FloristProfile.user_id == user.id))
-            if action in {"approve", "deny"}:
+            if action == "name":
+                full_name = str(request.form.get("full_name", "")).strip()
+                if not full_name or len(full_name) > 200:
+                    return json({"detail": "Enter a full name of up to 200 characters."}, status=400)
+                user.full_name = full_name
+                if profile:
+                    profile.contact_name = full_name
+            elif action in {"approve", "deny"}:
                 if not profile:
                     return json({"detail": "Florist application required."}, status=400)
                 if profile.application_state == ("approved" if action == "approve" else "denied"):
@@ -689,14 +773,14 @@ async def manage_access(request):
                 user.mfa_last_step = 0
                 user.recovery_codes = []
             elif action == "reinvite":
-                if user.role != "staff" or user.is_active:
-                    return json({"detail": "Only inactive staff can be reinvited."}, status=400)
+                if user.is_active:
+                    return json({"detail": "Only inactive accounts can be reinvited."}, status=400)
                 user.security_version += 1
                 token = issue_token(db, user, "invite")
                 queue_mail(
                     db,
                     user.email,
-                    "Staff Invitation",
+                    "Account Invitation",
                     "Set up within 30 minutes:\n" + public_link(f"/admin/security/reset?kind=invite&token={token}"),
                     challenge=True,
                 )
@@ -776,6 +860,7 @@ async def review_privacy(request, pk: int):
             orders = (await db.scalars(select(Order).where(Order.customer_id == user.id))).all()
             item.snapshot = {
                 "email": user.email,
+                "full_name": user.full_name,
                 "profile": {
                     field: getattr(profile, field)
                     for field in ("contact_name", "business_name", "phone", "website", "about_work")
@@ -796,6 +881,7 @@ async def review_privacy(request, pk: int):
                 "Legally required transaction records remain retained.",
             )
             user.email = f"deleted-{user.id}@accounts.invalid"
+            user.full_name = ""
             user.password_hash = hash_password(secrets.token_urlsafe(40))
             user.mfa_secret = user.mfa_pending = ""
             user.recovery_codes = []

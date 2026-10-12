@@ -112,6 +112,128 @@ async def access(data):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["admin", "staff", "florist"])
+async def test_named_account_invitations(role):
+    await admin_session()
+    _, response = await access(
+        {
+            "action": "invite",
+            "role": role,
+            "email": "june@example.com",
+            "full_name": " June Flowers ",
+            "business_name": "June Studio",
+        }
+    )
+    assert response.status == 302
+    async with session_scope() as db:
+        user = await db.scalar(select(User).where(User.email == "june@example.com"))
+        assert user.full_name == "June Flowers" and user.role == role
+        assert user.is_admin == (role != "florist") and not user.is_active
+        profile = await db.scalar(select(FloristProfile).where(FloristProfile.user_id == user.id))
+        if role == "florist":
+            assert profile.contact_name == user.full_name
+            assert profile.business_name == "June Studio" and not profile.approved
+        else:
+            assert profile is None
+        uid = user.id
+    _, activation = await reset_token(await token_for(uid, "invite"), kind="invite")
+    assert activation.status == 200
+    async with session_scope() as db:
+        assert (await db.get(User, uid)).is_active
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {},
+        {"full_name": " "},
+        {"full_name": "x" * 201},
+        {"full_name": "June", "role": "owner"},
+        {"full_name": "June", "role": "florist"},
+    ],
+)
+async def test_invitation_requires_valid_name_role_and_florist_business(fields):
+    await admin_session()
+    _, response = await access({"action": "invite", "email": "june@example.com", **fields})
+    assert response.status == 400
+    async with session_scope() as db:
+        assert await db.scalar(select(User.id).where(User.email == "june@example.com")) is None
+
+
+@pytest.mark.asyncio
+async def test_user_management_uses_settings_pages_and_preserves_action_on_error():
+    await admin_session()
+    uid = await make_user(role="staff")
+    _, listing = await app.asgi_client.get("/admin/security/access")
+    assert f'href="/admin/security/access/{uid}"' in listing.text
+    assert "<dialog" not in listing.text and 'name="full_name"' in listing.text
+    _, page = await app.asgi_client.get(f"/admin/security/access/{uid}?action=temp_password")
+    assert page.status == 200 and 'aria-label="User account settings"' in page.text
+    assert '<input type="hidden" name="action" value="temp_password">' in page.text
+    assert 'name="password_confirm"' in page.text and "<select" not in page.text
+    _, fallback = await app.asgi_client.get(f"/admin/security/access/{uid}?action=not-an-action")
+    assert '<input type="hidden" name="action" value="name">' in fallback.text
+    _, error = await app.asgi_client.post(
+        "/admin/security/access",
+        data={
+            "csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE),
+            "user_id": uid,
+            "action": "temp_password",
+            "reason": "Verified contact",
+            "password": "too-short",
+        },
+        headers={"Accept": "text/html"},
+    )
+    assert error.status == 400 and 'value="temp_password"' in error.text
+    assert ">Verified contact</textarea>" in error.text
+    assert 'value="too-short"' not in error.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["admin", "staff", "florist"])
+async def test_admin_can_set_and_search_full_names(role):
+    await admin_session()
+    uid = await make_user(role=role, email="target@example.com")
+    _, response = await access({"action": "name", "user_id": uid, "full_name": "June Flowers"})
+    assert response.status == 302
+    async with session_scope() as db:
+        target = await db.get(User, uid)
+        assert target.full_name == "June Flowers" and target.security_version == 1
+        if role == "florist":
+            profile = await db.scalar(select(FloristProfile).where(FloristProfile.user_id == uid))
+            assert profile.contact_name == "June Flowers"
+        assert await db.scalar(select(SecurityEvent).where(SecurityEvent.action == "access_name"))
+    _, page = await app.asgi_client.get("/admin/security/access?q=June+Flowers")
+    assert "June Flowers" in page.text and "target@example.com" in page.text
+
+
+@pytest.mark.asyncio
+async def test_management_page_rejects_staff_and_redirects_own_account():
+    uid = await admin_session()
+    _, own = await app.asgi_client.get(f"/admin/security/access/{uid}")
+    assert own.status == 302 and own.headers["location"] == "/admin/security/"
+    _, missing = await app.asgi_client.get("/admin/security/access/99999")
+    assert missing.status == 404
+    app.asgi_client.cookies.clear()
+    await admin_session(role="staff")
+    _, denied = await app.asgi_client.get(f"/admin/security/access/{uid}")
+    assert denied.status == 403
+
+
+@pytest.mark.asyncio
+async def test_self_service_full_name_keeps_florist_contact_in_sync():
+    uid = await make_user()
+    app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
+    _, response = await change({"action": "name", "full_name": "June Flowers"})
+    assert response.status == 200
+    async with session_scope() as db:
+        assert (await db.get(User, uid)).full_name == "June Flowers"
+        profile = await db.scalar(select(FloristProfile).where(FloristProfile.user_id == uid))
+        assert profile.contact_name == "June Flowers"
+
+
+@pytest.mark.asyncio
 async def test_legacy_signed_cookie_is_rejected_and_logout_revokes_copies():
     uid = await make_user()
     legacy = URLSafeTimedSerializer(get_settings().secret_key, salt="honey-summer-session").dumps({"uid": uid})
@@ -512,7 +634,7 @@ async def test_password_reset_does_not_remove_operator_mfa():
 @pytest.mark.asyncio
 async def test_invite_activation_reuse_and_staff_least_privilege():
     await admin_session()
-    _, invite = await access({"action": "invite", "email": "staff@example.com"})
+    _, invite = await access({"action": "invite", "email": "staff@example.com", "full_name": "June Flowers"})
     assert invite.status == 302
     # Invitation body is cleared after acceptance, so capture the independently issued challenge here.
     async with session_scope() as db:
@@ -766,7 +888,7 @@ async def test_reauth_extends_window_and_returns_to_the_admin_page():
     )
     assert response.status == 302 and response.headers["location"] == "/admin/security/access"
     # The refreshed window unblocks a previously rejected sensitive change.
-    _, allowed = await access({"action": "invite", "email": "rebooted@example.com"})
+    _, allowed = await access({"action": "invite", "email": "rebooted@example.com", "full_name": "June Flowers"})
     assert allowed.status == 302
     async with session_scope() as db:
         row = await db.get(AccountSession, token_digest(app.asgi_client.cookies.get(ADMIN_COOKIE)))

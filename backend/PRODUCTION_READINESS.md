@@ -314,8 +314,42 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
 
 ## F. Deployed account security — Phase 11
 
+- Staging F2 spot-check — October 12, 2026: in Chrome DevTools the admin session
+  cookie was observed with Secure, HttpOnly, SameSite=Lax and Path=/; CSRF cookies
+  were Secure/HttpOnly, with the admin CSRF cookie SameSite=Lax and security CSRF
+  cookie SameSite=Strict. A same-origin POST to `/admin/logout` with a deliberately
+  invalid CSRF token returned HTTP 403 (`Invalid CSRF token`) and did not sign out
+  the session. A valid staging logout returned HTTP 302 to the login page; its
+  response cleared the admin cookie (empty response-cookie value), and the cookie
+  was absent from browser storage afterward. Unauthenticated requests to staging
+  admin/API paths were redirected
+  by Cloudflare Access. A browser request from `https://example.com` to a
+  deliberately nonexistent staging API probe path returned HTTP 403; the browser
+  reported no `Access-Control-Allow-Origin` header and blocked response access.
+  This verifies denial of that cross-origin mutation, not the complete CORS policy
+  or valid same-origin form behavior. Read-only Railway staging inspection found
+  no `TRUSTED_PROXY_CIDRS` service variable or shared variable. With the setting
+  empty, the application ignores `X-Forwarded-For` for security-context hashing
+  and hashes the direct peer address instead; this is spoof-resistant but does not
+  establish per-client IP attribution through the deployed proxy. Confirm the
+  platform's trusted proxy ranges and exercise forwarding behavior before enabling
+  any allowlist. Full cookie lifecycle remains open. Cookie values were not
+  recorded.
+
 - [ ] F1 — Source-phase implementation, permission matrix, local adversarial tests/security review and admin recovery/break-glass instructions completed first.
 - [ ] F2 — Real proxy preserves Secure/HttpOnly/SameSite cookie flags/scope, CSRF/Origin/CORS protections and trusted forwarding/IP handling.
+- Staging F3 anonymous check — October 12, 2026: after the application admin
+  session cookie was confirmed absent following logout, opening `/admin/` showed
+  the login page rather than the dashboard. While signed out, `/wholesale` showed
+  the sign-in/request-access form and no wholesale catalogue or prices. These
+  verify the anonymous admin and florist boundaries. The existing approved
+  staging florist account then signed in successfully and reached its wholesale
+  home; no stems were listed, so catalogue/pricing authorization and purchase
+  behavior could not be exercised. Florist sign-out returned to the sign-in form,
+  which remained after reload. Staff role access, cross-worker revocation,
+  rotation and expiry remain unverified. A read-only staging Users review showed
+  only the existing admin and florist test account; no staff test account exists,
+  so staff permission checks are blocked pending approval to provision one.
 - [ ] F3 — Roles/approval/active state, revocation across workers, session rotation and idle/absolute expiry verified for anonymous/florist/staff/admin access.
 - [ ] F4 — Rate limits, enumeration resistance, single-use/expired/replayed reset/invite tokens, reauthentication, admin/staff MFA and recovery verified against deployment.
 - [ ] F5 — Redacted audit events, security/privilege/mail alerts, privacy/retention/export handling and admin incident response exercised.

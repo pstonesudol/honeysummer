@@ -1,0 +1,47 @@
+{% set descriptions = {
+  'name': 'Keep the person’s full name up to date. For florists, this also updates their contact name.',
+  'approve': 'Approve this business for wholesale access. The account must also be active to order.',
+  'deny': 'Deny wholesale access without deleting the account or its order history.',
+  'admin': 'Give this staff member full administrative access, including user and financial management.',
+  'staff': 'Limit this account to staff access for orders and fulfillment.',
+  'suspend': 'Disable sign-in and revoke existing browser sessions. Order history is retained.',
+  'reactivate': 'Allow this account to sign in again. Wholesale approval is unchanged.',
+  'reinvite': 'Email a fresh, single-use setup link that activates the account when accepted. The link expires in 30 minutes.',
+  'revoke': 'Sign this user out of every browser. They can sign in again with their credentials.',
+  'reset_mfa': 'Remove the authenticator and recovery codes. Verify the person’s identity through an established contact first.',
+  'password': 'Email a single-use password reset link and display it for secure hand-off. The link expires in 30 minutes.',
+  'temp_password': 'Set a temporary password. The user must choose a new password on their next sign-in. Share it through a verified channel, not in the recorded reason.'
+} %}
+<nav class="security-tabs" aria-label="Security areas"><a href="/admin/security/">My security</a><a href="/admin/security/access" aria-current="page">Users &amp; access</a><a href="/admin/activity">Activity</a></nav>
+<a class="security-back" href="/admin/security/access">‹ Back to users</a>
+{% set name = target.full_name or (target.profile.contact_name if target.profile else '') or target.email %}
+<div class="security-summary">
+  <div class="security-identity"><span class="security-avatar" aria-hidden="true">{{ name[0]|upper }}</span><div><strong>{{ name }}</strong><span class="security-caption">{{ target.email }} · {{ target.role|capitalize }} account</span>{% if target.profile %}<span class="security-caption">{{ target.profile.business_name }} · Wholesale {{ target.profile.application_state }}</span>{% endif %}</div></div>
+  <span class="security-status">{{ 'Active' if target.is_active else 'Inactive' }} · Two-step verification {{ 'on' if target.mfa_secret else 'off' }}</span>
+</div>
+<div class="security-layout">
+<nav class="security-settings" aria-label="User account settings">
+{% for group, values in [('Profile', ['name']), ('Access & roles', ['approve', 'deny', 'admin', 'staff', 'suspend', 'reactivate', 'reinvite']), ('Sign-in & protection', ['password', 'temp_password', 'reset_mfa']), ('Sessions', ['revoke'])] %}
+<div class="security-group"><p class="security-group-label">{{ group }}</p>
+{% for value, title, kind in actions %}{% if value in values %}
+<a class="security-setting{% if selected == value %} is-selected{% endif %}{% if kind == 'danger' %} security-setting--danger{% endif %}" href="/admin/security/access/{{ target.id }}?action={{ value }}"{% if selected == value %} aria-current="page"{% endif %}><span>{{ title }}</span><span aria-hidden="true">›</span></a>
+{% endif %}{% endfor %}
+</div>
+{% endfor %}
+</nav>
+{% for value, title, kind in actions %}{% if selected == value %}
+<form class="security-detail" method="post" action="/admin/security/access" data-native-submit aria-labelledby="security-detail-title">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="user_id" value="{{ target.id }}"><input type="hidden" name="action" value="{{ value }}">
+<div class="security-detail-head"><span class="security-group-label">Manage account</span><h2 id="security-detail-title">{{ title }}</h2><p>{{ descriptions[value] }}</p></div>
+{% if value == 'name' %}
+<label for="full_name">Full name</label><input id="full_name" name="full_name" value="{{ form_values.get('full_name', '') if form_values is defined else (target.full_name or (target.profile.contact_name if target.profile else '')) }}" maxlength="200" autocomplete="name" required>
+{% elif value == 'temp_password' %}
+<label for="password">New temporary password</label><input id="password" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required>
+<small class="security-caption">Use at least 12 characters.</small>
+<label for="password_confirm">Confirm temporary password</label><input id="password_confirm" name="password_confirm" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required>
+{% endif %}
+<div class="security-proof"><label for="reason">Recorded reason</label><textarea id="reason" name="reason" rows="3" required maxlength="2000" aria-describedby="reason-hint">{{ form_values.get('reason', '') if form_values is defined else '' }}</textarea><small id="reason-hint" class="security-caption">Record the decision or identity verification, never passwords or security codes.</small></div>
+<div class="security-detail-footer"><button class="security-submit{% if kind == 'danger' %} security-submit--danger{% endif %}">{{ 'Save full name' if value == 'name' else title }}</button><span class="security-caption">Changes are securely recorded.{% if value != 'password' %} Existing sessions will be revoked.{% endif %}</span></div>
+</form>
+{% endif %}{% endfor %}
+</div>

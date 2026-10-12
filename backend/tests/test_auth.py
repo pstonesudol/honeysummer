@@ -50,6 +50,7 @@ async def test_signup_creates_unapproved_profile_and_notifies_the_farm(sent):
         result = await session.execute(select(User).options(selectinload(User.profile)))
         user = result.scalar_one()
     assert user.email == "new@example.com"
+    assert user.full_name == "Jamie Rivera"
     assert user.profile.approved is False
     assert user.profile.business_name == "Fern & Fig"
     assert user.profile.contact_name == "Jamie Rivera"
