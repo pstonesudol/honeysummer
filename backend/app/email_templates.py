@@ -28,7 +28,7 @@ def logo_attachment() -> dict:
     }
 
 
-def render_email(*, title: str, body: str, order: dict | None = None) -> str:
+def render_email(*, title: str, body: str, order: dict | None = None, secure_links: bool = False) -> str:
     """Render branded HTML without changing the plain-text delivery fallback."""
     settings = get_settings()
     return _templates.get_template("order.html" if order is not None else "message.html").render(
@@ -39,4 +39,5 @@ def render_email(*, title: str, body: str, order: dict | None = None) -> str:
         site_url=settings.public_origin.rstrip("/"),
         contact_email=settings.inquiry_notification_email,
         order=order,
+        secure_links=secure_links,
     )

@@ -247,7 +247,25 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   the message was still classified as junk (SCL 5). No explicit DMARC record is
   published for the staging sending subdomain. Authentication-result review is
   complete; optional staging DMARC monitoring, spam placement/reputation work,
-  Resend event review, and broader email workflow coverage remain open.
+  Resend event review, and broader email workflow coverage remain open. A later
+  inquiry-email attempt was blocked by required form controls in browser
+  automation; read-only database count remained zero, so no inquiry or additional
+  email was created/sent. On October 12, 2026, a user-submitted staging contact
+  inquiry failed in the storefront-to-backend fetch before Railway received it;
+  redacted Worker diagnostics recorded a TypeError at the fetch stage with the
+  staging API URL and origin credential present. The server action was changed
+  to use the configured Worker self-service proxy and deployed to staging as
+  `9851eccb-5def-4819-8c47-ab4f26519400`; the subsequent inquiry reached Railway
+  with HTTP 201. Staging persisted provider outcomes as accepted for both the
+  customer acknowledgment and farm notification. A Resend dashboard screenshot
+  showed both messages as `Delivered`; the user also confirmed the customer
+  confirmation arrived. `Delivered` confirms recipient-server acceptance, not
+  inbox placement, so farm-mailbox placement remains unconfirmed. A subsequent
+  controlled staging wholesale approval showed the account active/approved and
+  Resend reported `Delivered` for the account-access update and administrative
+  notification. These statuses verify provider acceptance, not mailbox placement.
+  Invoice-related emails, link/reply-to review, and broader Resend event/workflow
+  coverage remain open.
 - Zero Trust Free activated by the user. Staging CI service-token secret names
   confirmed present in GitHub, with raw values kept private. Preparing fixed-origin,
   no-redirect Access-authenticated smoke requests and stripping Access credentials
