@@ -364,10 +364,11 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   staging florist account then signed in successfully and reached its wholesale
   home; no stems were listed, so catalogue/pricing authorization and purchase
   behavior could not be exercised. Florist sign-out returned to the sign-in form,
-  which remained after reload. Staff role access, cross-worker revocation,
-  rotation and expiry remain unverified. A read-only staging Users review showed
-  only the existing admin and florist test account; no staff test account exists,
-  so staff permission checks are blocked pending approval to provision one.
+  which remained after reload. A dedicated staging staff test account was then
+  created: sign-in reached the orders area, `/admin/orders/preparation` was
+  accessible, and `/admin/security/access` was denied. No orders were changed.
+  Cross-worker revocation, session rotation and idle/absolute expiry remain
+  unverified.
 - [ ] F3 — Roles/approval/active state, revocation across workers, session rotation and idle/absolute expiry verified for anonymous/florist/staff/admin access.
 - [ ] F4 — Rate limits, enumeration resistance, single-use/expired/replayed reset/invite tokens, reauthentication, admin/staff MFA and recovery verified against deployment.
 - [ ] F5 — Redacted audit events, security/privilege/mail alerts, privacy/retention/export handling and admin incident response exercised.

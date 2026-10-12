@@ -10,7 +10,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import Blueprint
 from sanic.response import html, json, redirect
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -44,7 +44,7 @@ from .security import (
     valid_email,
     verify_mfa,
 )
-from .security_models import AccountSession, PrivacyRequest, SecurityEvent, SecurityMail
+from .security_models import AccountSession, AccountToken, PrivacyRequest, SecurityEvent, SecurityMail
 from .settings import BASE_DIR, get_settings
 
 bp = Blueprint("security", url_prefix="/admin/security")
@@ -230,6 +230,7 @@ async def admin_mfa(request):
         if (
             not user
             or not user.is_active
+            or user.deleted_at
             or user.role not in {"admin", "staff"}
             or not user.mfa_secret
             or user.security_version != challenge["version"]
@@ -310,7 +311,12 @@ async def reset(request):
             if not row:
                 return _page(request, mode="reset", error="Invalid, expired or already used link.", status=400)
             user = await db.scalar(select(User).where(User.id == row.user_id).with_for_update())
-            if not user or user.security_version != row.version or (not user.is_active and kind != "invite"):
+            if (
+                not user
+                or user.deleted_at
+                or user.security_version != row.version
+                or (not user.is_active and kind != "invite")
+            ):
                 return _page(request, mode="reset", error="Invalid or expired link.", status=400)
             if kind == "email":
                 old_email = user.email
@@ -549,6 +555,8 @@ async def account_change(request):
 
 def _row_actions(account, profile) -> list[tuple[str, str, str]]:
     """List the access actions valid for a single account row as (value, label, kind)."""
+    if account.deleted_at:
+        return []
     actions: list[tuple[str, str, str]] = [("name", "Full name", "quiet")]
     if account.role == "florist":
         if profile and profile.application_state != "approved":
@@ -580,6 +588,8 @@ def _row_actions(account, profile) -> list[tuple[str, str, str]]:
     if account.is_active:
         actions.append(("password", "Send password reset", "quiet"))
         actions.append(("temp_password", "Set temporary password", "quiet"))
+    if account.role in {"admin", "staff"}:
+        actions.append(("delete", "Delete account", "danger"))
     return actions
 
 
@@ -598,6 +608,7 @@ async def access(request):
             select(User)
             .options(selectinload(User.profile))
             .outerjoin(FloristProfile, FloristProfile.user_id == User.id)
+            .where(User.deleted_at.is_(None))
             .order_by(User.id.desc())
             .limit(200)
         )
@@ -660,7 +671,7 @@ async def manage_user(request, pk: int):
         return redirect("/admin/security/")
     async with session_scope() as db:
         target = await db.scalar(select(User).options(selectinload(User.profile)).where(User.id == pk))
-        if not target:
+        if not target or target.deleted_at:
             return json({"detail": "Account not found."}, status=404)
         actions = _row_actions(target, target.profile)
     selected = str(request.args.get("action", "name"))
@@ -692,7 +703,13 @@ async def manage_access(request):
     async with session_scope() as db:
         admins = (await db.scalars(select(User).where(User.role == "admin").order_by(User.id).with_for_update())).all()
         current_actor = next((u for u in admins if u.id == actor.id), None)
-        if not current_actor or not current_actor.is_active or current_actor.security_version != actor.security_version:
+        if (
+            not current_actor
+            or not current_actor.is_active
+            or not current_actor.is_admin
+            or current_actor.deleted_at
+            or current_actor.security_version != actor.security_version
+        ):
             return json({"detail": "Admin session revoked. Sign in again."}, status=403)
         link = ""
         link_email = ""
@@ -736,10 +753,17 @@ async def manage_access(request):
             except ValueError:
                 return json({"detail": "Choose an account."}, status=400)
             user = await db.scalar(select(User).where(User.id == uid).with_for_update())
-            if not user or user.id == actor.id:
+            if not user or user.deleted_at:
+                return json({"detail": "Account not found."}, status=404)
+            if user.id == actor.id:
                 return json({"detail": "Cannot change your own access here."}, status=400)
-            active_admins = [u for u in admins if u.is_active]
-            if user.role == "admin" and user.is_active and len(active_admins) <= 1 and action in {"suspend", "staff"}:
+            active_admins = [u for u in admins if u.is_active and u.is_admin and not u.deleted_at]
+            if (
+                user.role == "admin"
+                and user.is_active
+                and len(active_admins) <= 1
+                and action in {"suspend", "staff", "delete"}
+            ):
                 return json({"detail": "The last active admin must be retained."}, status=400)
             profile = await db.scalar(select(FloristProfile).where(FloristProfile.user_id == user.id))
             if action == "name":
@@ -757,6 +781,21 @@ async def manage_access(request):
                 profile.approved = action == "approve"
                 profile.application_state = "approved" if action == "approve" else "denied"
                 profile.decision_reason = reason
+            elif action == "delete":
+                if user.role not in {"admin", "staff"}:
+                    return json({"detail": "Only admin or staff accounts can be deleted here."}, status=400)
+                confirmation = str(request.form.get("confirm_email", "")).strip().lower()
+                if confirmation != user.email.lower():
+                    return json({"detail": "Enter the account email to confirm deletion."}, status=400)
+                user.deleted_at = datetime.now(UTC)
+                user.is_active = False
+                user.password_hash = hash_password(secrets.token_urlsafe(40))
+                user.must_change_password = False
+                user.mfa_secret = user.mfa_pending = ""
+                user.mfa_last_step = 0
+                user.recovery_codes = []
+                await db.execute(delete(AccountSession).where(AccountSession.user_id == user.id))
+                await db.execute(delete(AccountToken).where(AccountToken.user_id == user.id))
             elif action in {"suspend", "reactivate"}:
                 user.is_active = action == "reactivate"
             elif action in {"staff", "admin"}:

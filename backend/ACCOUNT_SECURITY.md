@@ -12,6 +12,7 @@ Implemented October 10, 2026. This is local implementation evidence, **not deplo
 | Read order details/packing slips/preparation; update fulfillment | No | No | No | Yes | Yes |
 | Inventory/catalogue/content/inquiries/quotes/payments/refunds/reports | No | No | No | No | Yes |
 | Approve/deny, invite, suspend/reactivate, revoke, roles, privacy decisions/audit | No | No | No | No | Yes |
+| Delete other admin/staff accounts | No | No | No | No | Yes |
 
 All account routes enforce roles on the backend. Staff cannot create manual orders, refund, manage accounts, export reports or edit catalogue/content. Their landing page is Orders, not the financial dashboard. Staff do see order prices/contact/fulfillment details necessary for preparation; do not invite people who should not see those records. `is_active` is independent from florist approval. Suspension retains financial history and invalidates existing sessions. Guests do not receive login accounts.
 
@@ -25,6 +26,15 @@ All account routes enforce roles on the backend. Staff cannot create manual orde
 6. Deletion/export requests enter an admin review queue. Verify identity and record the legal-retention decision. Deletion disables/anonymizes the account profile, but **never deletes order, invoice, payment or audit history**. Reviewed exports provide contact/order summaries; admins must assemble additional retained order/inquiry/correspondence/media records through the existing workspaces when required. Do not call the summary a comprehensive statutory export. Deliver exports through a verified private channel, not a public link.
 
 ## Sessions, browser/proxy contract and passwords
+
+Admins can select **Delete account** in another admin/staff user's management page. Deletion requires
+recent authentication, the target email as confirmation, and a recorded reason. Self-deletion and removal
+of the last active admin are blocked. Deleted accounts disappear from Users and cannot be reactivated,
+reinvited, or recovered through the offline admin recovery tool. Sessions and invitation/reset tokens are
+removed, credentials and MFA are cleared, and the change is audited and emailed. This is permanent soft
+deletion: historical account identity, financial records, and audit references remain intact. The email
+remains reserved; use suspension instead when access may need to be restored. Florist deletion continues
+through the existing privacy-review workflow.
 
 Accounts with MFA enabled can select **Turn off two-step verification** at `/admin/security/`.
 This requires the current password and a valid authenticator or unused recovery code, clears the
@@ -68,6 +78,9 @@ uv run python -m app.security_maintenance --apply  # retry mail and prune expire
 4. Suspected compromise: suspend or revoke target sessions, preserve audit/financial records, review hosting access, reset credentials/recovery codes, check pending invitations/email changes, then reactivate only after identity review. Notify affected contacts via verified channels. Password reset does not auto-unsuspend an account.
 
 ## Migration, retention and review
+
+Migration `d4a7b0c3e6f9` adds `users.deleted_at` for operator deletion. Apply
+`uv run alembic upgrade head` before running this version.
 
 Migration `c3f6a9b2d5e8` adds `users.full_name` and backfills it from existing florist contact names. Existing operator names remain blank until explicitly set; email remains the display fallback. Apply `uv run alembic upgrade head` before running this version. Account deletion review also clears the stored full name.
 
