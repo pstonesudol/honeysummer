@@ -255,8 +255,12 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   customer acknowledgment and farm notification. A Resend dashboard screenshot
   showed both messages as `Delivered`; the user also confirmed the customer
   confirmation arrived. `Delivered` confirms recipient-server acceptance, not
-  inbox placement, so farm-mailbox placement and broader Resend event review remain
-  open along with wholesale/invoice email workflows.
+  inbox placement, so farm-mailbox placement remains unconfirmed. A subsequent
+  controlled staging wholesale approval showed the account active/approved and
+  Resend reported `Delivered` for the account-access update and administrative
+  notification. These statuses verify provider acceptance, not mailbox placement.
+  Invoice-related emails, link/reply-to review, and broader Resend event/workflow
+  coverage remain open.
 - Zero Trust Free activated by the user. Staging CI service-token secret names
   confirmed present in GitHub, with raw values kept private. Preparing fixed-origin,
   no-redirect Access-authenticated smoke requests and stripping Access credentials
