@@ -358,15 +358,16 @@ async def test_enrolled_operator_still_requires_authenticator_after_password():
     await app.asgi_client.get("/admin/security/mfa")
     async with session_scope() as db:
         secret = decrypt((await db.get(User, uid)).mfa_secret)
+    code = pyotp.TOTP(secret).now()
     _, complete = await app.asgi_client.post(
         "/admin/security/mfa",
-        data={"csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE), "code": pyotp.TOTP(secret).now()},
+        data={"csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE), "code": code},
     )
     assert complete.status == 302 and app.asgi_client.cookies.get(ADMIN_COOKIE)
     _, dashboard = await app.asgi_client.get("/admin/")
     assert dashboard.status == 200
     async with session_scope() as db:
-        assert not verify_mfa(await db.get(User, uid), pyotp.TOTP(secret).now())  # No timestep replay.
+        assert not verify_mfa(await db.get(User, uid), code)  # No timestep replay.
 
 
 @pytest.mark.asyncio
