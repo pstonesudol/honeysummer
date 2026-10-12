@@ -42,7 +42,7 @@ def verify_login_password(user: User | None, password: str) -> bool:
     if len(password) > 1024:
         return False
     verified = verify_password(user.password_hash if user else _dummy_password_hash, password)
-    return bool(user and user.is_active and verified)
+    return bool(user and user.is_active and not user.deleted_at and verified)
 
 
 def token_digest(token: str) -> str:
@@ -58,6 +58,7 @@ async def create_session_token(user_id: int, scope: str = "florist", *, expected
         if (
             not user
             or not user.is_active
+            or user.deleted_at
             or (expected_version is not None and user.security_version != expected_version)
         ):
             raise ValueError("Inactive account.")
@@ -100,7 +101,7 @@ async def session_user(request, cookie: str, scope: str) -> User | None:
         if aware(row.last_seen_at) + idle <= now:
             return None
         user = await db.scalar(select(User).options(selectinload(User.profile)).where(User.id == row.user_id))
-        if not user or not user.is_active or user.security_version != row.version:
+        if not user or not user.is_active or user.deleted_at or user.security_version != row.version:
             return None
         row.last_seen_at = now
         request.ctx.account_session = row

@@ -17,7 +17,7 @@ from app.admin import CSRF_COOKIE as ADMIN_CSRF_COOKIE
 from app.admin_recovery import recover
 from app.auth import COOKIE_NAME, aware, create_session_token, hash_password, token_digest, verify_password
 from app.db import session_scope
-from app.models import FloristProfile, Order, User
+from app.models import AdminActivity, FloristProfile, Order, User
 from app.security import (
     context_hash,
     decrypt,
@@ -769,6 +769,108 @@ async def test_admin_self_removal_forbidden_and_suspension_preserves_history():
     async with session_scope() as db:
         assert await db.scalar(select(func.count()).select_from(Order)) == 1
         assert await db.scalar(select(SecurityEvent).where(SecurityEvent.action == "access_suspend"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["admin", "staff"])
+@pytest.mark.parametrize("active", [True, False])
+async def test_admin_can_delete_operators_without_erasing_history(role, active):
+    actor = await admin_session()
+    uid = await make_user(role=role, active=active, email="target@example.com", mfa=True)
+    session = await create_session_token(uid, "admin") if active else None
+    reset = await token_for(uid, "reset" if active else "invite")
+    async with session_scope() as db:
+        db.add(AdminActivity(actor_id=uid, path="/admin/orders/1/fulfillment", status_code=302))
+        db.add(SecurityEvent(actor_id=uid, target_id=actor, action="historical", outcome="success"))
+        db.add(Order(customer_id=uid, status="paid"))
+        await db.commit()
+    _, page = await app.asgi_client.get(f"/admin/security/access/{uid}?action=delete")
+    assert page.status == 200 and 'name="action" value="delete"' in page.text
+    assert 'name="confirm_email"' in page.text and "This cannot be undone" in page.text
+    _, deleted = await access({"action": "delete", "user_id": uid, "confirm_email": "target@example.com"})
+    assert deleted.status == 302
+    async with session_scope() as db:
+        user = await db.get(User, uid)
+        assert user.deleted_at and not user.is_active and user.security_version == 1
+        assert not verify_password(user.password_hash, PASSWORD)
+        assert not user.mfa_secret and not user.recovery_codes
+        assert not await db.scalar(select(AccountSession).where(AccountSession.user_id == uid))
+        assert not await db.scalar(select(AccountToken).where(AccountToken.user_id == uid))
+        assert await db.scalar(select(AdminActivity).where(AdminActivity.actor_id == uid))
+        assert await db.scalar(select(SecurityEvent).where(SecurityEvent.action == "historical"))
+        assert (await db.scalar(select(Order))).customer_id == uid
+        event = await db.scalar(select(SecurityEvent).where(SecurityEvent.action == "access_delete"))
+        assert event.actor_id == actor and event.target_id == uid and event.reason == "Verified by admin"
+    _, listing = await app.asgi_client.get("/admin/security/access")
+    assert "target@example.com" not in listing.text
+    _, missing = await app.asgi_client.get(f"/admin/security/access/{uid}")
+    assert missing.status == 404
+    for action in ("reactivate", "reinvite", "delete"):
+        _, rejected = await access({"action": action, "user_id": uid, "confirm_email": "target@example.com"})
+        assert rejected.status == 404
+    _, link = await reset_token(reset, kind="reset" if active else "invite")
+    assert link.status == 400
+    with pytest.raises(ValueError):
+        await create_session_token(uid, "admin")
+    if role == "admin":
+        with pytest.raises(ValueError):
+            await recover("target@example.com", PASSWORD, "Offline review")
+    if session:
+        app.asgi_client.cookies.clear()
+        app.asgi_client.cookies.set(ADMIN_COOKIE, session)
+        _, blocked = await app.asgi_client.get("/admin/security/")
+        assert blocked.status == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["staff", "florist", "anonymous"])
+async def test_operator_deletion_is_admin_only(role):
+    target = await make_user(role="admin", email="target@example.com")
+    if role == "staff":
+        await admin_session(role="staff")
+    elif role == "florist":
+        uid = await make_user()
+        app.asgi_client.cookies.set(COOKIE_NAME, await create_session_token(uid))
+    _, rejected = await access({"action": "delete", "user_id": target, "confirm_email": "target@example.com"})
+    assert rejected.status == 403
+    async with session_scope() as db:
+        assert not (await db.get(User, target)).deleted_at
+
+
+@pytest.mark.asyncio
+async def test_operator_deletion_requires_confirmation_reason_csrf_and_recent_admin():
+    actor = await admin_session()
+    target = await make_user(role="staff")
+    for fields, status in [
+        ({"confirm_email": "wrong@example.com"}, 400),
+        ({"confirm_email": ""}, 400),
+        ({"reason": ""}, 400),
+        ({"csrf_token": "wrong"}, 403),
+        ({"user_id": actor, "confirm_email": "admin@example.com"}, 400),
+    ]:
+        _, rejected = await access(
+            {"action": "delete", "user_id": target, "confirm_email": "staff@example.com", **fields}
+        )
+        assert rejected.status == status
+    async with session_scope() as db:
+        assert not (await db.get(User, target)).deleted_at
+        assert (await db.get(User, actor)).is_active
+        await db.execute(update(AccountSession).values(reauthenticated_at=datetime.now(UTC) - timedelta(minutes=11)))
+        await db.commit()
+    _, stale = await access({"action": "delete", "user_id": target, "confirm_email": "staff@example.com"})
+    assert stale.status == 403
+
+
+@pytest.mark.asyncio
+async def test_operator_deletion_is_not_available_for_florists():
+    await admin_session()
+    target = await make_user()
+    _, page = await app.asgi_client.get(f"/admin/security/access/{target}?action=delete")
+    assert 'name="action" value="delete"' not in page.text
+    _, rejected = await access({"action": "delete", "user_id": target, "confirm_email": "florist@example.com"})
+    assert rejected.status == 400
+    async with session_scope() as db:
+        assert not (await db.get(User, target)).deleted_at
 
 
 @pytest.mark.asyncio

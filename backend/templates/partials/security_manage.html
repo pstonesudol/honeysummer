@@ -10,7 +10,8 @@
   'revoke': 'Sign this user out of every browser. They can sign in again with their credentials.',
   'reset_mfa': 'Remove the authenticator and recovery codes. Verify the person’s identity through an established contact first.',
   'password': 'Email a single-use password reset link and display it for secure hand-off. The link expires in 30 minutes.',
-  'temp_password': 'Set a temporary password. The user must choose a new password on their next sign-in. Share it through a verified channel, not in the recorded reason.'
+  'temp_password': 'Set a temporary password. The user must choose a new password on their next sign-in. Share it through a verified channel, not in the recorded reason.',
+  'delete': 'Permanently disable this account and remove it from the users list. Sessions, invitations, and reset links will be revoked. Historical account details, financial records, and audit history are retained. This cannot be undone; use suspension for a temporary change.'
 } %}
 <nav class="security-tabs" aria-label="Security areas"><a href="/admin/security/">My account</a><a href="/admin/security/access" aria-current="page">Users &amp; access</a><a href="/admin/activity">Activity</a></nav>
 <a class="security-back" href="/admin/security/access">‹ Back to users</a>
@@ -21,7 +22,7 @@
 </div>
 <div class="security-layout">
 <nav class="security-settings" aria-label="User account settings">
-{% for group, values in [('Profile', ['name']), ('Access & roles', ['approve', 'deny', 'admin', 'staff', 'suspend', 'reactivate', 'reinvite']), ('Sign-in & protection', ['password', 'temp_password', 'reset_mfa']), ('Sessions', ['revoke'])] %}
+{% for group, values in [('Profile', ['name']), ('Access & roles', ['approve', 'deny', 'admin', 'staff', 'suspend', 'reactivate', 'reinvite']), ('Sign-in & protection', ['password', 'temp_password', 'reset_mfa']), ('Sessions', ['revoke']), ('Delete account', ['delete'])] %}
 <div class="security-group"><p class="security-group-label">{{ group }}</p>
 {% for value, title, kind in actions %}{% if value in values %}
 <a class="security-setting{% if selected == value %} is-selected{% endif %}{% if kind == 'danger' %} security-setting--danger{% endif %}" href="/admin/security/access/{{ target.id }}?action={{ value }}"{% if selected == value %} aria-current="page"{% endif %}><span>{{ title }}</span><span aria-hidden="true">›</span></a>
@@ -35,6 +36,9 @@
 <div class="security-detail-head"><span class="security-group-label">Manage account</span><h2 id="security-detail-title">{{ title }}</h2><p>{{ descriptions[value] }}</p></div>
 {% if value == 'name' %}
 <label for="full_name">Full name</label><input id="full_name" name="full_name" value="{{ form_values.get('full_name', '') if form_values is defined else (target.full_name or (target.profile.contact_name if target.profile else '')) }}" maxlength="200" autocomplete="name" required>
+{% elif value == 'delete' %}
+<label for="confirm_email">Confirm account email</label><input id="confirm_email" name="confirm_email" type="email" autocomplete="off" required aria-describedby="delete-hint">
+<small id="delete-hint" class="security-caption">Type {{ target.email }} to confirm permanent deletion.</small>
 {% elif value == 'temp_password' %}
 <label for="password">New temporary password</label><input id="password" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required>
 <small class="security-caption">Use at least 12 characters.</small>

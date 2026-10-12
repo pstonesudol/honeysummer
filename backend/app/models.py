@@ -47,6 +47,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(200), default="", server_default="")
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     role: Mapped[str] = mapped_column(String(20), default=initial_account_role)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)

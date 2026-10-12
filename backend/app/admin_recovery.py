@@ -19,7 +19,9 @@ async def recover(email: str, password: str, reason: str) -> None:
         raise ValueError(password_error(password) or "An identity-review reason is required.")
     async with session_scope() as db:
         user = await db.scalar(
-            select(User).where(User.email == email.lower().strip(), User.role == "admin").with_for_update()
+            select(User)
+            .where(User.email == email.lower().strip(), User.role == "admin", User.deleted_at.is_(None))
+            .with_for_update()
         )
         if not user:
             raise ValueError("Existing admin not found; no account was changed.")
