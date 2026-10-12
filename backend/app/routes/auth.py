@@ -80,7 +80,7 @@ async def signup(request):
         password_hash = hash_password(password)
         if await session.scalar(select(User).where(User.email == email)):
             return json({"detail": "Request received. If eligible, Isabella will review your account."}, status=201)
-        user = User(email=email, password_hash=password_hash, is_active=True)
+        user = User(email=email, full_name=contact_name, password_hash=password_hash, is_active=True)
         session.add(
             FloristProfile(
                 business_name=business,
