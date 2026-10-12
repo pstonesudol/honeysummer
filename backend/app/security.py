@@ -5,7 +5,6 @@ import base64
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
-from html import escape
 from ipaddress import ip_address, ip_network
 from urllib.parse import urlsplit
 
@@ -18,6 +17,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from . import emails
 from .auth import aware, token_digest
 from .db import session_scope
+from .email_templates import render_email
 from .models import User
 from .security_models import AccountToken, SecurityEvent, SecurityMail, SecurityThrottle
 from .settings import get_settings
@@ -203,24 +203,12 @@ async def deliver_security_mail() -> None:
                 if not get_settings().debug and not get_settings().resend_api_key:
                     raise RuntimeError("Production security mail requires Resend.")
                 if get_settings().resend_api_key:
-                    paragraphs = "".join(
-                        f'<p><a href="{escape(line, quote=True)}">Continue securely with Honey Summer</a></p>'
-                        if line.startswith(get_settings().public_origin.rstrip("/") + "/")
-                        else f"<p>{escape(line)}</p>"
-                        for line in body.split("\n")
-                        if line
-                    )
-                    markup = (
-                        '<!doctype html><html lang="en"><body style="background:#f6f2ea;color:#6a4e42;'
-                        'font-family:Arial,sans-serif;line-height:1.6"><main style="max-width:600px;padding:24px">'
-                        f"<h1>{escape(row.subject)}</h1>{paragraphs}</main></body></html>"
-                    )
                     await asyncio.to_thread(
                         emails.send_email,
                         to=row.recipient,
                         subject=row.subject,
                         body=body,
-                        html_body=markup,
+                        html_body=render_email(title=row.subject, body=body, secure_links=True),
                         idempotency_key=f"security-mail-{row.id}",
                     )
                 else:

@@ -5,8 +5,13 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 
 from app import emails
+from app.db import session_scope
+from app.models import Inquiry
+from app.security import deliver_security_mail, queue_mail
+from app.security_models import SecurityMail
 from app.settings import get_settings
 
 
@@ -114,3 +119,91 @@ def test_recipient_specific_order_send(provider):
     assert len(provider) == 1
     assert "CUSTOM-7" in provider[0][0]["html"]
     assert provider[0][0]["to"] == ["farm@example.com"]
+
+
+@pytest.mark.parametrize("kind", ["bouquet", "wedding", "contact", "wholesale"])
+def test_all_inquiry_emails_use_shared_template(provider, kind):
+    inquiry = Inquiry(
+        id=1, kind=kind, name="Dana <Bloom>", email="customer@example.com", message="Flowers & more", details={}
+    )
+    emails.send_inquiry_emails(inquiry)
+    assert len(provider) == 2
+    for (params,) in provider:
+        assert "cid:honey-summer-logo" in params["html"]
+        assert "Dana &lt;Bloom&gt;" in params["html"]
+        assert "With warmth, Honey Summer" in params["html"]
+        assert params["attachments"]
+
+
+def test_wholesale_notifications_use_shared_template(provider):
+    emails.send_signup_notification(business_name="Fern & Fig", email="customer@example.com", contact_name="Dana")
+    emails.send_wholesale_approval_email(email="customer@example.com")
+    assert len(provider) == 2
+    for (params,) in provider:
+        assert "cid:honey-summer-logo" in params["html"]
+        assert "With warmth, Honey Summer" in params["html"]
+        assert params["attachments"]
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "Account Access Updated",
+        "Reset Your Password",
+        "Confirm Email Change",
+        "Staff Invitation",
+        "Temporary Password Set",
+        "Application Received",
+        "Wholesale Application",
+        "Repeated Security Attempts",
+        "Email Changed",
+        "Account Security Updated",
+        "Password Updated",
+        "Password Changed",
+        "Email Change Requested",
+        "MFA Enabled",
+        "MFA Disabled",
+        "Recovery Codes Replaced",
+        "Administrative Access Change",
+        "Deletion Request Reviewed",
+        "Admin Recovery",
+    ],
+)
+async def test_all_security_notifications_use_shared_template(provider, subject):
+    async with session_scope() as db:
+        queue_mail(db, "customer@example.com", subject, "Account action: approve. Reason: <Approval> & review")
+        await db.commit()
+    await deliver_security_mail()
+
+    ((params, options),) = provider
+    assert params["subject"] == f"Honey Summer — {subject}"
+    assert "cid:honey-summer-logo" in params["html"]
+    assert "&lt;Approval&gt; &amp; review" in params["html"]
+    assert "With warmth, Honey Summer" in params["html"]
+    assert params["attachments"]
+    assert "<Approval> & review" in params["text"]
+    async with session_scope() as db:
+        row = await db.scalar(select(SecurityMail))
+        assert options == {"idempotency_key": f"security-mail-{row.id}"}
+        assert row.accepted_at and not row.encrypted_body
+
+
+@pytest.mark.parametrize("path", ["/wholesale", "/admin/security/reset?kind=reset&token=secret", "/admin/login"])
+async def test_security_links_remain_safe_styled_and_usable(provider, path):
+    link = "https://staging.example.com" + path
+    message = (
+        f"Use this link within 30 minutes:\n{link}\nhttps://staging.example.com.evil.test/reset\n<script>bad</script>"
+    )
+    async with session_scope() as db:
+        queue_mail(db, "customer@example.com", "Continue", message, challenge=True)
+        await db.commit()
+    await deliver_security_mail()
+
+    params = provider[0][0]
+    assert f'href="{link.replace("&", "&amp;")}"' in params["html"]
+    assert "Continue securely with Honey Summer" in params["html"]
+    assert "display:inline-block;padding:12px 20px" in params["html"]
+    assert 'href="https://staging.example.com.evil.test' not in params["html"]
+    assert "<script>" not in params["html"]
+    assert "&lt;script&gt;bad&lt;/script&gt;" in params["html"]
+    assert link in params["text"]
