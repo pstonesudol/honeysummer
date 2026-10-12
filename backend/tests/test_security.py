@@ -358,15 +358,16 @@ async def test_enrolled_operator_still_requires_authenticator_after_password():
     await app.asgi_client.get("/admin/security/mfa")
     async with session_scope() as db:
         secret = decrypt((await db.get(User, uid)).mfa_secret)
+    code = pyotp.TOTP(secret).now()
     _, complete = await app.asgi_client.post(
         "/admin/security/mfa",
-        data={"csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE), "code": pyotp.TOTP(secret).now()},
+        data={"csrf_token": app.asgi_client.cookies.get(CSRF_COOKIE), "code": code},
     )
     assert complete.status == 302 and app.asgi_client.cookies.get(ADMIN_COOKIE)
     _, dashboard = await app.asgi_client.get("/admin/")
     assert dashboard.status == 200
     async with session_scope() as db:
-        assert not verify_mfa(await db.get(User, uid), pyotp.TOTP(secret).now())  # No timestep replay.
+        assert not verify_mfa(await db.get(User, uid), code)  # No timestep replay.
 
 
 @pytest.mark.asyncio
@@ -401,7 +402,7 @@ async def test_account_can_disable_mfa_and_revoke_all_sessions(role, proof, monk
     kind = "florist" if role == "florist" else "admin"
     cookie = COOKIE_NAME if role == "florist" else ADMIN_COOKIE
     tokens = [await create_session_token(uid, kind) for _ in range(2)]
-    app.asgi_client.cookies.set(cookie, tokens[0])
+    app.asgi_client.cookies.set(cookie, tokens[0], domain="mockserver.local")
     _, page = await app.asgi_client.get("/admin/security/?action=mfa_disable")
     assert page.status == 200
     assert 'name="action" value="mfa_disable"' in page.text
@@ -412,6 +413,13 @@ async def test_account_can_disable_mfa_and_revoke_all_sessions(role, proof, monk
     code = pyotp.TOTP(secret).now() if proof == "authenticator" else recovery
     _, disabled = await change({"action": "mfa_disable", "code": code})
     assert disabled.status == 200 and "Two-step verification turned off" in disabled.text
+    assert 'class="security-confirmation"' in disabled.text
+    assert "What changed" in disabled.text and "Sign in again" in disabled.text
+    sign_in_url = "/wholesale" if role == "florist" else "/admin/login"
+    assert f'href="{sign_in_url}"' in disabled.text
+    assert 'class="admin-menu"' not in disabled.text
+    assert 'id="reauth-banner"' not in disabled.text
+    assert not app.asgi_client.cookies.get(cookie)
     async with session_scope() as db:
         user = await db.get(User, uid)
         assert not user.mfa_secret and not user.mfa_pending and not user.recovery_codes

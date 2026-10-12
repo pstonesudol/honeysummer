@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Account security · Honey Summer</title>
+<title>{% block title %}Account security · Honey Summer{% endblock %}</title>
 <style>
 body{background:#f6f2ea;color:#6a4e42;font:1rem/1.6 system-ui;margin:0}main{max-width:850px;padding:24px;margin:auto}
 form,section{background:#fff9f3;border:1px solid #c8b6a6;border-radius:14px;padding:20px;margin:20px 0}
@@ -29,6 +29,7 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 .share-box{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff9f3;border:1px solid #c8b6a6;border-radius:10px;padding:10px}.share-box code{overflow-wrap:anywhere;flex:1;min-width:200px}
 @media (max-width:760px){.utable__head{display:none}.utable__row{grid-template-columns:1fr;gap:6px;padding:14px 20px}.actions{justify-content:flex-start}}
 </style>{% include "partials/security_styles.html" %}</head><body><main>
+{% block content %}
 <a href="/">Honey Summer</a> · <a href="/wholesale">Wholesale</a> · <a href="/admin/">Admin</a>
 <h1>Account security</h1>
 {% if user and user.is_admin %}{% include "partials/reauth.html" %}{% endif %}
@@ -36,4 +37,5 @@ dialog{border:0;border-radius:16px;padding:0;width:min(520px,92vw);box-shadow:0 
 {% if message %}<p role="status">{{ message }}</p>{% endif %}
 {% include "partials/security_body.html" %}
 <p><a href="/admin/security/">Account settings</a> · <a href="/admin/security/recovery">Forgot password</a> · <a href="/admin/login">Operator sign in</a></p>
+{% endblock %}
 </main></body></html>

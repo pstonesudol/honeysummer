@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from .auth import (
+    COOKIE_NAME,
     create_session_token,
     get_current_user,
     hash_password,
@@ -499,6 +500,17 @@ async def account_change(request):
         return _page(request, template=_template_for(user, "codes"), mode="codes", codes=codes)
     if action == "mfa_start":
         return redirect("/admin/security/")
+    if action == "mfa_disable":
+        response = _page(
+            request,
+            template="mfa_disabled.html",
+            mode="mfa_disabled",
+            sign_in_url="/wholesale" if user.role == "florist" else "/admin/login",
+        )
+        response.delete_cookie("honeysummer_admin")
+        response.delete_cookie(COOKIE_NAME)
+        response.delete_cookie(PREAUTH_COOKIE)
+        return response
     return _page(request, template=_template_for(user, "done"), mode="done", message=message)
 
 
