@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{{ title }}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f6f2ea;color:#49362e;">
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">{{ preheader }}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f6f2ea" style="background-color:#f6f2ea;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <!--[if mso]><table role="presentation" width="600"><tr><td><![endif]-->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#fffdf8;border:1px solid #e6cfae;">
+        <tr><td height="6" bgcolor="#d7b3b6" style="height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>
+        <tr><td align="center" bgcolor="#fbf8f2" style="padding:32px 24px 28px;">
+          <a href="{{ site_url }}" style="color:#6a4e42;text-decoration:none;">
+            <img src="{{ logo_url }}" alt="Honey Summer" width="220" border="0" style="display:block;width:220px;max-width:100%;height:auto;color:#6a4e42;font:28px Georgia,serif;">
+          </a>
+        </td></tr>
+        <tr><td style="padding:30px 24px 32px;font:16px/1.7 Arial,Helvetica,sans-serif;overflow-wrap:anywhere;">
+          {% block content %}{% endblock %}
+        </td></tr>
+        <tr><td align="center" bgcolor="#ead4d5" style="padding:24px;font:13px/1.7 Arial,Helvetica,sans-serif;color:#49362e;">
+          <p style="margin:0 0 8px;font:22px/1.4 Georgia,serif;">With warmth, Honey Summer</p>
+          <p style="margin:0;">Questions? <a href="mailto:{{ contact_email }}" style="color:#49362e;text-decoration:underline;">Get in touch</a></p>
+          <p style="margin:8px 0 0;"><a href="{{ site_url }}" style="color:#49362e;text-decoration:underline;">Visit Honey Summer</a></p>
+        </td></tr>
+      </table>
+      <!--[if mso]></td></tr></table><![endif]-->
+    </td></tr>
+  </table>
+</body>
+</html>

@@ -426,7 +426,7 @@ async def test_account_can_disable_mfa_and_revoke_all_sessions(role, proof, monk
         assert not verify_mfa(user, code)
         event = await db.scalar(select(SecurityEvent).where(SecurityEvent.action == "mfa_disable"))
         assert event.actor_id == event.target_id == uid
-    assert any(mail["subject"].endswith("MFA disabled") for mail in sent)
+    assert any(mail["subject"].endswith("MFA Disabled") for mail in sent)
     for token in tokens:
         app.asgi_client.cookies.set(cookie, token)
         _, blocked = await app.asgi_client.get("/admin/security/")
@@ -484,7 +484,7 @@ async def test_disable_mfa_requires_password_mfa_and_csrf(data, status):
         assert user.mfa_secret == secret and user.security_version == 0
         assert user.recovery_codes == [token_digest("recovery-code")]
         assert not await db.scalar(select(SecurityEvent).where(SecurityEvent.action == "mfa_disable"))
-        assert not await db.scalar(select(SecurityMail).where(SecurityMail.subject.endswith("MFA disabled")))
+        assert not await db.scalar(select(SecurityMail).where(SecurityMail.subject.endswith("MFA Disabled")))
 
 
 @pytest.mark.asyncio
@@ -582,7 +582,7 @@ async def test_admin_can_send_password_reset_link(monkeypatch):
     target = await make_user(role="florist", email="resetme@example.com")
     _, response = await access({"action": "password", "user_id": target})
     assert response.status == 200 and "Password reset link" in response.text
-    assert any(mail["to"] == "resetme@example.com" and "Reset your password" in mail["subject"] for mail in sent)
+    assert any(mail["to"] == "resetme@example.com" and "Reset Your Password" in mail["subject"] for mail in sent)
     token = re.search(r"token=([^\s&\"<]+)", response.text).group(1)
     _, completed = await reset_token(token)
     assert completed.status == 200

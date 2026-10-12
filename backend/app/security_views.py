@@ -250,7 +250,7 @@ async def recovery(request):
             queue_mail(
                 db,
                 email,
-                "Reset your password",
+                "Reset Your Password",
                 "Use this single-use link within 30 minutes:\n"
                 + public_link(f"/admin/security/reset?token={token}&kind=reset"),
                 challenge=True,
@@ -292,7 +292,7 @@ async def reset(request):
             if kind == "email":
                 old_email = user.email
                 user.email = row.email
-                queue_mail(db, old_email, "Email changed", "Your login email has changed. Contact us if unauthorized.")
+                queue_mail(db, old_email, "Email Changed", "Your login email has changed. Contact us if unauthorized.")
             else:
                 user.password_hash = hash_password(password)
             if kind == "invite":
@@ -301,7 +301,7 @@ async def reset(request):
             queue_mail(
                 db,
                 user.email,
-                "Account security updated",
+                "Account Security Updated",
                 "Your account was updated. Sign in again; old sessions are revoked.",
             )
             audit(db, request, kind + "_completed", target=user.id)
@@ -347,7 +347,7 @@ async def force_password(request):
         queue_mail(
             db,
             row.email,
-            "Password updated",
+            "Password Updated",
             "Your password was changed. Sign in again with your new password.",
         )
         audit(db, request, "force_password", actor=row.id, target=row.id)
@@ -412,7 +412,7 @@ async def account_change(request):
             queue_mail(
                 db,
                 user.email,
-                "Password changed",
+                "Password Changed",
                 "Your password changed. Sign in again; all old sessions are revoked.",
             )
         elif action == "email":
@@ -423,14 +423,14 @@ async def account_change(request):
             queue_mail(
                 db,
                 email,
-                "Confirm email change",
+                "Confirm Email Change",
                 "Confirm within 30 minutes:\n" + public_link(f"/admin/security/reset?kind=email&token={token}"),
                 challenge=True,
             )
             queue_mail(
                 db,
                 user.email,
-                "Email change requested",
+                "Email Change Requested",
                 "A change of login email was requested. Contact us if unauthorized.",
             )
             message = "Confirm the link sent to the new address."
@@ -466,7 +466,7 @@ async def account_change(request):
             user.recovery_codes = [token_digest(c) for c in codes]
             user.security_version += 1
             queue_mail(
-                db, user.email, "MFA enabled", "Authenticator protection was enabled. Store recovery codes offline."
+                db, user.email, "MFA Enabled", "Authenticator protection was enabled. Store recovery codes offline."
             )
         elif action == "mfa_disable":
             if not user.mfa_secret:
@@ -479,7 +479,7 @@ async def account_change(request):
             queue_mail(
                 db,
                 user.email,
-                "MFA disabled",
+                "MFA Disabled",
                 "Two-step verification was turned off. Your authenticator and recovery codes no longer work. "
                 "All sessions were revoked. Sign in again with your password. Contact us if unauthorized.",
             )
@@ -488,7 +488,7 @@ async def account_change(request):
                 return json({"detail": "Enable MFA first."}, status=400)
             codes = [secrets.token_hex(8) for _ in range(10)]
             user.recovery_codes = [token_digest(c) for c in codes]
-            queue_mail(db, user.email, "Recovery codes replaced", "Old MFA recovery codes can no longer be used.")
+            queue_mail(db, user.email, "Recovery Codes Replaced", "Old MFA recovery codes can no longer be used.")
         else:
             return json({"detail": "Unknown action."}, status=400)
         audit(db, request, action, actor=user.id, target=user.id)
@@ -648,7 +648,7 @@ async def manage_access(request):
             queue_mail(
                 db,
                 email,
-                "Staff invitation",
+                "Staff Invitation",
                 "Set up your password within 30 minutes, then sign in. Authenticator setup is optional:\n"
                 + public_link(f"/admin/security/reset?kind=invite&token={token}"),
                 challenge=True,
@@ -696,7 +696,7 @@ async def manage_access(request):
                 queue_mail(
                     db,
                     user.email,
-                    "Staff invitation",
+                    "Staff Invitation",
                     "Set up within 30 minutes:\n" + public_link(f"/admin/security/reset?kind=invite&token={token}"),
                     challenge=True,
                 )
@@ -709,7 +709,7 @@ async def manage_access(request):
                 queue_mail(
                     db,
                     user.email,
-                    "Reset your password",
+                    "Reset Your Password",
                     "An administrator sent you a password reset link. Use this single-use link within 30 minutes:\n"
                     + link,
                     challenge=True,
@@ -726,7 +726,7 @@ async def manage_access(request):
                 queue_mail(
                     db,
                     user.email,
-                    "Temporary password set",
+                    "Temporary Password Set",
                     "An administrator set a temporary password for your account. Sign in with it, then choose a "
                     "new password.\n" + public_link("/admin/security/force"),
                 )
@@ -737,12 +737,12 @@ async def manage_access(request):
             queue_mail(
                 db,
                 user.email,
-                "Account access updated",
+                "Account Access Updated",
                 f"Account action: {action}. Reason: {reason}\n"
                 + public_link("/wholesale" if user.role == "florist" else "/admin/login"),
             )
         queue_mail(
-            db, actor.email, "Administrative access change", "An access change was recorded. Review the security audit."
+            db, actor.email, "Administrative Access Change", "An access change was recorded. Review the security audit."
         )
         audit(db, request, "access_" + action, actor=actor.id, target=user.id, reason=reason)
         await db.commit()
@@ -791,7 +791,7 @@ async def review_privacy(request, pk: int):
             queue_mail(
                 db,
                 user.email,
-                "Deletion request reviewed",
+                "Deletion Request Reviewed",
                 "Login access is disabled and your account profile is anonymized. "
                 "Legally required transaction records remain retained.",
             )
