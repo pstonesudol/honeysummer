@@ -41,7 +41,7 @@ async def recover(email: str, password: str, reason: str) -> None:
         queue_mail(
             db,
             user.email,
-            "Admin recovery",
+            "Admin Recovery",
             "Offline admin recovery was performed. All sessions were revoked. "
             "Enroll a new authenticator at next sign-in.",
         )

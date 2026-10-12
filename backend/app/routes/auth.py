@@ -96,13 +96,13 @@ async def signup(request):
         queue_mail(
             session,
             email,
-            "Application received",
+            "Application Received",
             "Your wholesale application is awaiting owner review. Approval and account activation are separate.",
         )
         queue_mail(
             session,
             get_settings().inquiry_notification_email,
-            "Wholesale application",
+            "Wholesale Application",
             f"Review the application from {business} in Account security.",
         )
         try:

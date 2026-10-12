@@ -90,7 +90,7 @@ async def create_inquiry(request):
                     inquiry_id=inquiry.id,
                     actor_id=None,
                     direction="sent",
-                    subject="We received your note — Honey Summer",
+                    subject="We Received Your Note — Honey Summer",
                     summary="Automatic inquiry acknowledgement accepted by email provider; delivery is not confirmed.",
                 )
             )
