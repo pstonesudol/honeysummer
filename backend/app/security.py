@@ -158,7 +158,7 @@ async def throttle(request, action: str, email: str = "", *, limit: int = 10) ->
                 queue_mail(
                     db,
                     get_settings().inquiry_notification_email,
-                    "Repeated security attempts",
+                    "Repeated Security Attempts",
                     f"Repeated {action} attempts were throttled. Review the security audit. "
                     "No account is permanently locked.",
                 )

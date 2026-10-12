@@ -112,7 +112,8 @@ def send_inquiry_emails(inquiry: Inquiry) -> dict:
     never loses a submitted inquiry.
     """
     settings = get_settings()
-    subject = f"Honey Summer — {KIND_LABELS.get(inquiry.kind, inquiry.kind)}"
+    kind_label = KIND_LABELS.get(inquiry.kind, inquiry.kind)
+    subject = f"Honey Summer — {kind_label.title()}"
     outcomes = {}
     for recipient, params in (
         (
@@ -126,7 +127,7 @@ def send_inquiry_emails(inquiry: Inquiry) -> dict:
         ),
         (
             "customer",
-            dict(subject="We received your note — Honey Summer", body=_acknowledgement_body(inquiry), to=inquiry.email),
+            dict(subject="We Received Your Note — Honey Summer", body=_acknowledgement_body(inquiry), to=inquiry.email),
         ),
     ):
         try:
@@ -142,7 +143,7 @@ def send_signup_notification(*, business_name: str, email: str, contact_name: st
     """Tell the farm that a florist requested wholesale access."""
     try:
         send_email(
-            subject="New Honey Summer wholesale account request",
+            subject="New Honey Summer Wholesale Account Request",
             body=(
                 f"{contact_name} at {business_name} ({email}) requested wholesale access. "
                 "Review and approve them in the admin."
@@ -157,7 +158,7 @@ def send_wholesale_approval_email(*, email: str) -> None:
     """Tell an approved florist they can sign in with their existing account."""
     try:
         send_email(
-            subject="Your Honey Summer wholesale account is approved",
+            subject="Your Honey Summer Wholesale Account Is Approved",
             body=(
                 "Your wholesale account is approved. Sign in with the email and password "
                 "you chose when requesting access: "
@@ -191,6 +192,7 @@ def send_order_emails(
     """
     settings = get_settings()
     label = ORDER_LABELS.get(channel, "order")
+    subject_label = label.title()
     reference = order_reference or f"HS{order_id:06d}"
     lines = [f"Thank you for your Honey Summer {label} {reference}.", ""]
     lines.extend(f"{item['quantity']} × {item['name']} (${item['price']} each)" for item in items)
@@ -236,7 +238,7 @@ def send_order_emails(
     try:
         if recipient in (None, "customer"):
             send_email(
-                subject=f"Honey Summer {label} {reference}",
+                subject=f"Honey Summer {subject_label} {reference}",
                 body=body,
                 to=customer_email,
                 reply_to=settings.inquiry_notification_email,
@@ -244,7 +246,7 @@ def send_order_emails(
             )
         if recipient in (None, "farm"):
             send_email(
-                subject=f"New Honey Summer {label} {reference}",
+                subject=f"New Honey Summer {subject_label} {reference}",
                 body=body,
                 to=settings.inquiry_notification_email,
                 reply_to=customer_email,
