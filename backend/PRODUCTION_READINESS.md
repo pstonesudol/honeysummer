@@ -251,8 +251,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   staging API URL and origin credential present. The server action was changed
   to use the configured Worker self-service proxy and deployed to staging as
   `9851eccb-5def-4819-8c47-ab4f26519400`; the subsequent inquiry reached Railway
-  with HTTP 201, and the user confirmed the generated customer confirmation email
-  arrived. Farm-notification delivery and Resend event details remain unverified.
+  with HTTP 201. Staging persisted provider outcomes as accepted for both the
+  customer acknowledgment and farm notification; the user confirmed the customer
+  confirmation arrived. Farm-notification inbox delivery and Resend event details
+  remain unverified.
 - Zero Trust Free activated by the user. Staging CI service-token secret names
   confirmed present in GitHub, with raw values kept private. Preparing fixed-origin,
   no-redirect Access-authenticated smoke requests and stripping Access credentials
