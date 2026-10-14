@@ -1,6 +1,8 @@
-# Phase 8 local closeout — October 10, 2026
+# Phase 8 local closeout — October 10, 2026 (archived)
 
-**Status: implementation and local verification complete. Not production acceptance or observed owner sign-off.**
+> Historical evidence only; not an active plan. Current status: [STATUS.md](../STATUS.md).
+
+**Status: implementation and local verification complete. Not production acceptance or observed owner sign-off.** This is a historical closeout; the current consolidated status index is [`../STATUS.md`](../STATUS.md).
 
 ## Scope reconciled against the saved plan
 

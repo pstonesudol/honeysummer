@@ -1,6 +1,8 @@
-# Phase 9 closeout — October 10, 2026
+# Phase 9 closeout — October 10, 2026 (archived)
 
-**Status: implementation complete; owner acceptance assumed per user instruction.** This is not a production launch sign-off.
+> Historical evidence only; not an active plan. Current status: [STATUS.md](../STATUS.md).
+
+**Status: implementation complete; owner acceptance assumed per user instruction.** This is not a production launch sign-off. This is a historical closeout; the current consolidated status index is [`../STATUS.md`](../STATUS.md).
 
 ## Final delivered slice
 

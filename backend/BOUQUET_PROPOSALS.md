@@ -1,6 +1,6 @@
 # Bouquet proposals (Phase 8)
 
-**Implementation/local closeout complete — October 10, 2026.** See [`PHASE8_CLOSEOUT.md`](PHASE8_CLOSEOUT.md) for scope and verification evidence. Actual hosted Stripe/provider verification remains open in Phase 12.
+**Implementation/local closeout complete — October 10, 2026.** See [archived closeout](../deprecated/PHASE8_CLOSEOUT.md) for scope and verification evidence. Actual hosted Stripe/provider verification remains open in Phase 12. The current consolidated status index is [`../STATUS.md`](../STATUS.md).
 
 Open a **bouquet** inquiry in `/admin/inquiries`, then choose **Start bouquet proposal**. Draft a customer-visible title, description, terms, itemized lines, fulfillment details and delivery charge. Save to see the exact preview; internal notes are not included in the invoice. Catalogue-backed lines take the numeric `FL-` listing ID; custom labor/flowers can be quoted without creating fake stock. Quotes never reserve stock.
 

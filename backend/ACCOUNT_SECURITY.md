@@ -1,6 +1,6 @@
 # Phase 11 — account security and support
 
-Implemented October 10, 2026. This is local implementation evidence, **not deployed acceptance**. Phase 12 owns HTTPS/proxy, sender-domain/mail delivery, jobs, backups, runtime DB privileges and deployment checks in `PRODUCTION_READINESS.md`.
+Implemented October 10, 2026. This is local implementation evidence, **not deployed acceptance**. Phase 12 owns HTTPS/proxy, sender-domain/mail delivery, jobs, backups, runtime DB privileges and deployment checks in `PRODUCTION_READINESS.md`. The current consolidated status index is [`../STATUS.md`](../STATUS.md).
 
 ## Permission matrix
 

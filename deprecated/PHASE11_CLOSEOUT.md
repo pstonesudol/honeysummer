@@ -1,11 +1,13 @@
-# Phase 11 — implementation/local verification closeout
+# Phase 11 — implementation/local verification closeout (archived)
 
-October 10, 2026. **Feature implementation is complete; production acceptance is not claimed.** Procedures and the permission matrix are in `ACCOUNT_SECURITY.md`.
+> Historical evidence only; not an active plan. Current status: [STATUS.md](../STATUS.md).
+
+October 10, 2026. **Feature implementation is complete; production acceptance is not claimed.** Procedures and the permission matrix are in `ACCOUNT_SECURITY.md`. This is a historical closeout; the current consolidated status index is [`../STATUS.md`](../STATUS.md).
 
 Delivered:
 
 - Admin/staff/florist server-enforced access; independent activation/approval, reasoned approve/deny/suspend/reactivate/revoke, staff invitations, no self-promotion or removal of the last active admin. Existing financial history remains intact.
-- Opaque hashed server-side sessions, version-based cross-worker invalidation, login rotation, logout revocation, idle/absolute lifetimes, cookie flags, recent password/MFA reauthentication and mandatory operator TOTP. Optional florist MFA, hashed one-use recovery codes and an audited offline last-admin recovery CLI.
+- Opaque hashed server-side sessions, version-based cross-worker invalidation, login rotation, logout revocation, idle/absolute lifetimes, cookie flags, recent password/MFA reauthentication and optional operator TOTP under the approved optional-MFA policy. Optional florist MFA, hashed one-use recovery codes and an audited offline last-admin recovery CLI.
 - Hashed, atomic, single-use, 30-minute reset/invite/email-confirmation challenges; generic signup/recovery responses, Argon2 dummy verification for unknown sign-ins, bounded IP/account throttles, validated password/contact updates and old/new-email notifications.
 - Origin/form/API CSRF checks, disabled CORS, explicit trusted-proxy CIDR/rightmost-hop handling, production secret/encryption/origin startup validation and no auth access-query logging.
 - Transactional encrypted security outbox, accessible branded HTML/plain-text messages, provider idempotency keys, expiry/redaction, retry visibility and independent maintenance CLI/local Compose service. Mandatory security messages do not depend on marketing consent.
