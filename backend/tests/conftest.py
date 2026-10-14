@@ -7,6 +7,7 @@ created and dropped around every test.
 
 import os
 import tempfile
+from io import BytesIO
 
 _fd, _path = tempfile.mkstemp(suffix=".db")
 os.close(_fd)
@@ -20,7 +21,9 @@ os.environ.setdefault("RESEND_API_KEY", "")
 os.environ["DEBUG"] = "true"
 
 import pyotp  # noqa: E402
+import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
+from PIL import Image  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 
 from app import models  # noqa: E402,F401
@@ -33,6 +36,17 @@ from app.models import User  # noqa: E402
 from app.security import decrypt  # noqa: E402
 from app.security_views import CSRF_COOKIE as SECURITY_CSRF_COOKIE  # noqa: E402
 from app.server import app as sanic_app  # noqa: E402
+
+
+@pytest.fixture
+def real_image():
+    def encode(format="JPEG", size=(80, 60), mode="RGB", color="green", **kwargs):
+        with Image.new(mode, size, color) as image:
+            output = BytesIO()
+            image.save(output, format=format, **kwargs)
+            return output.getvalue()
+
+    return encode
 
 
 @pytest_asyncio.fixture(autouse=True)

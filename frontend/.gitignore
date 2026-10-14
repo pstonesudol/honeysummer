@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
 
 # Full-resolution client photography (optimized copies live in public/images/photography)
 /source-photos/
