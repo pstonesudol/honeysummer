@@ -1,13 +1,25 @@
 # Phase 12 — consolidated production acceptance
 
-Ownership reconciled October 10, 2026. **Every checkbox below is open.** Local builds, sandbox API checks and signed mock webhooks do not prove deployed/live verification.
+**Current status index:** [`../STATUS.md`](../STATUS.md). This file is the detailed
+acceptance evidence register; feature closeouts, runbooks and dated staging logs
+are supporting evidence, not separate status trackers. Ownership reconciled
+October 10, 2026. **Every acceptance checkbox below remains open unless and until
+it is explicitly checked with evidence.** Local builds, sandbox API checks,
+targeted staging passes and signed mock webhooks do not prove deployed/live
+verification or complete a row.
 
 ## Ownership and completion
+
+Current targeted staging retests (October 14, 2026 UTC), including PR #23/#24
+regression results and remaining operational gates, are tracked in
+`PHASE12_STAGING_VALIDATION_2026-10-14.md`. This newer evidence supersedes earlier
+upload-failure/mobile-defect snapshots only for the cases explicitly retested;
+it does not close the consolidated acceptance rows below.
 
 - Feature phases own implementation, automated/local/test-mode verification, functional acceptance and operating instructions. Phase 12 owns production setup, deployed staging/provider rehearsals and controlled live operational acceptance.
 - Phase 13 owns final brand/content approval, launch authorization, cutover and post-cutover smoke/rollback checks. It consumes this register instead of repeating production setup.
 - Moving a check here does not waive it. Defects return to their feature phase for correction, then Phase 12 retests. Unfinished security/features are not DevOps tasks.
-- Phase 7 device/account eligibility and Tap to Pay setup were confirmed by the user on October 10, 2026; owner practice/stock-recording rehearsal remains unverified separately. Phase 8 implementation/local closeout is complete (`PHASE8_CLOSEOUT.md`); its actual hosted provider verification and pre-live business-policy confirmation remain here. Phase 11 implementation/local verification is complete (`PHASE11_CLOSEOUT.md`); every deployed security/mail/operational check below remains open. Phase 9 owner acceptance was assumed at the user's prior instruction, not observed.
+- Phase 7 device/account eligibility and Tap to Pay setup were confirmed by the user on October 10, 2026; owner practice/stock-recording rehearsal remains unverified separately. Phase 8 implementation/local closeout is complete (`../deprecated/PHASE8_CLOSEOUT.md`); its actual hosted provider verification and pre-live business-policy confirmation remain here. Phase 11 implementation/local verification is complete (`../deprecated/PHASE11_CLOSEOUT.md`); every deployed security/mail/operational check below remains open. Phase 9 owner acceptance was assumed at the user's prior instruction, not observed.
 - Use isolated staging/provider test mode first. Actual live charges, refunds, emails, stock changes and DNS changes need explicitly authorized controlled procedures. Never run synthetic fixtures on the live shop database or blindly retry uncertain sends/refunds. Production debug payment bypasses must be disabled.
 
 For **each accepted check**, record its ID, operator, timestamp, deployment/git revision, environment/provider mode, redacted evidence link, expected/actual result, blockers/fixes and retest outcome. No checkbox is acceptance without evidence and operational sign-off. Document any inapplicable scope decision; safety-critical failures block launch. Do not record secrets, recovery tokens, private photos or unnecessary customer data here.

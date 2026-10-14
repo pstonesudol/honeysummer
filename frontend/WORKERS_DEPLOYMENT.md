@@ -109,7 +109,8 @@ restrict staging access and use synthetic data, not real customer records.
 5. Verify HTTPS `/api/health/`, `/admin/`, public `/media/`, protected private
    photo routing, cookies, Origin/CSRF, uploads and server-side wholesale checks
    through the Worker. A direct Railway health response does not prove proxy
-   acceptance. Record evidence in `backend/PRODUCTION_READINESS.md`.
+   acceptance. Record detailed evidence in `backend/PRODUCTION_READINESS.md`;
+   keep the current consolidated index in `STATUS.md`.
 6. Configure provider-backed staging checks before production approval. Production
    uses `API_URL=<production-origin> npm run deploy:production --workspace frontend`
    and `NEXT_PUBLIC_SITE_URL=https://hellohoneysummer.com`; do not attach the public

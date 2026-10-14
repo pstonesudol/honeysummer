@@ -117,7 +117,7 @@ website orders; record listed items in the admin inventory journal separately.
 
 ## Deployment
 
-Phase 12 owns production setup and deployed verification across all feature phases. Track launch evidence and open checks in [`backend/PRODUCTION_READINESS.md`](backend/PRODUCTION_READINESS.md); feature completion does not imply production acceptance. Phase 13 owns final approval and public cutover.
+Phase 12 owns production setup and deployed verification across all feature phases. Track the current consolidated status in [`STATUS.md`](STATUS.md) and detailed launch evidence/open checks in [`backend/PRODUCTION_READINESS.md`](backend/PRODUCTION_READINESS.md); feature completion does not imply production acceptance. Phase 13 owns final approval and public cutover.
 
 - Frontend: Cloudflare Workers through the OpenNext adapter, preserving the same-origin API proxy and server-side auth support.
 - Backend and Postgres: Railway. `.railway/railway.ts` defines isolated staging/production resources, the `/backend` upload build root, locked uv build, Alembic pre-deploy migrations, Sanic start and health check. GitHub source autodeploys are disconnected; [the release workflow](RELEASE_RUNBOOK.md) owns CI → staging → manual production approval for the same commit. The backend sequence has been rehearsed successfully. The staging frontend extension deploys/checks the Worker before backend production approval; its first Actions rehearsal remains open. Production frontend deployment is not enabled. Preview/apply infrastructure through the Railway CLI; configuration is not read automatically during app deployments. See [`.railway/README.md`](.railway/README.md) for variables and migration safety. The deprecated `railway.json` scaffold has been replaced.

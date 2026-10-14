@@ -34,7 +34,7 @@ The reviewed initial staging plan adds only `honeysummer`; it leaves the existin
 Postgres and volume unchanged. The initial production plan adds Postgres, its
 volume and `honeysummer`. Neither plan deletes anything. Recheck before applying;
 dashboard edits can change these plans. These commands are not proof of a healthy
-deployment, working providers, backups, or production acceptance.
+deployment, working providers, backups, or production acceptance. The current consolidated status index is [`../STATUS.md`](../STATUS.md); detailed acceptance evidence belongs in `backend/PRODUCTION_READINESS.md`.
 
 ### Variables and deployment prerequisites
 

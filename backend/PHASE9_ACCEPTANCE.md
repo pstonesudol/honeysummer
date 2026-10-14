@@ -1,10 +1,10 @@
 # Phase 9 closeout — owner acceptance assumed
 
-**October 10, 2026:** Phase 9 implementation is closed with Isabella's acceptance **assumed at the user's explicit direction**, not an observed owner sign-off. The unchecked checklist below is retained as a launch rehearsal, not a claim that Isabella performed it. Security belongs to Phase 11; production verification belongs to Phase 12. Do **not** retry wedding quote #9 or any review-state payment without identifying the original transaction in Stripe first.
+**October 10, 2026:** Phase 9 implementation is closed with Isabella's acceptance **assumed at the user's explicit direction**, not an observed owner sign-off. The unchecked checklist below is retained as a launch rehearsal, not a claim that Isabella performed it. Security belongs to Phase 11; production verification belongs to Phase 12. Do **not** retry wedding quote #9 or any review-state payment without identifying the original transaction in Stripe first. This is a historical closeout; the current consolidated status index is [`../STATUS.md`](../STATUS.md).
 
 ## Verified closeout evidence
 
-- Automated suite, lint, frontend build and Alembic schema check are recorded in `PHASE9_CLOSEOUT.md`.
+- Automated suite, lint, frontend build and Alembic schema check are recorded in `../deprecated/PHASE9_CLOSEOUT.md`.
 - Real Stripe **test-mode** synthetic quotes #13 and #14: $1 deposit, $0.50 deposit refund, newly accepted $3 itemization with $0.50 retained / $2.50 revised balance; no order on deposit and one order after final payment (#23/#24). App refund and external refund import on the final invoice produced $1 recorded order refunds, exactly once, without stock changes.
 - Synthetic quote #15: known unpaid invoice void, replacement with a distinct Stripe ID/revision, simulated lost local ID and exact matching Stripe attachment. Both unpaid invoices were voided after testing.
 - The new invoice-refund audit queried Stripe and found journals agree with supported payments. This was report-only and its run was persisted.

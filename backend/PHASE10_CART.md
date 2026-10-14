@@ -1,6 +1,6 @@
 # Phase 10 — global storefront carts
 
-**Phase 10 complete: implementation and local verification, October 10, 2026.** Production setup and deployed Stripe acceptance belong to Phase 12's [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md), not an unfinished Phase 10 gate. This is not production Stripe approval.
+**Phase 10 complete: implementation and local verification, October 10, 2026.** Production setup and deployed Stripe acceptance belong to Phase 12's [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md), not an unfinished Phase 10 gate. This is not production Stripe approval. This is a historical closeout; the current consolidated status index is [`../STATUS.md`](../STATUS.md).
 
 ## Shopping experience
 
