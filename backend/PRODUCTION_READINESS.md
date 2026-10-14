@@ -367,8 +367,22 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   which remained after reload. A dedicated staging staff test account was then
   created: sign-in reached the orders area, `/admin/orders/preparation` was
   accessible, and `/admin/security/access` was denied. No orders were changed.
-  Cross-worker revocation, session rotation and idle/absolute expiry remain
-  unverified.
+  Follow-up on October 12, 2026: after suspension and reactivation, the old
+  staff session was redirected to sign-in and a fresh sign-in reached the staff
+  orders area. A read-only session-registry check showed one stale-version
+  session and two current-version sessions. This verifies revocation/reactivation
+  on staging's single backend replica, not cross-worker revocation. At 11:07 PM
+  EDT, reloading the untouched staff `/admin/orders` tab returned the application
+  sign-in page; a read-only registry check showed the current-version sessions
+  had been idle over 35 minutes. The 30-minute idle-expiry check passed on this
+  replica. The user then signed in fresh; the staff orders area loaded and the
+  registry gained a new unique hashed session record with a 12-hour lifetime
+  while the prior idle sessions remained expired. This verifies server-side
+  session rotation without reading cookie values. Staff sign-out then redirected
+  to the login page; the session registry dropped from four rows to three and
+  from three current-version rows to two, and a fresh `/admin/orders` request
+  stayed at login. Actual 12-hour absolute expiry and cross-worker revocation
+  remain unverified.
 - [ ] F3 — Roles/approval/active state, revocation across workers, session rotation and idle/absolute expiry verified for anonymous/florist/staff/admin access.
 - [ ] F4 — Rate limits, enumeration resistance, single-use/expired/replayed reset/invite tokens, reauthentication, admin/staff MFA and recovery verified against deployment.
 - [ ] F5 — Redacted audit events, security/privilege/mail alerts, privacy/retention/export handling and admin incident response exercised.
@@ -399,6 +413,121 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
 - [ ] G3 — Intended domain, redirects, DNS/TLS, Workers routes, Railway origin and email DNS checked before cutover; TTL/rollback/contact plan approved.
 - [ ] G4 — All applicable checks pass with evidence; source feature/owner acceptance or explicit prior waivers reconciled, no unresolved launch blockers, operational sign-off recorded.
 - [ ] G5 — Handoff to Phase 13 for final assets/copy/licensing/SEO/accessibility approval, launch authorization, public cutover and post-cutover smoke/rollback checks.
+
+### Additional staging acceptance evidence — October 12, 2026
+
+- Read-only Railway checks found the staging API and Postgres online with one
+  running replica each, no recent deployment failures/issues, no pending Railway
+  changes, and successful backend deployment
+  `164097df-fc42-4a3e-95b0-0966d4b7d585`. The database is at Alembic head
+  `c3f6a9b2d5e8`; `alembic check`
+  reported no new upgrade operations. Runtime configuration reported `DEBUG=false`,
+  the staging public origin and origin gate enabled, and Stripe test-mode keys.
+  This is staging-only evidence; production was not inspected or changed.
+- Ran `python -m app.reconcile --full` in staging report-only mode. The durable
+  run record shows `applied=false` and zero findings; inventory and overdue holds
+  were not changed. This is a manual full reconciliation rehearsal, not a
+  scheduled or monitored job, and does not close C3/C4.
+- Ran the staging invoice/refund journal audit in report-only mode; it reported
+  that journals agree with supported Stripe payments. No refund, restock or
+  order change was made. The persisted audit does not replace scheduled
+  monitoring, so C4/D5 remain open.
+- Read-only security-mail outbox counts showed 26 of 26 messages accepted by
+  Resend, with no attempted-but-unaccepted or never-attempted records. Provider
+  acceptance is not inbox delivery. No privacy-request records exist, so export
+  or deletion handling was not rehearsed and F5 remains open.
+- The order-notification outbox has 14 records, all marked sent with no pending
+  notification retries and at most one recorded attempt. That application status
+  alone is not inbox-delivery evidence; broader E3 workflow/retry coverage remains
+  open.
+- Read-only security-audit counts for the dedicated staff test account show one
+  successful suspension, one successful reactivation, and four successful
+  password sign-ins (including the post-idle reauthentication). This confirms
+  these actions were logged, not the full redaction/retention or alert-response
+  requirements; F5 remains open.
+- A one-hour read-only Railway HTTP-log sample (22:00–23:00 EDT) contained 209
+  requests (200, 302, 400 and 403 responses), with no 5xx responses or upstream
+  errors. This is a point-in-time log check, not configured uptime/error alerting
+  or an escalation rehearsal; G1 remains open.
+- Origin-gate probes against the staging Railway URL returned HTTP 200 for the
+  health exception and HTTP 403 for the retail catalogue and admin login. Through
+  the authenticated staging Worker, the health route returned `status: ok` and
+  the retail catalogue rendered. Direct-origin protected-route denial is verified;
+  an unauthenticated request to the staging custom-domain homepage returned HTTP
+  302 to the Cloudflare Access gate. The broader A2 routing/media/upload checks
+  remain open. The public Worker also served the static
+  `/images/photography/flower-bucket-portrait.jpg` asset (1200×1800); this does
+  not verify R2 uploads, cache policy, or protected private-media routing.
+- Read-only Stripe test-account verification found one enabled staging webhook
+  endpoint with the eight expected event types. All ten persisted Stripe event
+  records were retrievable from that test account and matched their stored event
+  types: seven `checkout.session.completed` events were applied and three
+  `checkout.session.expired` events were ignored. Staging has seven paid retail
+  orders and three cancelled retail orders; inventory summaries showed no
+  negative available quantities or sold-out listings with positive stock. This
+  verifies those historical checkout/expiry outcomes only; signed retry/replay,
+  async/failure, refund and concurrency cases remain open.
+- An unsigned empty POST to the staging direct-origin Stripe webhook returned
+  HTTP 400. The Stripe-event record count remained ten afterward, confirming this
+  invalid-signature probe did not enter the event ledger. This negative check does
+  not replace a new signed delivery/retry rehearsal.
+- A read-only comparison of all seven matched paid Checkout sessions against
+  their stored order-item snapshots plus delivery fees found no amount, currency,
+  order-status or `order_id` metadata mismatches. All three matched expired/unpaid
+  sessions had local cancelled/expired orders. This validates those examples,
+  not concurrent purchase behavior or fulfillment details.
+- Follow-up exception: Stripe test mode lists eight `complete/paid` Checkout
+  sessions, but only seven match an order's stored Stripe session ID. The unmatched
+  session was created October 11 at 18:43 UTC for USD 30.00 (two units of
+  `myproduct`); its test-mode PaymentIntent succeeded and has no refund recorded.
+  It has no application metadata or client reference, and its completion event
+  has no `stripe_events` record. The webhook handler ignores events without an
+  `order_id` but does not persist that ignored outcome, so the missing ledger
+  record does not establish delivery failure. The app's Checkout creation code
+  sets an `order_id` metadata value, so this does not appear to be an app-created
+  Checkout; no local order exists and the staging catalog has no exact
+  `myproduct` listing. The user recognizes it as intentional and thinks it was
+  either a client or webhook test; the exact source remains unverified. The full
+  report-only reconciliation did not surface this unmatched external test
+  session. It was left untouched; no cancellation/refund was attempted.
+- The single bouquet proposal has a linked Stripe invoice; Stripe reports that
+  invoice open, and the proposal has no associated order. No payment, resend or
+  additional invoice action was taken. Invoice-paid webhooks and the wider D1/D4
+  workflows remain open.
+- Non-purchasing retail cart smoke tests added one available item, confirmed its
+  displayed item/subtotal and wholesale-access boundary, changed quantity to two
+  and confirmed the $10 subtotal, reloaded the page and confirmed the one-item
+  cart persisted, navigated to Our Story and confirmed the cart remained, then
+  removed the item. The cart returned to empty; checkout was not started and
+  inventory was not reserved. Separate carts/shared-stock contention and checkout
+  remain untested. At 390px, the cart drawer itself fit the viewport and exposed
+  a labeled quantity input, remove control and close control; full
+  keyboard/focus/screen-reader testing remains open.
+  A read-only catalog summary found two retail listings (one purchasable) and no
+  wholesale listings, so a wholesale catalog/purchase could not be exercised.
+  On the 390px mobile viewport, the closed navigation control extended beyond the
+  right viewport edge (its inspected bounds were x=355–445). The wedding inquiry
+  form also retained a two-column layout at that width: its first-column controls
+  were only 75px wide and began at x=-15, visibly clipping labels/fields in the
+  captured page. Inquiry form controls also appeared without accessible names in
+  the browser snapshot. Treat mobile navigation/form usability and accessibility
+  acceptance as unresolved; B1/B4/B7 are not passed.
+- October 13, 2026 R2 follow-up: the owner activated Cloudflare R2 and created
+  `honeysummer-staging-public` and `honeysummer-staging-private`. The public
+  bucket's custom domain `media-staging.hellohoneysummer.com` reached an active
+  state; its empty root returned the expected R2 object-not-found response. The
+  private bucket was left private and has no custom domain. The owner set all six
+  R2 variables on the staging backend; Railway's staging deployment succeeded
+  with one running replica. Variable names were verified without reading values.
+  An admin gallery upload of a 15.1 MB image failed at the still-deployed upload
+  limit. Railway showed no gallery POST and the database had no matching gallery
+  row, so a successful app upload/public delivery is not verified. The 50 MiB
+  image and 60 MiB Worker limits in this local change have not yet been deployed.
+  Staging private-media access and upload persistence remain unverified. No R2
+  resources or variables were added to production.
+- Staging still has no backend scheduled job/cron, no Railway alert webhooks,
+  and no trusted proxy CIDR configuration. Scheduled reconciliation/monitoring,
+  alert delivery and trusted client-IP attribution remain blocked/open.
 
 ## Future features
 

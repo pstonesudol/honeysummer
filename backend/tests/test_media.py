@@ -71,8 +71,8 @@ def test_image_upload_validates_magic_and_stores_local(tmp_path, monkeypatch):
     monkeypatch.setattr(media, "get_settings", lambda: settings)
     with pytest.raises(ValueError, match="PNG"):
         media.store_image(SimpleNamespace(body=b"<svg><script>alert(1)</script></svg>", name="evil.svg"), "gallery")
-    with pytest.raises(ValueError, match="8 MB"):
-        media.store_image(SimpleNamespace(body=b"\x89PNG\r\n\x1a\n" + b"0" * (8 * 1024 * 1024)), "gallery")
+    with pytest.raises(ValueError, match="50 MiB"):
+        media.store_image(SimpleNamespace(body=b"\x89PNG\r\n\x1a\n" + b"0" * media.MAX_IMAGE_BYTES), "gallery")
     path = media.store_image(SimpleNamespace(body=b"\x89PNG\r\n\x1a\nimage", name="../unsafe.php"), "gallery")
     assert path.startswith("gallery/") and path.endswith(".png")
     assert (tmp_path / path).read_bytes().startswith(b"\x89PNG")
@@ -102,6 +102,31 @@ def test_r2_upload_requires_complete_config_and_writes_object(monkeypatch, tmp_p
     settings.r2_public_url = ""
     with pytest.raises(ValueError, match="incomplete"):
         media.store_image(SimpleNamespace(body=b"\xff\xd8\xfftest", name="photo.jpg"), "flowers")
+
+
+def test_full_resolution_photo_within_50_mib_is_accepted(monkeypatch, tmp_path):
+    settings = SimpleNamespace(
+        media_root=tmp_path,
+        media_url="/media",
+        r2_endpoint_url="https://account.r2.cloudflarestorage.com",
+        r2_bucket="photos",
+        r2_access_key_id="test",
+        r2_secret_access_key="secret",
+        r2_public_url="https://images.example.com",
+    )
+    monkeypatch.setattr(media, "get_settings", lambda: settings)
+    uploaded = []
+    monkeypatch.setattr(
+        boto3, "client", lambda *args, **kwargs: SimpleNamespace(put_object=lambda **kwargs: uploaded.append(kwargs))
+    )
+    body = b"\xff\xd8\xff" + b"0" * (15 * 1024 * 1024)
+
+    key = media.store_image(SimpleNamespace(body=body, name="professional-photo.jpg"), "gallery")
+
+    assert uploaded[0]["Bucket"] == "photos"
+    assert uploaded[0]["Body"] is body
+    assert uploaded[0]["ContentType"] == "image/jpeg"
+    assert uploaded[0]["Key"] == key
 
 
 def test_private_inquiry_upload_is_not_public_and_requires_private_bucket(monkeypatch, tmp_path):

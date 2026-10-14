@@ -101,16 +101,24 @@ test("Cloudflare Access service credentials are stripped before forwarding to Ra
   });
 });
 
-test("12 MiB upload limit remains enforced for declared and streaming bodies", async () => {
+test("60 MiB upload limit is enforced for declared and streaming bodies", async () => {
   const declared = await proxyBackend(new Request(`${site}/admin/upload`, {
     method: "POST", headers: { "Content-Length": String(maxProxyBodyBytes + 1) }, body: "synthetic",
   }), backend, async () => { throw new Error("Oversized request must not be sent"); });
   assert.equal(declared.status, 413);
+  assert.match(declared.headers.get("content-type"), /application\/json/);
+  assert.deepEqual(await declared.json(), { detail: "Upload request exceeds the 60 MiB limit." });
 
-  const stream = new ReadableStream({ start(controller) {
-    controller.enqueue(new Uint8Array(maxProxyBodyBytes));
-    controller.enqueue(new Uint8Array(1));
-    controller.close();
+  const chunk = new Uint8Array(1024 * 1024);
+  let sent = 0;
+  const stream = new ReadableStream({ pull(controller) {
+    if (sent < maxProxyBodyBytes) {
+      controller.enqueue(chunk);
+      sent += chunk.byteLength;
+    } else {
+      controller.enqueue(new Uint8Array(1));
+      controller.close();
+    }
   } });
   const streaming = await proxyBackend(new Request(`${site}/admin/upload`, {
     method: "POST", body: stream, duplex: "half",
@@ -119,4 +127,5 @@ test("12 MiB upload limit remains enforced for declared and streaming bodies", a
     return new Response("Unexpected success");
   });
   assert.equal(streaming.status, 413);
+  assert.deepEqual(await streaming.json(), { detail: "Upload request exceeds the 60 MiB limit." });
 });

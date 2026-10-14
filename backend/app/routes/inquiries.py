@@ -8,14 +8,13 @@ from sanic.response import json as json_response
 
 from ..db import session_scope
 from ..emails import send_inquiry_emails
-from ..media import store_private_image
+from ..media import MAX_IMAGE_BYTES, store_private_image
 from ..models import Inquiry, InquiryCorrespondence
 from ..schemas import InquiryOut
 
 bp = Blueprint("inquiries", url_prefix="/api")
 
 KINDS = {"bouquet", "wedding", "contact"}
-MAX_PHOTO_BYTES = 8 * 1024 * 1024
 
 
 def _string(form, key: str) -> str:
@@ -53,8 +52,8 @@ async def create_inquiry(request):
     if upload and upload.name:
         if upload.type and not upload.type.startswith("image/"):
             errors["photo"] = ["Please upload an image file."]
-        elif len(upload.body) > MAX_PHOTO_BYTES:
-            errors["photo"] = ["Photos must be 8 MB or smaller."]
+        elif len(upload.body) > MAX_IMAGE_BYTES:
+            errors["photo"] = ["Photos must be 50 MiB or smaller."]
 
     if errors:
         return json_response(errors, status=400)
