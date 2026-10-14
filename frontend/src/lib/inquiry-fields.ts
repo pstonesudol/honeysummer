@@ -158,7 +158,7 @@ export const inquiryFields: Record<InquiryKind, InquiryField[]> = {
       name: "inspiration_photo",
       label: "Inspiration photo",
       type: "file",
-      help: "JPG or PNG, up to 10 MB. Optional but lovely.",
+      help: "JPG or PNG, up to 50 MiB. Optional but lovely.",
     },
     {
       name: "pinterest_url",
