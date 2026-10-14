@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "test:e2e": "playwright test",
     "preview": "node scripts/worker.mjs preview",
     "deploy": "node scripts/worker.mjs deploy",
     "upload": "node scripts/worker.mjs upload",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "1.20.8",
+    "@playwright/test": "1.64.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "24.10.0",
     "@types/react": "19.3.0",

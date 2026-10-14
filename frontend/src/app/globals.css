@@ -602,7 +602,27 @@ textarea {
   }
 
   .site-header {
+    position: relative;
     min-height: 7rem;
+    gap: 1rem;
+  }
+
+  .site-header .brand-mark {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .site-header .brand-mark__logo {
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  .site-header .brand-mark__tagline {
+    text-align: center;
+  }
+
+  .site-header .header-actions {
+    flex-shrink: 0;
   }
 
   .desktop-nav {
@@ -610,7 +630,7 @@ textarea {
   }
 
   .mobile-nav {
-    position: relative;
+    position: static;
     display: block;
     font-family: var(--font-gaian), Georgia, serif;
   }
@@ -1097,6 +1117,7 @@ textarea {
 }
 
 .form-field {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
@@ -1117,6 +1138,7 @@ textarea {
 .form-field input,
 .form-field select,
 .form-field textarea {
+  min-width: 0;
   width: 100%;
   border: 1px solid rgba(106, 78, 66, 0.28);
   border-radius: 0.9rem;
@@ -1153,9 +1175,12 @@ textarea {
   line-height: 1.5;
 }
 
-.checkbox input {
+.form-field .checkbox input {
   width: 1.15rem;
   height: 1.15rem;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 0.2rem;
   margin-top: 0.15rem;
   accent-color: var(--cocoa);
 }
@@ -1473,8 +1498,8 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .form-field--half {
-    grid-column: span 1;
+  .form-grid > .form-field {
+    grid-column: 1 / -1;
   }
 
   .cta-band__note {
