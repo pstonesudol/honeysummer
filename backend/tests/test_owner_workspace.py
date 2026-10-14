@@ -93,7 +93,9 @@ async def test_account_activity_and_photo_selection_require_admin_and_keep_secre
 
 
 @pytest.mark.asyncio
-async def test_local_photo_migration_is_dry_run_first_and_removes_only_verified_original(tmp_path, monkeypatch):
+async def test_local_photo_migration_is_dry_run_first_and_removes_only_verified_original(
+    tmp_path, monkeypatch, real_image
+):
     settings = get_settings()
     monkeypatch.setattr(settings, "media_root", tmp_path / "public")
     monkeypatch.setattr(settings, "private_media_root", tmp_path / "private")
@@ -108,7 +110,7 @@ async def test_local_photo_migration_is_dry_run_first_and_removes_only_verified_
         monkeypatch.setattr(settings, name, "")
     source = settings.media_root / "inquiries/2026/old.png"
     source.parent.mkdir(parents=True)
-    body = b"\x89PNG\r\n\x1a\nphoto"
+    body = real_image(format="PNG")
     source.write_bytes(body)
     async with session_scope() as db:
         inquiry = Inquiry(kind="wedding", name="Ava", email="ava@example.com", photo="inquiries/2026/old.png")

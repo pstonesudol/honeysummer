@@ -87,6 +87,11 @@ The marketing pages read live content from the API and post inquiries back to it
 
 Announcements, gallery images, flower listings, florist accounts, inquiries, and orders are all managed from the admin at `/admin` — create the first operator account with `uv run python -m app.seed`. Set `RESEND_API_KEY` (see `backend/.env.example`) to send mail through Resend; without it, messages print to the console for local development. Uploaded photos are stored under `backend/media/` in development and served at `/media/`. Move to Cloudflare R2 before launch so uploads survive deploys.
 
+Public uploads retain only bounded WebP display images; keep professional masters
+in an owner-managed archive. See [`backend/MEDIA_HANDLING.md`](backend/MEDIA_HANDLING.md)
+for validation limits, private-photo separation, memory considerations, and the
+explicit legacy-object replacement/retest procedure.
+
 ### Global shopping carts
 
 The header cart persists separate retail and account-scoped wholesale baskets. Review each order at `/checkout/retail` or `/checkout/wholesale`; only server-verified payment clears purchased quantities, and the other basket remains saved. See [`backend/PHASE10_CART.md`](backend/PHASE10_CART.md) for checkout recovery, migration and verification details. Run cart unit tests with `npm run test --workspace frontend`.
