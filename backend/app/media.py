@@ -10,6 +10,8 @@ import boto3
 
 from .settings import get_settings
 
+MAX_IMAGE_BYTES = 50 * 1024 * 1024
+
 
 def public_media_url() -> str:
     """Return the public base URL for stored media."""
@@ -19,8 +21,8 @@ def public_media_url() -> str:
 
 def _image_details(upload) -> tuple[bytes, str, str]:
     body = upload.body
-    if not body or len(body) > 8 * 1024 * 1024:
-        raise ValueError("Choose an image smaller than 8 MB.")
+    if not body or len(body) > MAX_IMAGE_BYTES:
+        raise ValueError("Choose an image no larger than 50 MiB.")
     if body.startswith(b"\x89PNG\r\n\x1a\n"):
         suffix, content_type = ".png", "image/png"
     elif body.startswith(b"\xff\xd8\xff"):

@@ -1,10 +1,10 @@
 const prefixes = ["/api", "/admin", "/media"];
-export const maxProxyBodyBytes = 12 * 1024 * 1024;
+export const maxProxyBodyBytes = 60 * 1024 * 1024;
 
 function tooLarge() {
-  return new Response("Request body exceeds 12 MiB.", {
+  return new Response(JSON.stringify({ detail: "Upload request exceeds the 60 MiB limit." }), {
     status: 413,
-    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
   });
 }
 
@@ -43,7 +43,7 @@ export async function proxyBackend(request, apiOrigin, fetcher = fetch, originHe
   if (hasBody && body) {
     const reader = body.getReader();
     let bytes = 0;
-    // Preserve the existing Next proxy's 12 MiB limit, including chunked uploads
+    // Enforce a bounded 60 MiB streaming limit, including chunked uploads
     // without Content-Length, without buffering uploads into Worker memory.
     body = new ReadableStream({
       async pull(controller) {

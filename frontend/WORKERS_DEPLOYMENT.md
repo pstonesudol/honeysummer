@@ -40,7 +40,7 @@ reach the browser; following an upstream login redirect inside the Worker loses
 the newly issued session cookie and silently returns the login page again.
 Absolute backend redirects become same-origin paths; external Stripe redirects
 are preserved without being fetched. Cookies, Origin, CSRF fields, backend error
-statuses and the 12 MiB streaming upload limit are retained. Auth/admin responses
+statuses and the 60 MiB streaming upload limit are retained. Auth/admin responses
 are no-store. No credentials or customer data are logged.
 
 Next rewrites remain for local Next development; the Worker wrapper handles these
