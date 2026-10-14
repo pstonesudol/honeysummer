@@ -7,6 +7,7 @@ import { submitInquiry } from "@/lib/actions";
 import type { FlowerListing } from "@/lib/api";
 import { useCart } from "./cart-provider";
 import { CheckoutNotice } from "./checkout-notice";
+import { ImageUpload } from "./image-upload";
 import { ProductGrid } from "./retail-shop";
 import {
   inquiryFields,
@@ -62,13 +63,7 @@ function FieldControl({ field, kind }: { field: InquiryField; kind: InquiryKind 
       );
     case "file":
       return (
-        <input
-          id={id}
-          name={field.name}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          aria-describedby={describedBy}
-        />
+        <ImageUpload id={id} name={field.name} describedBy={describedBy} />
       );
     case "number":
       return (

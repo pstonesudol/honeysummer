@@ -23,7 +23,7 @@
   {% endif %}
   <div class="grid">
     {% for row in rows %}
-    <div class="{% if row.field.kind in ['textarea', 'readonly'] %}full{% endif %}">
+    <div class="{% if row.field.kind in ['textarea', 'readonly', 'file'] %}full{% endif %}">
       <label for="f-{{ row.field.name }}">{{ row.field.label }}</label>
       {% if row.field.kind == 'readonly' %}
         {% if row.field.name in ['photo', 'image'] and row.value %}
@@ -42,8 +42,17 @@
           {% endfor %}
         </select>
       {% elif row.field.kind == 'file' %}
-        <input id="f-{{ row.field.name }}" name="{{ row.field.name }}" type="file" accept="image/*">
-        {% if row.value %}<img class="preview" src="{{ media_url }}/{{ row.value }}" alt="">{% endif %}
+        <div class="image-upload" data-image-upload>
+          <input id="f-{{ row.field.name }}" name="{{ row.field.name }}" type="file" accept="image/*" aria-describedby="f-{{ row.field.name }}-status">
+          <figure class="image-upload__preview" {% if not row.value %}hidden{% endif %}>
+            <img {% if row.value %}src="{{ media_url }}/{{ row.value }}"{% endif %} data-current-src="{% if row.value %}{{ media_url }}/{{ row.value }}{% endif %}" alt="{{ row.field.label }} preview">
+            <figcaption>Full image preview · no cropping</figcaption>
+          </figure>
+          <div class="image-upload__details">
+            <p class="muted" id="f-{{ row.field.name }}-status" role="status">{% if row.value %}Current photo. Choose a new image to replace it.{% else %}Choose an image to see a preview before saving.{% endif %}</p>
+            <button class="button--ghost button--sm" type="button" data-clear-image hidden>Clear selection</button>
+          </div>
+        </div>
       {% else %}
         <input id="f-{{ row.field.name }}" name="{{ row.field.name }}" type="{{ row.input_type }}"
                {% if row.step %}step="{{ row.step }}"{% endif %}
@@ -159,4 +168,54 @@
   <p><button type="submit">Save follow-up</button></p>
 </form>
 {% endif %}
+<script>
+for (const upload of document.querySelectorAll('[data-image-upload]')) {
+  const input = upload.querySelector('input');
+  const preview = upload.querySelector('figure');
+  const image = preview.querySelector('img');
+  const status = upload.querySelector('[role="status"]');
+  const clear = upload.querySelector('[data-clear-image]');
+  const initialStatus = status.textContent;
+  let objectUrl = null;
+  const release = () => {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = null;
+  };
+  const update = () => {
+    release();
+    image.onerror = null;
+    const file = input.files[0];
+    clear.hidden = !file;
+    if (!file) {
+      if (image.dataset.currentSrc) image.src = image.dataset.currentSrc;
+      else image.removeAttribute('src');
+      preview.hidden = !image.dataset.currentSrc;
+      status.textContent = initialStatus;
+      return;
+    }
+    status.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB · Selected, not yet saved`;
+    preview.hidden = true;
+    if (!file.type.startsWith('image/')) {
+      status.textContent = 'This file cannot be previewed. Please choose an image.';
+      return;
+    }
+    image.onerror = () => {
+      preview.hidden = true;
+      status.textContent = 'This image cannot be previewed in your browser. Choose another image if needed.';
+      release();
+    };
+    objectUrl = URL.createObjectURL(file);
+    image.src = objectUrl;
+    preview.hidden = false;
+  };
+  input.addEventListener('change', update);
+  clear.addEventListener('click', () => {
+    input.value = '';
+    update();
+    input.focus();
+  });
+  input.form.addEventListener('reset', () => setTimeout(update, 0));
+  window.addEventListener('pagehide', release);
+}
+</script>
 {% endblock %}
