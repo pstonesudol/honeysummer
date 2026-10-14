@@ -60,14 +60,15 @@ async def test_creates_inquiry_and_sends_two_emails(sent):
 
 
 @pytest.mark.asyncio
-async def test_accepts_an_inspiration_photo(sent, monkeypatch, tmp_path):
+async def test_accepts_an_inspiration_photo(sent, monkeypatch, tmp_path, real_image):
 
     monkeypatch.setattr(get_settings(), "private_media_root", tmp_path)
+    body = real_image()
 
     _, response = await app.asgi_client.post(
         "/api/inquiries/",
         data=_form(kind="wedding"),
-        files={"photo": ("inspo.jpg", b"\xff\xd8\xffimage-bytes", "image/jpeg")},
+        files={"photo": ("inspo.jpg", body, "image/jpeg")},
     )
 
     assert response.status == 201
@@ -78,6 +79,8 @@ async def test_accepts_an_inspiration_photo(sent, monkeypatch, tmp_path):
     assert (tmp_path / inquiry.photo).exists()
     _, anonymous = await app.asgi_client.get(f"/admin/inquiries/{inquiry.id}/photo")
     assert anonymous.status == 302
+    _, public = await app.asgi_client.get(f"/media/{inquiry.photo}")
+    assert public.status == 404
 
     async with session_scope() as session:
         session.add(User(email="owner@example.com", password_hash=hash_password("password"), is_admin=True))
@@ -88,7 +91,7 @@ async def test_accepts_an_inspiration_photo(sent, monkeypatch, tmp_path):
         "/admin/login", data=dict(email="owner@example.com", password="password", csrf_token=token)
     )
     _, photo = await app.asgi_client.get(f"/admin/inquiries/{inquiry.id}/photo")
-    assert photo.status == 200 and photo.body == b"\xff\xd8\xffimage-bytes"
+    assert photo.status == 200 and photo.body == body
     assert photo.headers["cache-control"] == "private, no-store"
 
 

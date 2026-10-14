@@ -3,14 +3,30 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
+from threading import BoundedSemaphore
 from uuid import uuid4
 
 import boto3
+from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 
 from .settings import get_settings
 
 MAX_IMAGE_BYTES = 50 * 1024 * 1024
+MAX_DECODED_PIXELS = 40_000_000
+MAX_IMAGE_EDGE = 16_000
+MAX_IMAGE_FRAMES = 100
+MAX_DISPLAY_EDGE = 2400
+MAX_DISPLAY_BYTES = 2 * 1024 * 1024
+# Fail fast: do not queue full-resolution decodes in this process.
+_image_slot = BoundedSemaphore(1)
+_IMAGE_TYPES = {
+    "PNG": (".png", "image/png"),
+    "JPEG": (".jpg", "image/jpeg"),
+    "GIF": (".gif", "image/gif"),
+    "WEBP": (".webp", "image/webp"),
+}
 
 
 def public_media_url() -> str:
@@ -19,26 +35,87 @@ def public_media_url() -> str:
     return (settings.r2_public_url or settings.media_url).rstrip("/")
 
 
-def _image_details(upload) -> tuple[bytes, str, str]:
+def _image_details(upload, *, public: bool = False) -> tuple[bytes, str, str]:
     body = upload.body
     if not body or len(body) > MAX_IMAGE_BYTES:
         raise ValueError("Choose an image no larger than 50 MiB.")
-    if body.startswith(b"\x89PNG\r\n\x1a\n"):
-        suffix, content_type = ".png", "image/png"
-    elif body.startswith(b"\xff\xd8\xff"):
-        suffix, content_type = ".jpg", "image/jpeg"
-    elif body.startswith((b"GIF87a", b"GIF89a")):
-        suffix, content_type = ".gif", "image/gif"
-    elif body.startswith(b"RIFF") and body[8:12] == b"WEBP":
-        suffix, content_type = ".webp", "image/webp"
+    if not _image_slot.acquire(blocking=False):
+        raise ValueError("Another image is being processed. Please retry shortly.")
+    try:
+        # Verify structure, then reopen and actually decode every frame,
+        # including private originals. Header inspection alone is insufficient.
+        with Image.open(BytesIO(body), formats=list(_IMAGE_TYPES)) as image:
+            suffix, content_type = _IMAGE_TYPES[image.format]
+            _check_dimensions(image)
+            image.verify()
+        with Image.open(BytesIO(body), formats=list(_IMAGE_TYPES)) as image:
+            total_pixels = 0
+            frame = 0
+            while True:
+                _check_dimensions(image)
+                total_pixels += image.width * image.height
+                if total_pixels > MAX_DECODED_PIXELS or frame >= MAX_IMAGE_FRAMES:
+                    raise ValueError(
+                        "Choose an image with at most 40 million decoded pixels across at most 100 frames."
+                    )
+                image.load()
+                frame += 1
+                try:
+                    image.seek(frame)
+                except EOFError:
+                    break
+            if public:
+                image.seek(0)
+                return _display_image(image), ".webp", "image/webp"
+        return body, suffix, content_type
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+        raise ValueError("Choose an image with at most 40 million decoded pixels.") from exc
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise ValueError("Upload a valid, complete PNG, JPEG, WebP or GIF image (not an SVG).") from exc
+    finally:
+        _image_slot.release()
+
+
+def _check_dimensions(image: Image.Image) -> None:
+    if image.width * image.height > MAX_DECODED_PIXELS or max(image.size) > MAX_IMAGE_EDGE:
+        raise ValueError("Choose an image with at most 40 million decoded pixels and no edge over 16000 pixels.")
+
+
+def _display_image(image: Image.Image) -> bytes:
+    # Apply orientation before dropping EXIF, including location/camera metadata.
+    # In-place transpose avoids retaining another full-resolution pixel buffer.
+    ImageOps.exif_transpose(image, in_place=True)
+    image.thumbnail((MAX_DISPLAY_EDGE, MAX_DISPLAY_EDGE), Image.Resampling.LANCZOS, reducing_gap=3)
+    has_alpha = image.mode in ("RGBA", "LA") or "transparency" in image.info
+    mode = "RGBA" if has_alpha else "RGB"
+    icc = image.info.get("icc_profile")
+    if icc:
+        try:
+            source = ImageCms.ImageCmsProfile(BytesIO(icc))
+            if image.mode in ("P", "LA"):
+                image = image.convert(mode)
+            image = ImageCms.profileToProfile(image, source, ImageCms.createProfile("sRGB"), outputMode=mode)
+        except (ImageCms.PyCMSError, OSError, ValueError) as exc:
+            raise ValueError("Image color profile cannot be converted to sRGB. Export it as sRGB and retry.") from exc
     else:
-        raise ValueError("Upload a PNG, JPEG, WebP or GIF image (not an SVG).")
-    return body, suffix, content_type
+        # Untagged images are assumed sRGB; Pillow converts untagged CMYK to RGB.
+        image = image.convert(mode)
+    try:
+        while True:
+            output = BytesIO()
+            image.save(output, format="WEBP", quality=82, method=4, exif=b"", icc_profile=b"", xmp=b"")
+            encoded = output.getvalue()
+            if len(encoded) <= MAX_DISPLAY_BYTES:
+                return encoded
+            # Bound high-entropy images without lowering quality indefinitely.
+            image.thumbnail((max(1, int(image.width * 0.8)), max(1, int(image.height * 0.8))), Image.Resampling.LANCZOS)
+    finally:
+        image.close()
 
 
 def store_image(upload, subdir: str) -> str:
-    """Validate and store a public image in R2 or the local media tree."""
-    body, suffix, content_type = _image_details(upload)
+    """Store only an optimized public display image; never archive the original."""
+    body, suffix, content_type = _image_details(upload, public=True)
 
     now = datetime.now(UTC)
     key = f"{subdir}/{now:%Y}/{now:%m}/{uuid4().hex}{suffix}"
