@@ -410,13 +410,24 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     `1630370919026007653`). No backup policy was enabled; no restore was run.
     Production PITR inspection also reported disabled/unwired, not an active
     substitute. No workspace upgrade or PITR-enabling redeploy was authorized.
-  - Choose an explicitly approved paid backup plan or a separately implemented
-    logical backup (`pg_dump`) job to encrypted/private durable storage, with
-    retention, failure monitoring and an isolated restore rehearsal. Cloudflare
-    R2/access is still blocked. Logical backup execution also needs an approved
-    database connection method: current Postgres has no public TCP proxy and
-    Railway SSH reports no registered keys. Do not expose the database or add
-    account keys silently just to make the rehearsal work.
+  - **Current direction — October 14, 2026:** use a logical `pg_dump` job over
+    Railway private networking; encrypt the DB dump and staging public/private R2
+    objects client-side; upload to a dedicated private R2 backup bucket. A daily
+    03:30 UTC schedule and 14-day retention are proposed. Railway cron is expected
+    not to require a plan upgrade; metered compute/storage may still incur charges.
+  - Local code and unit tests are in `app/backup.py`, `tests/test_backup.py`, and
+    `backup.Dockerfile`; design is in `BACKUP_RUNBOOK.md`; staging-only setup and
+    read-only plans are in `STAGING_BACKUP_SETUP_REVIEW.md`. No provider resource,
+    credential, key, lifecycle rule, schedule, alert, or restore has been
+    configured. No plan was applied; production remains untouched.
+  - Restore tooling/rehearsal and independent escrow/recovery of both backup and
+    application encryption keys remain open; G2 is not passed.
+  - The October 11 note that R2 was blocked predates the October 13 creation of
+    staging public/private media buckets. Those media buckets must not be reused
+    for database backups; a separate private backup bucket and appropriately
+    scoped credentials remain necessary. Public TCP and SSH access are still not
+    configured; the selected design uses an in-environment scheduled service and
+    must verify private-network access rather than exposing Postgres.
   - Railway native volume restores are limited to the same project/environment
     and replace the service mount on apply; never test that operation against
     the working production database. A logical restore to a disposable Postgres

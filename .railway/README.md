@@ -64,6 +64,9 @@ successful migrations are **not** automatically rolled back if app deployment
 fails. Review schema compatibility and backups before each production release.
 `/api/health/` checks liveness only; it does not verify database/provider health.
 Database backups, restore rehearsals and background jobs remain open Phase 12 work.
+The proposed staging-only backup configuration and read-only plan are documented
+in [`backend/STAGING_BACKUP_SETUP_REVIEW.md`](../backend/STAGING_BACKUP_SETUP_REVIEW.md);
+do not apply it until the review gates are resolved.
 
 ### Import safety
 

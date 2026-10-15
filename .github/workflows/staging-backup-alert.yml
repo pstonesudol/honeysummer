@@ -1,0 +1,29 @@
+name: Staging backup alert
+
+on:
+  workflow_dispatch:
+    inputs:
+      outcome:
+        description: Backup result from the staging backup service
+        required: true
+        type: choice
+        options:
+          - failure
+          - success
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Report staging backup failure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit failure notification
+        if: inputs.outcome == 'failure'
+        run: |
+          echo "::error::The Honey Summer staging backup job reported a failure. Check the Railway staging backup service logs."
+          exit 1
+      - name: Confirm alert path
+        if: inputs.outcome == 'success'
+        run: echo "Staging backup alert path test completed successfully."
