@@ -16,6 +16,7 @@ this plan before any provider action. Production is explicitly excluded.
 | Backup contents | One PostgreSQL custom dump plus every staging public/private R2 object and metadata |
 | Encryption | Client-side AES-256-GCM with a dedicated key; encrypted manifest uploaded last |
 | Failure alert | Dispatch `.github/workflows/staging-backup-alert.yml`; failed Actions run notifies subscribed GitHub users |
+| Ad-hoc trigger | `.github/workflows/staging-backup-manual.yml` manually triggers the staging Railway cron run from `main` |
 | Railway plan | No Pro upgrade expected for the cron service; compute and storage/request usage may still cost money |
 
 The cadence/retention are proposed defaults, not provider configuration. Cost
@@ -34,17 +35,16 @@ plus the proposed daily schedule. Variables remain unmanaged; no secrets are in
 IaC. Do not apply until the plan is approved and the restore/recovery gaps below
 are closed.
 
-Read-only Railway plans were inspected after adding the configuration:
+Fresh read-only Railway plans were inspected after aligning the existing backend
+source declaration with its current GitHub type and leaving its default restart
+policy unmanaged:
 
-- **Staging:** 1 service to add, 2 service-field changes, 0 destroys. The add is
-  `honeysummer-staging-backup`. The other changes are on existing `honeysummer`:
-  source type `github → empty`, and restart policy `null → ON_FAILURE`.
-- **Production:** 0 services to add, 2 service-field changes, 0 destroys. The
-  same two existing-backend changes appear; **the backup service is absent**.
-- **Nothing was applied.** Do not accept either whole-project plan as-is. Review
-  the existing backend drift independently so backup provisioning cannot bundle
-  unrelated changes. Re-run fresh staging and production plans immediately before
-  any future apply.
+- **Staging:** 1 service to add, 0 changes, 0 destroys. The only addition is
+  `honeysummer-staging-backup`.
+- **Production:** already up to date: 0 adds, 0 changes, 0 destroys. The backup
+  service is absent.
+- **Nothing was applied.** These are read-only plans. Re-run both plans immediately
+  before any future apply; do not apply if the output differs.
 
 ## Secret and permission inventory
 
@@ -71,13 +71,16 @@ Do not put secrets in chat, docs, logs, source control, or the status register.
 
 ## Recovery requirements before enablement
 
-The backup writer and encryption tests now cover streaming database encryption,
-copying public/private R2 objects, per-object hashes, manifest-last completion,
-and a generic GitHub failure dispatch. **This is still not an accepted recovery
-system.** Before enabling the schedule, complete and review:
+The backup writer and tests cover streaming database encryption, copying
+public/private R2 objects, per-object hashes, manifest-last completion, a generic
+GitHub failure dispatch, and an isolated-target restore command. The manual
+GitHub workflow can trigger the proposed Railway cron service once provisioned.
+**This is still not an accepted recovery system.** Before enabling the schedule,
+complete and review:
 
-1. An executable download/manifest verification/decrypt/`pg_restore` procedure
-   that refuses production targets and does not drop existing data.
+1. Review the restore command's explicit `staging-restore` target guard, exact
+   typed confirmation, empty-database and empty-bucket checks, and no-overwrite
+   behavior. It refuses production and non-restore targets and does not drop data.
 2. A separate isolated Postgres target and isolated public/private restore buckets
    with no customer-facing routes; rehearse there, never over active staging.
 3. Secure independent escrow and retrieval test for both `BACKUP_ENCRYPTION_KEY`
@@ -85,10 +88,13 @@ system.** Before enabling the schedule, complete and review:
 4. Cross-check media byte counts/hashes and restore content type/cache metadata;
    verify private restored objects remain private and public restored objects are
    not routed until explicitly approved.
-5. Alert test: trigger a synthetic failure, verify the GitHub Actions run fails,
+5. Manual trigger test: run **Run staging backup now** from `main` in GitHub
+   Actions and verify it invokes the staging service once. Test only after the
+   service and secrets are provisioned.
+6. Alert test: trigger a synthetic failure, verify the GitHub Actions run fails,
    and confirm an actual notification reaches the owner. A hard kill, startup
    failure, missing token or GitHub API outage can bypass the direct dispatch.
-6. Verify the destination is private, lifecycle expiry is correct, credentials are
+7. Verify the destination is private, lifecycle expiry is correct, credentials are
    bucket-scoped, and a successful scheduled run exits cleanly. Keep a manifest as
    the required completion marker; partial objects without one are not backups.
 

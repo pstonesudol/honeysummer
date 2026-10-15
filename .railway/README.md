@@ -7,12 +7,14 @@ The CLI imported the existing staging Postgres and volume without secret values.
 name `honeysummer` to avoid creating a second, differently named backend.
 The same resource names resolve independently within each selected environment.
 
-**Release ownership:** backend GitHub source triggers are now disconnected in
-both environments. The IaC file preserves that empty source with build root
-`/backend`; GitHub Actions uploads the CI-tested backend archive, stages it first,
-then waits for a protected production-environment approval. See
+**Release ownership:** backend GitHub source triggers are disconnected in both
+environments, while the existing Railway GitHub source connection is preserved
+as unmanaged dashboard state. The IaC does not detach or rewrite that connection.
+GitHub Actions uploads the CI-tested backend archive, stages it first, then waits
+for a protected production-environment approval. See
 [`RELEASE_RUNBOOK.md`](../RELEASE_RUNBOOK.md) for token setup and activation.
-Do not reconnect the repository source or reapply an old revision that does so.
+Do not reconnect direct Railway source triggers or reapply an old revision that
+changes the release ownership model.
 
 Install local dependencies with `npm ci`. Authenticate with `railway login`,
 then `railway link` to Honey Summer (skip the optional service selection).
@@ -30,11 +32,11 @@ railway config apply --environment staging
 railway config apply --environment production
 ```
 
-The reviewed initial staging plan adds only `honeysummer`; it leaves the existing
-Postgres and volume unchanged. The initial production plan adds Postgres, its
-volume and `honeysummer`. Neither plan deletes anything. Recheck before applying;
-dashboard edits can change these plans. These commands are not proof of a healthy
-deployment, working providers, backups, or production acceptance. The current consolidated status index is [`../STATUS.md`](../STATUS.md); detailed acceptance evidence belongs in `backend/PRODUCTION_READINESS.md`.
+Review the exact output of every fresh plan before applying. Dashboard edits can
+change these plans. These commands are not proof of a healthy deployment, working
+providers, backups, or production acceptance. The current consolidated status
+index is [`../STATUS.md`](../STATUS.md); detailed acceptance evidence belongs in
+`backend/PRODUCTION_READINESS.md`.
 
 ### Variables and deployment prerequisites
 

@@ -1,0 +1,75 @@
+name: Run staging backup now
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-backup-manual
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Trigger staging backup
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@5.64.2
+      - name: Deploy the reviewed backup code to the staging service
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$RAILWAY_TOKEN"
+          test -n "$RAILWAY_PROJECT_ID"
+          temporary="$(mktemp -d)"
+          trap 'rm -rf "$temporary"' EXIT
+          git archive --format=tar "$GITHUB_SHA" backend | tar -xf - -C "$temporary"
+          deployment="$(railway up "$temporary" --path-as-root --detach --json \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment staging \
+            --service honeysummer-staging-backup \
+            --message "Manual staging backup from ${GITHUB_SHA}")"
+          deployment_id="$(jq -er '.deploymentId' <<< "$deployment")"
+          query='query($id: String!) { deployment(id: $id) { id status projectId environmentId serviceId } }'
+          for attempt in $(seq 1 60); do
+            result="$(railway api "$query" --variables "{\"id\":\"$deployment_id\"}")"
+            status="$(jq -er '.data.deployment.status' <<< "$result")"
+            project_id="$(jq -er '.data.deployment.projectId' <<< "$result")"
+            environment_id="$(jq -er '.data.deployment.environmentId' <<< "$result")"
+            test "$project_id" = "$RAILWAY_PROJECT_ID"
+            test "$environment_id" = "1084c402-f444-49e4-8a85-3ac85e82bf5d"
+            case "$status" in
+              SUCCESS) break ;;
+              FAILED|CRASHED|REMOVED)
+                echo "Backup service deployment failed; inspect Railway deployment $deployment_id."
+                exit 1
+                ;;
+            esac
+            if [ "$attempt" -eq 60 ]; then
+              echo "Timed out waiting for backup service deployment $deployment_id."
+              exit 1
+            fi
+            sleep 10
+          done
+      - name: Trigger the staging backup immediately
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          railway cron run \
+            --service honeysummer-staging-backup \
+            --environment staging \
+            --project "$RAILWAY_PROJECT_ID"
