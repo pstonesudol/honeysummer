@@ -39,7 +39,7 @@ cutover, live customer transaction or launch authorization is claimed here.
 | 10 — Separate retail/wholesale carts | Complete | Partial | Not started | Real hosted Checkout, returns/webhooks, cancellation/expiry/delayed payment, two-cart recovery and supported-device checks remain open. |
 | 11 — Accounts/security | Complete; optional operator MFA policy approved | Partial | Not started | Cross-worker revocation, broader rate limits, real token expiry/recovery, security-mail delivery, privacy/incident response and deployment-header checks remain open. |
 | 12 — DevOps/production acceptance | In progress | In progress | Partial — direct production backend health only | All detailed acceptance rows remain open. Backups/restore, scheduled jobs, alerts, provider rehearsals and launch sign-off are not complete. |
-| 12.5 — Automated quality/release checks | Partial baseline; scope incomplete | Partial HTTP smoke evidence; broader automation open | Not accepted | CI already runs tests, lint and migrations, and staging release smoke checks exist. Explicit type checks, vulnerability/secret scans, complete migration validation and required failure rehearsals remain open. |
+| 12.5 — Automated quality/release checks | Partial baseline; scope incomplete | Partial HTTP smoke evidence; broader automation open | Not accepted | CI now runs an explicit frontend TypeScript check in addition to tests, lint and migrations. Dependency vulnerability/secret scans, backend type checks, complete migration validation and required failure rehearsals remain open. `npm ci` currently reports 8 high-severity dependency findings; triage before making the audit a blocking gate. |
 | 12.6 — IaC/drift control | Partial baseline; scope incomplete | Partial Railway/Wrangler configuration evidence | Not accepted | Railway IaC and Wrangler configuration exist. Cloudflare/GitHub settings are not fully codified; secure state, approved applies and drift detection remain open. |
 | 13 — Polish/launch | Partial | Not applicable | Not started | Final copy/photos/fonts/licensing, accessibility/SEO, client approval, cutover and post-cutover checks remain open. |
 
@@ -83,11 +83,13 @@ acceptance row unless the register explicitly says so.
   restore buckets are provisioned. Restore rehearsal, failure-alert verification,
   and escrow retrieval checks remain open. Production has no backup service and
   was not changed.
-- Reconciliation workers — October 15, 2026: report-only inventory/Checkout and
-  invoice-refund jobs are implemented with staging-only 15-minute/daily schedules
-  and generic GitHub failure dispatch. They are not yet provisioned or deployed;
-  first-run evidence and owner notification confirmation remain open. See
-  `backend/STAGING_RECONCILIATION_RUNBOOK.md`. No production worker was changed.
+- Reconciliation workers — October 15, 2026: staging-only report-only
+  inventory/Checkout and invoice-refund jobs are provisioned at 15-minute and
+  daily schedules. Both first manual runs succeeded with zero findings. A
+  controlled GitHub dispatch produced the intended failed alert workflow; owner
+  notification receipt remains unconfirmed. Ongoing monitoring and production
+  readiness remain open. See `backend/STAGING_RECONCILIATION_RUNBOOK.md`. No
+  production worker was changed.
 
 ## Production validation summary
 
