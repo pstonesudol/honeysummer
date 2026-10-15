@@ -24,7 +24,8 @@ jobs:
           ref: main
           persist-credentials: false
       - name: Install Railway CLI
-        run: npm install --global @railway/cli@5.64.2
+        # `railway cron run` is supported by this verified CLI version.
+        run: npm install --global @railway/cli@5.68.0
       - name: Deploy the reviewed backup code to the staging service
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
