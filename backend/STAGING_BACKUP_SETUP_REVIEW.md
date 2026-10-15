@@ -35,17 +35,16 @@ plus the proposed daily schedule. Variables remain unmanaged; no secrets are in
 IaC. Do not apply until the plan is approved and the restore/recovery gaps below
 are closed.
 
-Read-only Railway plans were inspected after adding the configuration:
+Fresh read-only Railway plans were inspected after aligning the existing backend
+source declaration with its current GitHub type and leaving its default restart
+policy unmanaged:
 
-- **Staging:** 1 service to add, 2 service-field changes, 0 destroys. The add is
-  `honeysummer-staging-backup`. The other changes are on existing `honeysummer`:
-  source type `github → empty`, and restart policy `null → ON_FAILURE`.
-- **Production:** 0 services to add, 2 service-field changes, 0 destroys. The
-  same two existing-backend changes appear; **the backup service is absent**.
-- **Nothing was applied.** Do not accept either whole-project plan as-is. Review
-  the existing backend drift independently so backup provisioning cannot bundle
-  unrelated changes. Re-run fresh staging and production plans immediately before
-  any future apply.
+- **Staging:** 1 service to add, 0 changes, 0 destroys. The only addition is
+  `honeysummer-staging-backup`.
+- **Production:** already up to date: 0 adds, 0 changes, 0 destroys. The backup
+  service is absent.
+- **Nothing was applied.** These are read-only plans. Re-run both plans immediately
+  before any future apply; do not apply if the output differs.
 
 ## Secret and permission inventory
 

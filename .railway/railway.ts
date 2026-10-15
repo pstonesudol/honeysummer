@@ -17,12 +17,9 @@ export default defineRailway((ctx) => {
   });
 
   const backend = service("honeysummer", {
-    // GitHub Actions owns deployment order and uploads the approved commit.
-    // No GitHub source/branch: Railway webhooks must not bypass staging/approval.
-    source: {
-      ...empty(),
-      rootDirectory: "/backend",
-    },
+    // Preserve the existing GitHub repository association and root while leaving
+    // its disconnected deploy triggers and default restart policy untouched.
+    source: { type: "github", rootDirectory: "/backend" },
     build: {
       builder: "RAILPACK",
       buildCommand: "uv sync --locked --no-dev",
@@ -34,7 +31,6 @@ export default defineRailway((ctx) => {
     healthcheckTimeout: 120,
     replicas: { iad: 1 },
     deploy: {
-      restartPolicyType: "ON_FAILURE",
       restartPolicyMaxRetries: 3,
     },
   });

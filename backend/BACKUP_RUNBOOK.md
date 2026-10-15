@@ -47,11 +47,13 @@ escrow. An isolated restore rehearsal remains required before G2 can pass.
   `.github/workflows/staging-backup-alert.yml` workflow. GitHub only notifies
   users who have appropriate Actions/repository notifications enabled.
 - Ad-hoc run: after the scheduled service is provisioned, the manual GitHub
-  workflow **Run staging backup now** on `main` calls `railway cron run` for that
-  service. It uses the protected GitHub `staging` environment and requires its
-  `RAILWAY_TOKEN` secret plus `RAILWAY_PROJECT_ID` variable. This triggers the
-  exact same backup runner immediately; it does not create a separate backup
-  implementation or allow a production target.
+  workflow **Run staging backup now** on `main` uploads the reviewed `backend/`
+  image to that service, waits for the exact deployment to succeed in the staging
+  environment, then calls `railway cron run`. It uses the protected GitHub
+  `staging` environment and requires its `RAILWAY_TOKEN` secret plus
+  `RAILWAY_PROJECT_ID` variable. It triggers the same backup runner immediately;
+  it does not create a separate backup implementation or allow a production
+  target.
 
 ### Credentials and permissions
 
