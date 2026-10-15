@@ -1,0 +1,35 @@
+name: Run staging backup now
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-backup-manual
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Trigger staging backup
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: staging
+    steps:
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@5.64.2
+      - name: Trigger the staging cron service immediately
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$RAILWAY_TOKEN"
+          test -n "$RAILWAY_PROJECT_ID"
+          railway cron run \
+            --service honeysummer-staging-backup \
+            --environment staging \
+            --project "$RAILWAY_PROJECT_ID"

@@ -23,9 +23,11 @@ lifecycle rule, schedule, alert, or restore has been configured. The backup buck
 must be dedicated and private, separate from both media buckets.
 
 The job does not automatically escrow the backup key or application encryption
-key, and there is not yet a restore command. The operator must store both keys
-independently in approved secure escrow. Restore tooling and an isolated restore
-rehearsal remain required before G2 can pass.
+key. `python -m app.restore_backup <manifest-key>` is a guarded restore tool; it
+requires a separately isolated `staging-restore` PostgreSQL target and empty,
+separate public/private restore buckets, then demands an exact typed target
+confirmation. The operator must store both keys independently in approved secure
+escrow. An isolated restore rehearsal remains required before G2 can pass.
 
 ## Proposed staging configuration
 
@@ -44,6 +46,12 @@ rehearsal remain required before G2 can pass.
 - Alert: caught backup errors dispatch the deliberately failing
   `.github/workflows/staging-backup-alert.yml` workflow. GitHub only notifies
   users who have appropriate Actions/repository notifications enabled.
+- Ad-hoc run: after the scheduled service is provisioned, the manual GitHub
+  workflow **Run staging backup now** on `main` calls `railway cron run` for that
+  service. It uses the protected GitHub `staging` environment and requires its
+  `RAILWAY_TOKEN` secret plus `RAILWAY_PROJECT_ID` variable. This triggers the
+  exact same backup runner immediately; it does not create a separate backup
+  implementation or allow a production target.
 
 ### Credentials and permissions
 
@@ -74,32 +82,45 @@ dispatch. Before calling alerting accepted, test a simulated failure and confirm
 receipt through the owner's GitHub notification settings. Railway's own failure
 history is a secondary diagnostic, not proof of notification.
 
-## Recovery procedure (not yet automated)
+## Recovery procedure (tool implemented; rehearsal not yet completed)
 
-1. Select a snapshot by its encrypted manifest key. Verify each listed backup
-   object exists and its ciphertext checksum matches its stored metadata.
-2. Download into a restricted, disposable workspace outside the repository.
-   Decrypt/authenticate the manifest first; missing or invalid manifest means the
-   snapshot is incomplete.
-3. Decrypt and authenticate the database archive and media objects. Verify the
-   restored media sizes and SHA-256 hashes against the manifest. Never use
-   unauthenticated/partial plaintext.
-4. Restore with `pg_restore --exit-on-error --no-owner --no-acl` into a new,
-   isolated, empty PostgreSQL database. Never point restore at working staging or
-   production.
-5. Restore public/private objects into separate isolated buckets. The private
-   bucket must have no public domain; keep the restored public bucket unrouted
-   until keys, bytes, content types, caching and access boundaries are verified.
-   Never overwrite the source buckets during rehearsal.
-6. Verify schema/revision state, representative synthetic records and application
-   reads with a disposable app configuration. Verify escrow/retrieval of both
-   the backup key and application encryption key independently.
-7. Securely remove plaintext and disposable resources under an approved cleanup
+1. Select a snapshot by its encrypted manifest key. Configure restore-only
+   credentials and target settings as described below, then run
+   `uv run --no-sync python -m app.restore_backup '<manifest-key>'` from a
+   restricted operator environment.
+2. Confirm the displayed exact target phrase (`RESTORE staging-restore
+   <host>/<database>`) before continuing. The tool requires an empty isolated
+   PostgreSQL database and empty separate media buckets, checks object ciphertext
+   hashes, authenticates the manifest and all files, and verifies media plaintext
+   lengths and hashes before writing anything.
+3. The tool runs `pg_restore --list`, then `pg_restore --exit-on-error --no-owner
+   --no-acl`; it restores public/private objects into separate isolated buckets
+   while preserving content type, cache control and metadata. The private bucket
+   must have no public domain. Never restore into working staging, production,
+   or source buckets.
+4. Verify schema/revision state, representative synthetic records and app reads
+   using a disposable app configuration. Verify escrow/retrieval of both the
+   backup key and application encryption key independently.
+5. Securely remove plaintext and disposable resources under an approved cleanup
    procedure. Record snapshot ID, target, checks, result, operator and cleanup;
    never record credentials, key material or private-photo contents.
 
-This rehearsal requires an executable restore tool or reviewed manual commands,
-isolated Postgres and public/private buckets, and explicit cleanup approval. G2
-remains open until database, media, key recovery and failure alerts are rehearsed.
+Restore-only environment variables:
+
+- `RESTORE_TARGET_ENVIRONMENT=staging-restore`
+- `RESTORE_DATABASE_URL`: isolated Postgres URL whose host identifies the restore
+  target (contains `restore`, not `production`).
+- `RESTORE_PUBLIC_BUCKET`, `RESTORE_PRIVATE_BUCKET`: distinct empty buckets whose
+  names identify them as restore targets and differ from source/backup buckets.
+- `RESTORE_BACKUP_R2_ACCESS_KEY_ID`, `RESTORE_BACKUP_R2_SECRET_ACCESS_KEY`:
+  read-only access to the backup bucket.
+- `RESTORE_R2_ACCESS_KEY_ID`, `RESTORE_R2_SECRET_ACCESS_KEY`: write-only access
+  to the two isolated restore buckets; never source or production buckets.
+- Existing `R2_ENDPOINT_URL`, `BACKUP_R2_BUCKET`, and escrowed
+  `BACKUP_ENCRYPTION_KEY` are also required.
+
+This rehearsal requires isolated Postgres and public/private buckets, and explicit
+cleanup approval. G2 remains open until database, media, key recovery and failure
+alerts are rehearsed.
 Production needs its own separately approved policy and recovery evidence; staging
 does not prove production recoverability.

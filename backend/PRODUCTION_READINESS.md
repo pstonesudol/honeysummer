@@ -415,13 +415,17 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     objects client-side; upload to a dedicated private R2 backup bucket. A daily
     03:30 UTC schedule and 14-day retention are proposed. Railway cron is expected
     not to require a plan upgrade; metered compute/storage may still incur charges.
-  - Local code and unit tests are in `app/backup.py`, `tests/test_backup.py`, and
-    `backup.Dockerfile`; design is in `BACKUP_RUNBOOK.md`; staging-only setup and
-    read-only plans are in `STAGING_BACKUP_SETUP_REVIEW.md`. No provider resource,
-    credential, key, lifecycle rule, schedule, alert, or restore has been
-    configured. No plan was applied; production remains untouched.
-  - Restore tooling/rehearsal and independent escrow/recovery of both backup and
-    application encryption keys remain open; G2 is not passed.
+  - Local code and tests are in `app/backup.py`, `app/restore_backup.py`,
+    `tests/test_backup.py`, `tests/test_restore_backup.py`, and
+    `backup.Dockerfile`. GitHub workflows provide failure alerts and an on-demand
+    staging run trigger; details are in `BACKUP_RUNBOOK.md` and
+    `STAGING_BACKUP_SETUP_REVIEW.md`. No provider resource, credential, key,
+    lifecycle rule, schedule, alert, backup, or restore has been configured or
+    run. Production remains untouched.
+  - The guarded restore tooling is implemented but has not been rehearsed against
+    disposable Postgres and media buckets. Independent escrow/recovery of both
+    backup and application encryption keys and end-to-end alert/trigger tests
+    remain open; G2 is not passed.
   - The October 11 note that R2 was blocked predates the October 13 creation of
     staging public/private media buckets. Those media buckets must not be reused
     for database backups; a separate private backup bucket and appropriately
