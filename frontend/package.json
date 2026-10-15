@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
     "preview": "node scripts/worker.mjs preview",
     "deploy": "node scripts/worker.mjs deploy",
     "upload": "node scripts/worker.mjs upload",
