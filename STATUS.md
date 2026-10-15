@@ -78,8 +78,9 @@ acceptance row unless the register explicitly says so.
   success. Exact deployed git SHA is not exposed by Railway metadata.
 - Backups — October 15, 2026: the staging-only Railway cron service and daily
   03:30 UTC schedule are provisioned. The service has no deployment and is
-  offline; no backup bucket, backup credentials/key, lifecycle rule, backup run,
-  or restore exists yet. The production plan contains no backup service.
+  offline. A private R2 backup bucket and 14-day snapshot lifecycle are set, but
+  scoped credentials and the encryption key are not. No backup or restore has
+  run. The production plan contains no backup service.
 
 ## Production validation summary
 

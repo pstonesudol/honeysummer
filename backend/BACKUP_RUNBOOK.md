@@ -6,8 +6,9 @@ This runbook describes the selected **logical backup** approach. Railway's
 scheduled-service (cron) feature is expected to work without upgrading the
 workspace; scheduled compute and R2 storage/requests can still incur usage costs.
 The staging cron service has been created, but it is offline with no deployment;
-no backup has run. No R2 bucket, credential, encryption key, lifecycle rule, or
-production configuration has been created or changed.
+no backup has run. The private destination bucket and 14-day lifecycle rule now
+exist. No R2 credentials, encryption key, or production configuration have been
+created or changed.
 
 The backup command is `python -m app.backup`. It streams a PostgreSQL custom dump
 through AES-256-GCM encryption and copies every object in the staging public and
@@ -21,9 +22,10 @@ backup key is not the application's `SECURITY_ENCRYPTION_KEY`.
 staging with a 03:30 UTC daily cron schedule and no public domain or volume. It has
 no deployment and is offline. Its non-secret settings and staging Postgres/media
 references are configured, but required encryption/R2/GitHub secrets are not.
-The dedicated backup bucket and its 14-day lifecycle policy have not been
-created. GitHub Actions is the selected failure-alert destination. The backup
-bucket must be private and separate from both media buckets.
+The dedicated private bucket `honeysummer-staging-backups` now exists with no
+custom or `r2.dev` public domain; snapshots under `snapshots/` expire after 14
+days, and the default 7-day incomplete-multipart cleanup is preserved. GitHub
+Actions is the selected failure-alert destination.
 
 The job does not automatically escrow the backup key or application encryption
 key. `python -m app.restore_backup <manifest-key>` is a guarded restore tool; it
@@ -41,17 +43,17 @@ escrow. An isolated restore rehearsal remains required before G2 can pass.
   Railway's private network; never a copied production URL.
 - Schedule: configured as `30 3 * * *` UTC; restart policy `NEVER`. The service
   has no deployment yet, so it has not run.
-- Storage: private bucket `honeysummer-staging-backups` is planned, not yet
-  created; 14-day lifecycle expiry is also pending. No public custom domain. The
-  manifest is the completion marker; orphaned partial snapshots are harmless and
-  lifecycle-expired.
+- Storage: private bucket `honeysummer-staging-backups` is created with no public
+  domain and a 14-day lifecycle rule on `snapshots/`. The manifest is the
+  completion marker; orphaned partial snapshots are harmless and lifecycle-
+  expired.
 - Environment guard: `.railway/railway.ts` includes the service only when the
   selected environment is `staging`; production plans must not contain it.
 - Alert: caught backup errors dispatch the deliberately failing
   `.github/workflows/staging-backup-alert.yml` workflow. GitHub only notifies
   users who have appropriate Actions/repository notifications enabled.
-- Ad-hoc run: after the scheduled service is provisioned, the manual GitHub
-  workflow **Run staging backup now** on `main` uploads the reviewed `backend/`
+- Ad-hoc run: once required secrets and credentials are configured, the manual
+  GitHub workflow **Run staging backup now** on `main` uploads the reviewed `backend/`
   image to that service, waits for the exact deployment to succeed in the staging
   environment, then calls `railway cron run`. It uses the protected GitHub
   `staging` environment and requires its `RAILWAY_TOKEN` secret plus
