@@ -10,6 +10,7 @@ import stripe
 from sqlalchemy import select
 
 from .db import session_scope
+from .job_alerts import dispatch_job_failure
 from .models import BouquetProposal, InvoiceRefund, WeddingInvoice
 from .reconcile import record_run
 from .settings import get_settings
@@ -85,10 +86,17 @@ async def audit_and_record() -> list[str]:
 
 def main():
     """Audit all invoice receipts and persist report-only findings."""
-    findings = asyncio.run(audit_and_record())
+    try:
+        findings = asyncio.run(audit_and_record())
+    except Exception:
+        if not dispatch_job_failure("invoice-refund-audit"):
+            print("Invoice refund audit failed; GitHub alert dispatch was unavailable.", file=sys.stderr)
+        raise
     for finding in findings:
         print(finding)
     if findings:
+        if not dispatch_job_failure("invoice-refund-audit"):
+            print("Invoice refund audit findings exist; GitHub alert dispatch was unavailable.")
         sys.exit(1)
     print("Invoice refund journals agree with supported Stripe payments.")
 

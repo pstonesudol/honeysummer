@@ -11,6 +11,7 @@ import sys
 from sqlalchemy import func, select
 
 from .db import session_scope
+from .job_alerts import dispatch_job_failure
 from .models import ReconciliationRun
 from .payments import reconcile
 from .security import deliver_security_mail
@@ -54,7 +55,12 @@ def main() -> None:
         "--full", action="store_true", help="check all paid orders against Stripe, not just the last 48 hours"
     )
     args = parser.parse_args()
-    findings = asyncio.run(reconcile_and_record(apply=args.apply, full=args.full))
+    try:
+        findings = asyncio.run(reconcile_and_record(apply=args.apply, full=args.full))
+    except Exception:
+        if not dispatch_job_failure("reconciliation"):
+            print("Reconciliation job failed; GitHub alert dispatch was unavailable.", file=sys.stderr)
+        raise
     for finding in findings:
         print(finding)
     if not findings:
@@ -62,6 +68,8 @@ def main() -> None:
     else:
         # A nonzero exit lets cron/job monitoring alert on discrepancies, even
         # when --apply fixed one: the operator should inspect what happened.
+        if not dispatch_job_failure("reconciliation"):
+            print("Reconciliation findings exist; GitHub alert dispatch was unavailable.", file=sys.stderr)
         sys.exit(1)
 
 

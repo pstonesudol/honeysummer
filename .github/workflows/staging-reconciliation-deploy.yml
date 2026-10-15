@@ -1,0 +1,67 @@
+name: Deploy staging reconciliation workers
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-reconciliation-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy and run report-only staging audits
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@5.68.0
+      - name: Deploy both scheduled runners
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$RAILWAY_TOKEN"
+          test -n "$RAILWAY_PROJECT_ID"
+          temporary="$(mktemp -d)"
+          trap 'rm -rf "$temporary"' EXIT
+          git archive --format=tar "$GITHUB_SHA" backend | tar -xf - -C "$temporary"
+          for service in honeysummer-staging-reconcile honeysummer-staging-invoice-refund-audit; do
+            deployment="$(railway up "$temporary" --path-as-root --detach --json \
+              --project "$RAILWAY_PROJECT_ID" \
+              --environment staging \
+              --service "$service" \
+              --message "Staging report-only audit worker from ${GITHUB_SHA}")"
+            deployment_id="$(jq -er '.deploymentId' <<< "$deployment")"
+            query='query($id: String!) { deployment(id: $id) { id status projectId environmentId } }'
+            for attempt in $(seq 1 120); do
+              result="$(railway api "$query" --variables "{\"id\":\"$deployment_id\"}")"
+              status="$(jq -er '.data.deployment.status' <<< "$result")"
+              project_id="$(jq -er '.data.deployment.projectId' <<< "$result")"
+              environment_id="$(jq -er '.data.deployment.environmentId' <<< "$result")"
+              test "$project_id" = "$RAILWAY_PROJECT_ID"
+              test "$environment_id" = "1084c402-f444-49e4-8a85-3ac85e82bf5d"
+              case "$status" in
+                SUCCESS) break ;;
+                FAILED|CRASHED|REMOVED)
+                  echo "Staging worker deployment failed; inspect Railway deployment $deployment_id."
+                  exit 1
+                  ;;
+              esac
+              if [ "$attempt" -eq 120 ]; then
+                echo "Timed out waiting for staging worker deployment $deployment_id."
+                exit 1
+              fi
+              sleep 10
+            done
+          done
