@@ -413,27 +413,24 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   - **Current direction — October 14, 2026:** use a logical `pg_dump` job over
     Railway private networking; encrypt the DB dump and staging public/private R2
     objects client-side; upload to a dedicated private R2 backup bucket. A daily
-    03:30 UTC schedule and 14-day retention are proposed. Railway cron is expected
+    03:30 UTC schedule and 14-day retention are configured. Railway cron is expected
     not to require a plan upgrade; metered compute/storage may still incur charges.
   - Local code and tests are in `app/backup.py`, `app/restore_backup.py`,
     `tests/test_backup.py`, `tests/test_restore_backup.py`, and
     `backup.Dockerfile`. GitHub workflows provide failure alerts and an on-demand
     staging run trigger; details are in `BACKUP_RUNBOOK.md` and
-    `STAGING_BACKUP_SETUP_REVIEW.md`. The staging-only cron service is provisioned
-    with its schedule and non-secret/reference variables, but has no deployment
-    and remains offline. A private R2 backup bucket and 14-day lifecycle rule are
-    configured. Scoped credentials and the backup key remain missing; no backup
-    or restore has been run. Production remains untouched.
-  - The guarded restore tooling is implemented but has not been rehearsed against
-    disposable Postgres and media buckets. Independent escrow/recovery of both
-    backup and application encryption keys and end-to-end alert/trigger tests
-    remain open; G2 is not passed.
+    `STAGING_BACKUP_SETUP_REVIEW.md`. The staging-only cron service completed two
+    manual runs, each producing an encrypted database dump, four media objects,
+    and a final manifest. Its private R2 destination has 14-day snapshot retention.
+    A separate staging restore Postgres service and two empty restore buckets are
+    provisioned with public access disabled. Restore-only credentials are still
+    needed. The guarded restore tooling has not been rehearsed; independent
+    escrow/retrieval of both encryption keys and end-to-end failure-alert
+    verification remain open. G2 is not passed; production remains untouched.
   - The October 11 note that R2 was blocked predates the October 13 creation of
-    staging public/private media buckets. Those media buckets must not be reused
-    for database backups; a separate private backup bucket and appropriately
-    scoped credentials remain necessary. Public TCP and SSH access are still not
-    configured; the selected design uses an in-environment scheduled service and
-    must verify private-network access rather than exposing Postgres.
+    staging public/private media buckets. Those media buckets are not reused for
+    database backups. Restore must use the isolated restore targets and scoped
+    credentials; public TCP and SSH access remain disabled.
   - Railway native volume restores are limited to the same project/environment
     and replace the service mount on apply; never test that operation against
     the working production database. A logical restore to a disposable Postgres
