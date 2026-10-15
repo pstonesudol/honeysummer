@@ -419,9 +419,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     `tests/test_backup.py`, `tests/test_restore_backup.py`, and
     `backup.Dockerfile`. GitHub workflows provide failure alerts and an on-demand
     staging run trigger; details are in `BACKUP_RUNBOOK.md` and
-    `STAGING_BACKUP_SETUP_REVIEW.md`. No provider resource, credential, key,
-    lifecycle rule, schedule, alert, backup, or restore has been configured or
-    run. Production remains untouched.
+    `STAGING_BACKUP_SETUP_REVIEW.md`. The staging-only cron service is provisioned
+    with its schedule and non-secret/reference variables, but has no deployment
+    and remains offline. No R2 backup bucket, credential, key, lifecycle rule,
+    backup, or restore has been created or run. Production remains untouched.
   - The guarded restore tooling is implemented but has not been rehearsed against
     disposable Postgres and media buckets. Independent escrow/recovery of both
     backup and application encryption keys and end-to-end alert/trigger tests

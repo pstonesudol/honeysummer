@@ -1,8 +1,10 @@
 # Staging backup setup — review before provisioning
 
-**Status: proposed only. No Railway/R2 resources, variables, credentials,
-schedules, lifecycle rules, or deployments have been created or changed.** Review
-this plan before any provider action. Production is explicitly excluded.
+**Staging service provisioned; backup not operational.** Railway now has the
+staging-only cron service and its proposed daily schedule. It has no deployment
+and is offline. Staging Postgres/media references and non-secret identifiers are
+set; no R2 bucket, credentials, encryption key, lifecycle rule, backup run, or
+production change exists. Production is explicitly excluded.
 
 ## Proposed design
 
@@ -27,13 +29,13 @@ allowance. Railway compute depends on backup runtime.
 
 ## Proposed staging service configuration
 
-`.railway/railway.ts` now describes a backup service only when the selected
+`.railway/railway.ts` describes a backup service only when the selected
 environment is `staging`. It has no public domain or volume, uses the staging
 Postgres private network, builds `backup.Dockerfile`, runs
 `uv run --no-sync python -m app.backup`, and is configured for `NEVER` restart
-plus the proposed daily schedule. Variables remain unmanaged; no secrets are in
-IaC. Do not apply until the plan is approved and the restore/recovery gaps below
-are closed.
+plus the daily schedule. The service was created after the exact read-only plan
+below. Variables remain unmanaged; no secrets are in IaC. Do not deploy or enable
+the job until required secrets and the recovery prerequisites below are ready.
 
 Fresh read-only Railway plans were inspected after aligning the existing backend
 source declaration with its current GitHub type and leaving its default restart
