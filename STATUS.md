@@ -76,7 +76,7 @@ acceptance row unless the register explicitly says so.
   names exist only in staging. Staging backend deployment
   `ccacdc4a-8953-4457-9e75-86bedd7b87c0` was the latest observed staging backend
   success. Exact deployed git SHA is not exposed by Railway metadata.
- - Backups — October 15, 2026: the staging-only Railway cron service and daily
+- Backups — October 15, 2026: the staging-only Railway cron service and daily
   03:30 UTC schedule are provisioned. Two manual runs succeeded; encrypted
   database/media objects and manifests are present in the private R2 bucket with
   14-day retention. An isolated restore Postgres service and two empty private
