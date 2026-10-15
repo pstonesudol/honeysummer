@@ -1,0 +1,96 @@
+name: Restore staging backup into isolated targets
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_key:
+        description: Exact encrypted manifest object key from the completed snapshot
+        required: true
+        type: string
+      target_confirmation:
+        description: Exact RESTORE staging-restore host/database phrase shown by the restore runbook
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-recovery-operations
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    name: Restore into isolated staging targets
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Validate the selected snapshot and explicit target confirmation
+        env:
+          RESTORE_MANIFEST_KEY: ${{ inputs.manifest_key }}
+          RESTORE_CONFIRMATION: ${{ inputs.target_confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$RESTORE_MANIFEST_KEY" =~ ^snapshots/[A-Za-z0-9_./-]+/manifest\.json\.hsbackup$ ]]
+          [[ "$RESTORE_CONFIRMATION" == "RESTORE staging-restore "* ]]
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@5.68.0
+      - name: Deploy and run the isolated restore job
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_RESTORE_SERVICE_ID: ${{ vars.RAILWAY_RESTORE_SERVICE_ID }}
+          RESTORE_MANIFEST_KEY: ${{ inputs.manifest_key }}
+          RESTORE_CONFIRMATION: ${{ inputs.target_confirmation }}
+        run: |
+          set -euo pipefail
+          test -n "$RAILWAY_TOKEN"
+          test -n "$RAILWAY_PROJECT_ID"
+          test -n "$RAILWAY_RESTORE_SERVICE_ID"
+          railway variable set \
+            "RESTORE_MANIFEST_KEY=$RESTORE_MANIFEST_KEY" \
+            "RESTORE_CONFIRMATION=$RESTORE_CONFIRMATION" \
+            --service honeysummer-staging-restore-runner \
+            --environment staging \
+            --project "$RAILWAY_PROJECT_ID" \
+            --skip-deploys \
+            --json >/dev/null
+          temporary="$(mktemp -d)"
+          trap 'rm -rf "$temporary"' EXIT
+          git archive --format=tar "$GITHUB_SHA" backend | tar -xf - -C "$temporary"
+          deployment="$(railway up "$temporary" --path-as-root --detach --json \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment staging \
+            --service honeysummer-staging-restore-runner \
+            --message "Approved isolated staging restore from ${GITHUB_SHA}")"
+          deployment_id="$(jq -er '.deploymentId' <<< "$deployment")"
+          query='query($id: String!) { deployment(id: $id) { id status projectId environmentId serviceId } }'
+          for attempt in $(seq 1 180); do
+            result="$(railway api "$query" --variables "{\"id\":\"$deployment_id\"}")"
+            status="$(jq -er '.data.deployment.status' <<< "$result")"
+            project_id="$(jq -er '.data.deployment.projectId' <<< "$result")"
+            environment_id="$(jq -er '.data.deployment.environmentId' <<< "$result")"
+            service_id="$(jq -er '.data.deployment.serviceId' <<< "$result")"
+            test "$project_id" = "$RAILWAY_PROJECT_ID"
+            test "$environment_id" = "1084c402-f444-49e4-8a85-3ac85e82bf5d"
+            test "$service_id" = "$RAILWAY_RESTORE_SERVICE_ID"
+            case "$status" in
+              SUCCESS) break ;;
+              FAILED|CRASHED|REMOVED)
+                echo "Isolated restore failed; inspect Railway deployment $deployment_id."
+                exit 1
+                ;;
+            esac
+            if [ "$attempt" -eq 180 ]; then
+              echo "Timed out waiting for isolated restore deployment $deployment_id."
+              exit 1
+            fi
+            sleep 10
+          done
