@@ -39,10 +39,33 @@ export default defineRailway((ctx) => {
     },
   });
 
+  const resources = [Postgres, postgresVolume, backend];
+  if (ctx.environment === "staging") {
+    // Proposed staging-only logical backup runner. Secrets and bucket names are
+    // intentionally not managed here; configure only after separate approval.
+    resources.push(
+      service("honeysummer-staging-backup", {
+        source: {
+          ...empty(),
+          rootDirectory: "/backend",
+        },
+        build: {
+          builder: "DOCKERFILE",
+          dockerfilePath: "backup.Dockerfile",
+        },
+        start: "uv run --no-sync python -m app.backup",
+        deploy: {
+          cronSchedule: "30 3 * * *",
+          restartPolicyType: "NEVER",
+        },
+      }),
+    );
+  }
+
   return project("Honey Summer", {
     // Railway CLI variable ownership policy: never import or overwrite secrets.
     // Set DATABASE_URL and security/provider variables in the dashboard.
     variables: { managed: false },
-    resources: [Postgres, postgresVolume, backend],
+    resources,
   });
 });
