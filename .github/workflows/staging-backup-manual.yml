@@ -73,4 +73,5 @@ jobs:
           railway cron run \
             --service honeysummer-staging-backup \
             --environment staging \
-            --project "$RAILWAY_PROJECT_ID"
+            --project "$RAILWAY_PROJECT_ID" \
+            --yes
