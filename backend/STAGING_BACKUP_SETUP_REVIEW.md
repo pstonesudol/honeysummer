@@ -1,8 +1,11 @@
 # Staging backup setup — review before provisioning
 
-**Status: proposed only. No Railway/R2 resources, variables, credentials,
-schedules, lifecycle rules, or deployments have been created or changed.** Review
-this plan before any provider action. Production is explicitly excluded.
+**Staging service provisioned; backup not operational.** Railway now has the
+staging-only cron service and its proposed daily schedule. It has no deployment
+and is offline. Staging Postgres/media references and non-secret identifiers are
+set. The private R2 destination bucket and 14-day snapshot expiration are also
+configured. Scoped R2 credentials and the encryption key are still missing; no
+backup has run and production is untouched.
 
 ## Proposed design
 
@@ -12,7 +15,7 @@ this plan before any provider action. Production is explicitly excluded.
 | Railway service | `honeysummer-staging-backup`, one short-lived scheduled service |
 | Schedule | Daily, 03:30 UTC (`30 3 * * *`) |
 | Backup retention | 14 days, R2 lifecycle rule on `snapshots/` |
-| R2 destination | New private bucket `honeysummer-staging-backups`, no public/custom domain |
+| R2 destination | Private bucket `honeysummer-staging-backups`, no `r2.dev` or custom domain |
 | Backup contents | One PostgreSQL custom dump plus every staging public/private R2 object and metadata |
 | Encryption | Client-side AES-256-GCM with a dedicated key; encrypted manifest uploaded last |
 | Failure alert | Dispatch `.github/workflows/staging-backup-alert.yml`; failed Actions run notifies subscribed GitHub users |
@@ -27,24 +30,27 @@ allowance. Railway compute depends on backup runtime.
 
 ## Proposed staging service configuration
 
-`.railway/railway.ts` now describes a backup service only when the selected
+`.railway/railway.ts` describes a backup service only when the selected
 environment is `staging`. It has no public domain or volume, uses the staging
 Postgres private network, builds `backup.Dockerfile`, runs
 `uv run --no-sync python -m app.backup`, and is configured for `NEVER` restart
-plus the proposed daily schedule. Variables remain unmanaged; no secrets are in
-IaC. Do not apply until the plan is approved and the restore/recovery gaps below
-are closed.
+plus the daily schedule. It is provisioned but offline with no deployment. Direct
+service variables include only non-secret IDs and staging references; secrets
+remain unmanaged and outside IaC. Do not deploy or run until required secrets and
+the recovery prerequisites below are ready.
 
 Fresh read-only Railway plans were inspected after aligning the existing backend
 source declaration with its current GitHub type and leaving its default restart
 policy unmanaged:
 
-- **Staging:** 1 service to add, 0 changes, 0 destroys. The only addition is
-  `honeysummer-staging-backup`.
-- **Production:** already up to date: 0 adds, 0 changes, 0 destroys. The backup
-  service is absent.
-- **Nothing was applied.** These are read-only plans. Re-run both plans immediately
-  before any future apply; do not apply if the output differs.
+- **Before creation:** staging plan was exactly 1 service add, 0 changes, 0
+  destroys; production plan was up to date. The staging service was created from
+  that plan; no production resource was changed.
+- **Current production plan:** up to date; no backup service.
+- **Current staging plan:** no adds/destroys; it still reports one source-type
+  normalization (`github` → `empty`) on the backup service only. The service has
+  no repository attached and no deployment. Recheck this diff before any future
+  apply; never apply changes to the production environment for this setup.
 
 ## Secret and permission inventory
 
@@ -59,7 +65,7 @@ references where applicable. Never copy production values.
 | `R2_BUCKET` | Existing staging public media bucket identifier | No |
 | `R2_PRIVATE_BUCKET` | Existing staging private media bucket identifier | No |
 | `BACKUP_SOURCE_R2_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` | Separate read/list-only credential for those two staging media buckets | Yes |
-| `BACKUP_R2_BUCKET` | New destination bucket identifier | No |
+| `BACKUP_R2_BUCKET` | Created destination bucket `honeysummer-staging-backups` | No |
 | `BACKUP_R2_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` | Separate write credential scoped to destination bucket | Yes |
 | `GITHUB_ALERT_TOKEN` | Fine-grained token limited to this repo, Actions: write only | Yes |
 | `GITHUB_REPOSITORY` / `GITHUB_ALERT_REF` | `pstonesudol/honeysummer` / `main` | No |

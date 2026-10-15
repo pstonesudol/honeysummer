@@ -5,8 +5,10 @@
 This runbook describes the selected **logical backup** approach. Railway's
 scheduled-service (cron) feature is expected to work without upgrading the
 workspace; scheduled compute and R2 storage/requests can still incur usage costs.
-No Railway or R2 resources, credentials, schedules, billing settings, or
-production configuration have been changed.
+The staging cron service has been created, but it is offline with no deployment;
+no backup has run. The private destination bucket and 14-day lifecycle rule now
+exist. No R2 credentials, encryption key, or production configuration have been
+created or changed.
 
 The backup command is `python -m app.backup`. It streams a PostgreSQL custom dump
 through AES-256-GCM encryption and copies every object in the staging public and
@@ -16,11 +18,14 @@ manifest is considered complete. `backend/backup.Dockerfile` provides PostgreSQL
 18's client tools, matching the current staging database major version. The
 backup key is not the application's `SECURITY_ENCRYPTION_KEY`.
 
-**Proposed, not applied:** a staging-only Railway service in `.railway/railway.ts`,
-daily at 03:30 UTC, with 14-day R2 lifecycle retention. GitHub Actions is the
-selected failure-alert destination. No staging bucket/service, credentials, key,
-lifecycle rule, schedule, alert, or restore has been configured. The backup bucket
-must be dedicated and private, separate from both media buckets.
+**Current staging state:** `honeysummer-staging-backup` is provisioned in Railway
+staging with a 03:30 UTC daily cron schedule and no public domain or volume. It has
+no deployment and is offline. Its non-secret settings and staging Postgres/media
+references are configured, but required encryption/R2/GitHub secrets are not.
+The dedicated private bucket `honeysummer-staging-backups` now exists with no
+custom or `r2.dev` public domain; snapshots under `snapshots/` expire after 14
+days, and the default 7-day incomplete-multipart cleanup is preserved. GitHub
+Actions is the selected failure-alert destination.
 
 The job does not automatically escrow the backup key or application encryption
 key. `python -m app.restore_backup <manifest-key>` is a guarded restore tool; it
@@ -36,18 +41,19 @@ escrow. An isolated restore rehearsal remains required before G2 can pass.
   `uv run --no-sync python -m app.backup`.
 - Database: staging-only `DATABASE_URL` reference to staging Postgres over
   Railway's private network; never a copied production URL.
-- Schedule: `30 3 * * *` UTC; restart policy `NEVER` so one failure produces one
-  recorded failure and the next attempt is the following day.
-- Storage: proposed private bucket `honeysummer-staging-backups`, lifecycle
-  expiry after 14 days. No public custom domain. The manifest is the completion
-  marker; orphaned partial snapshots are harmless and lifecycle-expired.
+- Schedule: configured as `30 3 * * *` UTC; restart policy `NEVER`. The service
+  has no deployment yet, so it has not run.
+- Storage: private bucket `honeysummer-staging-backups` is created with no public
+  domain and a 14-day lifecycle rule on `snapshots/`. The manifest is the
+  completion marker; orphaned partial snapshots are harmless and lifecycle-
+  expired.
 - Environment guard: `.railway/railway.ts` includes the service only when the
   selected environment is `staging`; production plans must not contain it.
 - Alert: caught backup errors dispatch the deliberately failing
   `.github/workflows/staging-backup-alert.yml` workflow. GitHub only notifies
   users who have appropriate Actions/repository notifications enabled.
-- Ad-hoc run: after the scheduled service is provisioned, the manual GitHub
-  workflow **Run staging backup now** on `main` uploads the reviewed `backend/`
+- Ad-hoc run: once required secrets and credentials are configured, the manual
+  GitHub workflow **Run staging backup now** on `main` uploads the reviewed `backend/`
   image to that service, waits for the exact deployment to succeed in the staging
   environment, then calls `railway cron run`. It uses the protected GitHub
   `staging` environment and requires its `RAILWAY_TOKEN` secret plus
