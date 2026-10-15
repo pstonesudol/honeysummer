@@ -51,10 +51,23 @@ export default defineRailway((ctx) => {
   if (ctx.environment === "staging") {
     // Staging-only backup and restore runners. Secret values are never managed
     // by IaC; target and permission details are documented in the runbook.
-    resources.push(
-      RestorePostgres,
-      restorePostgresVolume,
-      service("honeysummer-staging-backup", {
+    const backupRunner = service("honeysummer-staging-backup", {
+      source: {
+        type: "github",
+        rootDirectory: "/backend",
+      },
+      build: {
+        builder: "DOCKERFILE",
+        dockerfilePath: "backup.Dockerfile",
+      },
+      start: "uv run --no-sync python -m app.backup",
+      deploy: {
+        cronSchedule: "30 3 * * *",
+        restartPolicyType: "NEVER",
+      },
+    });
+    const jobRunner = (name: string, command: string, schedule: string) =>
+      service(name, {
         source: {
           ...empty(),
           rootDirectory: "/backend",
@@ -63,15 +76,26 @@ export default defineRailway((ctx) => {
           builder: "DOCKERFILE",
           dockerfilePath: "backup.Dockerfile",
         },
-        start: "uv run --no-sync python -m app.backup",
+        start: command,
         deploy: {
-          cronSchedule: "30 3 * * *",
+          cronSchedule: schedule,
           restartPolicyType: "NEVER",
         },
-      }),
+      });
+
+    resources.push(
+      RestorePostgres,
+      restorePostgresVolume,
+      backupRunner,
+      jobRunner("honeysummer-staging-reconcile", "uv run --no-sync python -m app.reconcile", "*/15 * * * *"),
+      jobRunner(
+        "honeysummer-staging-invoice-refund-audit",
+        "uv run --no-sync python -m app.invoice_refund_audit",
+        "15 4 * * *",
+      ),
       service("honeysummer-staging-restore-runner", {
         source: {
-          ...empty(),
+          type: "github",
           rootDirectory: "/backend",
         },
         build: {

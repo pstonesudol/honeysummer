@@ -1,0 +1,33 @@
+name: Staging reconciliation job alert
+
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Scheduled staging job that reported a failure
+        required: true
+        type: choice
+        options:
+          - reconciliation
+          - invoice-refund-audit
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    name: Report staging job failure
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit failure notification
+        env:
+          JOB: ${{ inputs.job }}
+        run: |
+          set -euo pipefail
+          case "$JOB" in
+            reconciliation|invoice-refund-audit) ;;
+            *) echo "Unknown scheduled job alert type."; exit 2 ;;
+          esac
+          echo "::error::The Honey Summer staging $JOB job reported findings or failed. Check its Railway staging logs and persisted run record."
+          exit 1

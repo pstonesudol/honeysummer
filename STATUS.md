@@ -83,6 +83,11 @@ acceptance row unless the register explicitly says so.
   restore buckets are provisioned. Restore rehearsal, failure-alert verification,
   and escrow retrieval checks remain open. Production has no backup service and
   was not changed.
+- Reconciliation workers — October 15, 2026: report-only inventory/Checkout and
+  invoice-refund jobs are implemented with staging-only 15-minute/daily schedules
+  and generic GitHub failure dispatch. They are not yet provisioned or deployed;
+  first-run evidence and owner notification confirmation remain open. See
+  `backend/STAGING_RECONCILIATION_RUNBOOK.md`. No production worker was changed.
 
 ## Production validation summary
 
