@@ -166,6 +166,10 @@ acceptance row unless the register explicitly says so.
   was 15.034 minutes, maximum 17.877 minutes, with no gaps over 20 minutes or
   failure/error messages. Persisted finding counts and alerting on a real finding
   remain unverified, so this is monitoring evidence but not formal acceptance.
+- A click on the empty staging contact form's “Send message” control left the page
+  on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
+  14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,
+  not evidence of successful inquiry persistence or delivery.
 - A sanitized Railway HTTP-log sample checked at approximately 14:13 UTC covered
   501 staging API GETs from 04:20 to 14:13 UTC: 499 returned 200 and two returned
   499 when the client closed the request before a response (2 ms and 8 ms). There
