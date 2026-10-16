@@ -831,6 +831,21 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   activated, edited, or deleted. This confirms only that an admin record is
   present; it does not establish current object readability, signed private-media
   authorization, or backup/restore recovery. Production was untouched.
+- PR #51 readiness-observation documentation merged to `main` at 23:41 UTC;
+  its latest observed checks passed. This merge changed documentation only and
+  did not deploy or alter a production service.
+- Staging reconciliation and read-only API follow-up — October 16, approximately
+  23:46 UTC: Railway logs showed 11 further scheduled report-only runs between
+  21:17 and 23:45 UTC, each with the generic `Inventory and overdue holds
+  reconciled.` message. Railway reported the latest execution succeeded at
+  23:45:10 UTC, zero warnings, critical issues, recent failures, and no pending
+  work. Persisted findings remain verified only through 21:01 UTC; the staging
+  admin session had expired. No job was manually triggered.
+  A sanitized API HTTP-log sample from 23:30:58–23:46:21 UTC contained 116 GETs
+  (115 HTTP 200, one HTTP 302) and zero upstream errors. Read-only browser checks
+  returned API health `status: ok` and unchanged retail listings (35 available
+  Red Flowers at $5/stem; White Flowers unavailable). This bounded sample is not
+  uptime/SLO evidence; no submission or order was made. Production was untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,

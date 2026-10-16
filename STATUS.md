@@ -270,6 +270,20 @@ acceptance row unless the register explicitly says so.
   wedding/proposal reviews. A separate Railway check confirmed the 21:01:58 UTC
   scheduled run succeeded with no warnings, critical issues, recent failures, or
   pending work. No manual trigger; production untouched.
+- PR #51 readiness documentation merged to `main` at 23:41 UTC; its latest
+  observed checks passed. The current follow-up worktree is based on the merged
+  main line.
+- A read-only staging reconciliation review at 23:46 UTC found 11 additional
+  scheduled runs between 21:17 and 23:45 UTC, each followed by the generic
+  reconciliation success message. Railway reported the latest run succeeded at
+  23:45:10 UTC, with zero warnings, critical issues, recent failures, and pending
+  work. Persisted finding counts remain verified only through 21:01 UTC; the
+  admin session has since expired. No manual trigger; production untouched.
+- A bounded sanitized API-log sample from 23:30:58 to 23:46:21 UTC contained
+  116 GETs (115 HTTP 200, one HTTP 302) and no upstream errors. Browser read-only
+  checks returned API health `status: ok` and the same retail listings (35 Red
+  Flowers available at $5/stem; White Flowers unavailable). These point-in-time
+  observations are not an uptime/SLO claim. No submission or order was made.
 - The authenticated staging admin Gallery page showed one existing item captioned
   “Temporary staging upload test,” with `Active` false. This was a read-only
   inventory check; the item was not opened, activated, edited, or deleted. Its
