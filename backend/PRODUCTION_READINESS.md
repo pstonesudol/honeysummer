@@ -808,6 +808,12 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   succeeded at 20:15:33 UTC, with zero warnings, critical issues, recent failures,
   and pending work. Persisted counts were not verified while the admin session was
   signed out. No job was manually triggered; production was untouched.
+- Staging reconciliation follow-up — October 16, approximately 20:47 UTC:
+  the 20:31:02 and 20:45:07 UTC scheduled report-only runs logged generic success
+  messages at 20:31:09 and 20:45:12 UTC. Railway reported the latest execution
+  succeeded at 20:45:14 UTC, with zero warnings, critical issues, recent failures,
+  and pending work. Persisted finding counts were not verified while admin was
+  signed out. No job was manually triggered; production was untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,

@@ -258,6 +258,11 @@ acceptance row unless the register explicitly says so.
   succeeded at 20:15:33 UTC, with zero warnings, critical issues, recent failures,
   and pending work. Persisted counts remain unverified while the admin session is
   signed out. No manual trigger; production untouched.
+- The next two scheduled report-only runs succeeded at 20:31:02 and 20:45:07
+  UTC, with generic success messages at 20:31:09 and 20:45:12 UTC. Railway showed
+  the latest completed at 20:45:14 UTC with zero warnings, critical issues, recent
+  failures, and pending work. Persisted counts remain unverified. No manual
+  trigger; production untouched.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,
