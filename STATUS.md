@@ -179,6 +179,11 @@ acceptance row unless the register explicitly says so.
   records from 14:41–14:48 UTC; all were GETs (499 HTTP 200, two HTTP 302), with
   no non-GET method or 5xx. This is a bounded request sample, not an uptime/SLO
   result.
+- Reconciliation follow-up at approximately 15:02 UTC: the next scheduled
+  report-only run succeeded at 15:01:48 UTC; its 15:01:46 UTC log contained the
+  generic success message. Railway reported zero warnings, critical issues, and
+  recent failures, with no pending work. Persisted finding counts remain
+  unverified.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,
