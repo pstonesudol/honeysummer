@@ -660,6 +660,19 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   submitted. The generic reconciliation log message does not expose persisted
   finding counts; this short sample is not sustained monitoring or full
   acceptance. Production was untouched.
+- Staging R2 media access spot-check — October 16, 2026: Cloudflare listed two
+  objects in each staging bucket. A metadata-only inspection showed the public
+  objects use `public, max-age=31536000, immutable`; one is a 15,118,440-byte
+  JPEG, so the previously noted legacy oversized public object remains an open
+  cleanup/acceptance exception. A HEAD request through the active staging media
+  custom domain returned HTTP 200 with `image/webp` and the expected immutable
+  cache header for a public object. A HEAD request using a private-bucket object
+  path through that same public hostname returned HTTP 404, with no redirect or
+  content headers, consistent with the private object not being publicly served.
+  Object paths and contents were not recorded or downloaded. This spot-check does
+  not verify signed private-media authorization, upload persistence, full cache
+  policy, or all legacy objects; no data or configuration changed, and production
+  was untouched.
 - Trusted proxy CIDR configuration and trusted client-IP attribution remain
   blocked/open.
 - Backup alert follow-up — October 15, 2026: invoked the backup dispatch helper
