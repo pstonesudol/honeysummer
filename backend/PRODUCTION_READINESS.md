@@ -695,6 +695,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   (2 ms and 8 ms). No 5xx responses appeared in this sample. This does not
   identify the client or establish an uptime/SLO result; no request was generated
   for this check and production was untouched.
+- Staging retail/mobile UI spot-check — October 16, approximately 14:24 UTC: in
+  the authorized browser, `/api/health/` returned `status: ok` and the retail
+  catalogue returned the same two listings as before (35 Red Flowers available,
+  White Flowers unavailable). At a 390px viewport, `/checkout/retail` showed an
+  empty cart, $0 estimated total and a disabled checkout button. No item was added
+  or checkout submitted. This confirms only a read-only storefront state and does
+  not close deployed purchase/return/webhook checks B3/B5.
 - Local form/layout regression run — October 16, 2026: the isolated Playwright
   suite passed 25/25 checks at 320, 390, 520, 521, 768, 850, 851 and 1440px,
   covering contact, bouquet and wedding forms, computed accessible names,

@@ -164,6 +164,12 @@ acceptance row unless the register explicitly says so.
   live status text in its accessible description and to account for the padded
   preview wrapper. This used only a local fallback server; it is not deployed
   staging evidence and does not close B7.
+- At approximately 14:24 UTC, the authorized staging browser returned API health
+  `status: ok` and the same two retail catalogue listings (35 available Red
+  Flowers; White Flowers unavailable). The 390px retail checkout page showed an
+  empty cart, $0 estimated total and disabled checkout button. No item was added
+  and no checkout was submitted; this is UI smoke evidence only, not B3/B5
+  purchase acceptance.
 
 ## Production validation summary
 
