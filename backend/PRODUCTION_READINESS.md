@@ -794,6 +794,14 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   failures, and no pending work. Persisted finding counts were not verified while
   the admin session was signed out. No job was manually triggered; production was
   untouched.
+- Staging reconciliation follow-up — October 16, approximately 19:46 UTC:
+  Railway logs showed three further scheduled report-only runs succeeded at
+  19:15:04, 19:31:07, and 19:45:23 UTC, each followed by the generic
+  `Inventory and overdue holds reconciled.` message. The latest execution
+  completed at 19:45:33 UTC. Railway showed zero warnings, critical issues,
+  recent failures, and pending work. Persisted finding counts were not verified
+  while the admin session was signed out. No job was manually triggered;
+  production was untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,
