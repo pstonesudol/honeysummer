@@ -76,15 +76,17 @@ acceptance row unless the register explicitly says so.
   names exist only in staging. Staging backend deployment
   `ccacdc4a-8953-4457-9e75-86bedd7b87c0` was the latest observed staging backend
   success. Exact deployed git SHA is not exposed by Railway metadata.
-- Backups — October 15, 2026: the staging-only Railway cron service and daily
-  03:30 UTC schedule are provisioned. Two manual runs succeeded; encrypted
-  database/media objects and manifests are present in the private R2 bucket with
-  14-day retention. An isolated restore Postgres service and two empty private
-  restore buckets are provisioned. A direct backup-alert dispatch test succeeded
-  and produced the expected failed GitHub workflow; an actual backup-job failure
-  and receipt of this specific notification remain unverified. Restore rehearsal
-  and escrow retrieval checks remain open. Production has no backup service and
-  was not changed.
+- Backups — October 16, 2026: the staging-only Railway backup cron and daily
+  03:30 UTC schedule are active; two manual backups and the scheduled backup
+  succeeded. A full logical restore of snapshot
+  `snapshots/2026/10/15/e79086d9ea1c4aa589a5e6a1acad831e/manifest.json.hsbackup`
+  into the isolated `staging-restore` Postgres and media buckets completed. The
+  restore log reports one database archive, two public objects and two private
+  objects; R2 listings confirm both media buckets populated. One prior attempt
+  stopped before reading the snapshot because credentials were still staged; it
+  wrote no data. Schema/revision and application-level read checks, independent
+  escrow retrieval confirmation, cleanup approval and backup-alert receipt remain
+  open. Temporary R2 credentials have a 24-hour TTL. Production was untouched.
 - Reconciliation workers — October 15, 2026: staging-only report-only
   inventory/Checkout and invoice-refund jobs are provisioned at 15-minute and
   daily schedules. Both first manual runs succeeded with zero findings. A

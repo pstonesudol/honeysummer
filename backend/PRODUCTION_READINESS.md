@@ -422,11 +422,29 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     `STAGING_BACKUP_SETUP_REVIEW.md`. The staging-only cron service completed two
     manual runs, each producing an encrypted database dump, four media objects,
     and a final manifest. Its private R2 destination has 14-day snapshot retention.
-    A separate staging restore Postgres service and two empty restore buckets are
-    provisioned with public access disabled. Restore-only credentials are still
-    needed. The guarded restore tooling has not been rehearsed; independent
-    escrow/retrieval of both encryption keys and end-to-end failure-alert
-    verification remain open. G2 is not passed; production remains untouched.
+    A separate staging restore Postgres service and two restore buckets are
+    provisioned with public access disabled. On October 16, 2026 UTC, snapshot
+    `snapshots/2026/10/15/e79086d9ea1c4aa589a5e6a1acad831e/manifest.json.hsbackup`
+    was restored through the guarded workflow to
+    `staging-restore-postgres.railway.internal/railway` and the isolated public
+    and private restore buckets. The successful Railway run log reports one
+    database archive, two public media objects and two private media objects;
+    R2 object listings confirm two objects in each target bucket. The run
+    authenticated/decrypted the snapshot, checked ciphertext and plaintext media
+    hashes, verified the targets were empty before writing, and `pg_restore`
+    completed successfully. An earlier attempt crashed before reading the backup
+    because the four newly entered credentials were still staged; it made no
+    writes. The credentials were activated only in staging and have a 24-hour
+    TTL. Production was untouched.
+    - Still open: query the restored schema/Alembic revision and perform a
+      disposable app-level read; owner confirmation of independent escrow
+      retrieval (successful decryption proves the configured backup key works,
+      not that its escrow copy is retrievable); cleanup approval and secure
+      cleanup of the restored database/media and expired credential variables;
+      and receipt confirmation for the backup-specific GitHub alert. The backup
+      encryption key also encrypts copied media; `SECURITY_ENCRYPTION_KEY` is a
+      separate application key and was not needed for this raw archive restore.
+      G2 remains open until the remaining recovery and operational checks pass.
   - The October 11 note that R2 was blocked predates the October 13 creation of
     staging public/private media buckets. Those media buckets are not reused for
     database backups. Restore must use the isolated restore targets and scoped
@@ -435,7 +453,8 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     and replace the service mount on apply; never test that operation against
     the working production database. A logical restore to a disposable Postgres
     verifies logical recovery, not native snapshot restore. Back up the separate
-    application encryption key and public/private media too. G2 remains open.
+    application `SECURITY_ENCRYPTION_KEY` separately and preserve the backed-up
+    public/private media. G2 remains open.
 - [ ] G3 — Intended domain, redirects, DNS/TLS, Workers routes, Railway origin and email DNS checked before cutover; TTL/rollback/contact plan approved.
 - [ ] G4 — All applicable checks pass with evidence; source feature/owner acceptance or explicit prior waivers reconciled, no unresolved launch blockers, operational sign-off recorded.
 - [ ] G5 — Handoff to Phase 13 for final assets/copy/licensing/SEO/accessibility approval, launch authorization, public cutover and post-cutover smoke/rollback checks.
