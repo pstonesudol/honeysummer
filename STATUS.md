@@ -186,6 +186,14 @@ acceptance row unless the register explicitly says so.
   empty cart, $0 estimated total and disabled checkout button. No item was added
   and no checkout was submitted; this is UI smoke evidence only, not B3/B5
   purchase acceptance.
+- A staging browser accessibility spot-check at 390px on `/order-flowers` showed
+  visible custom-request field captions, but the browser's computed accessibility
+  snapshot reported missing accessible names for the name, email, phone, date,
+  occasion, budget, color-preferences and message controls. The admin login
+  snapshot similarly reported missing names for email/password. This may reflect
+  label association or browser-snapshot interpretation and needs a real DOM/
+  assistive-technology check; it is not accepted as passing accessibility evidence.
+  No form was submitted.
 
 ## Production validation summary
 

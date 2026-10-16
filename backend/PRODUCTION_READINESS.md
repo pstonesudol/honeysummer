@@ -722,6 +722,14 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   UTC window (169 GETs, all HTTP 200). No inquiry or email was submitted. This
   confirms only that no backend submission occurred; successful inquiry handling,
   persistence, and delivery remain open. Production was untouched.
+- Staging accessibility follow-up — October 16, approximately 14:41 UTC: at a
+  390px viewport, the browser's computed accessibility snapshot reported no
+  accessible names for several visible custom bouquet request fields on
+  `/order-flowers` (name, email, phone, date, occasion, budget, color preferences,
+  message), and for email/password on `/admin/login`. The visible captions render,
+  so label association needs confirmation using DOM inspection and assistive
+  technology before treating this as a defect or a pass. No form was submitted.
+  Accessibility acceptance remains open; production was untouched.
 - Staging retail/mobile UI spot-check — October 16, approximately 14:24 UTC: in
   the authorized browser, `/api/health/` returned `status: ok` and the retail
   catalogue returned the same two listings as before (35 Red Flowers available,
