@@ -98,8 +98,12 @@ acceptance row unless the register explicitly says so.
   27 primary keys, and 15 unique constraints are validated. All populated-table
   ID sequences match their maximum IDs. Both private media references and the
   gallery reference match restored R2 objects; one additional public object is
-  unreferenced by current media columns. Independent escrow retrieval confirmation
-  and cleanup approval remain open. A controlled backup exception exercised the
+  unreferenced by current media columns. All rows across 26 mapped application
+  tables (389 rows total) deserialized through SQLAlchemy; both private restored
+  inquiry images were read with the app's private-media function and decoded as
+  valid JPEGs. The two public restored images also decoded successfully. The
+  restore-private bucket has no custom domain. Independent escrow retrieval
+  confirmation and cleanup approval remain open. A controlled backup exception exercised the
   job's failure handler and produced the expected GitHub alert workflow; receipt of
   that specific notification remains unconfirmed. Temporary R2 credentials have
   a 24-hour TTL. Production was untouched.
