@@ -762,9 +762,9 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   16:01 UTC: Railway reported the next scheduled report-only run succeeded at
   16:01:08 UTC; its 16:00:42 UTC log said `Inventory and overdue holds
   reconciled.` Railway reported zero warnings, critical issues, recent failures,
-  and no pending work. Persisted findings were not visible because authenticated
-  admin access was unavailable in this browser session. No job was manually
-  triggered; production was untouched.
+  and no pending work. The persisted-summary view was initially unavailable; a
+  later read-only admin check confirmed the 12:00 PM EDT (16:00 UTC) row as
+  `Report · 0 findings`. No job was manually triggered; production was untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,
