@@ -758,6 +758,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   and no pending work. The authenticated admin session was no longer available
   to refresh the persisted finding-count view, so this run's count remains
   unverified. No job was manually triggered; production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  16:01 UTC: Railway reported the next scheduled report-only run succeeded at
+  16:01:08 UTC; its 16:00:42 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, recent failures,
+  and no pending work. Persisted findings were not visible because authenticated
+  admin access was unavailable in this browser session. No job was manually
+  triggered; production was untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,
