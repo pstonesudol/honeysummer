@@ -53,10 +53,13 @@ The restore tool demands an exact typed target confirmation. A staging-only
 `honeysummer-staging-restore-runner` and manual workflow provide the
 private-network execution path. The October 16, 2026 staging restore completed;
 see the dated G2 evidence in `PRODUCTION_READINESS.md`. The restore used the backup
-key for both database and media decryption. Independent escrow retrieval is not
-yet owner-confirmed; the separate application `SECURITY_ENCRYPTION_KEY` is needed
-for application-level recovery checks, not for decrypting this snapshot. Keep the
-isolated restored data until cleanup is explicitly approved.
+key for both database and media decryption. The owner independently retrieved
+`BACKUP_ENCRYPTION_KEY` from escrow and confirmed an exact match with the staging
+backup service value using hidden terminal prompts; no key material was shared.
+The separate application `SECURITY_ENCRYPTION_KEY` is not needed to decrypt this
+snapshot, but is needed for application-level recovery checks; its independent
+escrow retrieval remains unconfirmed. Keep the isolated restored data until
+cleanup is explicitly approved.
 
 ## Staging configuration
 
@@ -139,8 +142,10 @@ history is a secondary diagnostic, not proof of notification.
    must have no public domain. Never restore into working staging, production,
    or source buckets.
 4. Verify schema/revision state, representative synthetic records and app reads
-   using a disposable app configuration. Verify escrow/retrieval of both the
-   backup key and application encryption key independently.
+   using a disposable app configuration. Independently verify escrow retrieval
+   of both `BACKUP_ENCRYPTION_KEY` and `SECURITY_ENCRYPTION_KEY`. The backup-key
+   retrieval/match is confirmed for the October 16 rehearsal; the application-key
+   retrieval remains open.
 5. Securely remove plaintext and disposable resources under an approved cleanup
    procedure. Record snapshot ID, target, checks, result, operator and cleanup;
    never record credentials, key material or private-photo contents.

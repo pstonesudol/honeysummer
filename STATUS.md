@@ -106,8 +106,11 @@ acceptance row unless the register explicitly says so.
   access is disabled. A controlled backup exception exercised the job's failure
   handler; the owner supplied a screenshot of the corresponding GitHub Actions
   failure email at 8:46 PM on October 15, confirming receipt for run `38831354476`.
-  Independent escrow retrieval confirmation and cleanup approval remain open.
-  Temporary R2 credentials have a 24-hour TTL. Production was untouched.
+  The owner independently retrieved `BACKUP_ENCRYPTION_KEY` from escrow and
+  confirmed an exact match with the staging backup service using hidden terminal
+  prompts; no key material was shared. Escrow retrieval for the separate
+  `SECURITY_ENCRYPTION_KEY` and restore cleanup approval remain open. Temporary
+  R2 credentials have a 24-hour TTL. Production was untouched.
 - Reconciliation workers — October 15, 2026: staging-only report-only
   inventory/Checkout and invoice-refund jobs are provisioned at 15-minute and
   daily schedules. Both first manual runs succeeded with zero findings. A

@@ -461,10 +461,14 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     treated as corruption. A PostgreSQL `pg_amcheck` binary and `amcheck` extension
     were unavailable on the managed restore service, so low-level page checks were
     not run. Production was untouched.
-    - Still open: owner confirmation of independent escrow retrieval (successful
-      snapshot decryption proves the configured backup key works, not that its
-      escrow copy is retrievable); and cleanup approval plus secure cleanup of the
-      restored database/media and expired credential variables. On October
+    - The owner independently retrieved `BACKUP_ENCRYPTION_KEY` from escrow and
+      confirmed an exact match with the staging backup service value using hidden
+      terminal prompts; no key material was shared. Still open: independent
+      escrow retrieval of the separate `SECURITY_ENCRYPTION_KEY` (the configured
+      key passed a synthetic round-trip, but no restored MFA or queued-mail
+      ciphertext was available to validate; the escrow copy itself is not yet
+      confirmed); and cleanup approval plus secure cleanup of the restored
+      database/media and expired credential variables. On October
       16 a controlled in-process exception replaced `create_backup` before any
       storage operation; the backup job dispatched
       `staging-backup-alert.yml` (run `38831354476`), which emitted the generic
@@ -630,8 +634,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   accepted the dispatch and the expected failed backup-alert workflow emitted
   its generic message. This verifies the dispatch token/API/workflow path, not a
   failure injected into the backup execution itself. Receipt of this specific
-  backup notification remains unconfirmed; G2 restore and key-escrow checks also
-  remain open.
+  receipt for the earlier dispatch-only notification was not separately
+  confirmed. The later controlled backup-handler run's email receipt is confirmed
+  above. Backup-key escrow retrieval is confirmed; the separate application-key
+  escrow check and restore cleanup approval remain open.
 
 ## Future features
 
