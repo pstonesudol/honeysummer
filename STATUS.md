@@ -192,6 +192,9 @@ acceptance row unless the register explicitly says so.
   occasion, budget, color-preferences and message controls. The admin login
   snapshot similarly reported missing names for email/password; the wholesale
   sign-in snapshot also reported missing names for email, password and MFA code.
+  The login page's “Forgot password?” link opens `/admin/security/recovery`,
+  which renders an email field and “Send recovery link” control; the email field
+  was reported without an accessible name. The recovery control was not clicked.
   This may reflect label association or browser-snapshot interpretation and needs
   a real DOM/assistive-technology check; it is not accepted as passing
   accessibility evidence. No form was submitted.

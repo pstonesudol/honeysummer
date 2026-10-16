@@ -729,8 +729,11 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   message), for email/password on `/admin/login`, and for email, password, and
   optional MFA code on `/wholesale`. The visible captions render, so label
   association needs confirmation using DOM inspection and assistive technology
-  before treating this as a defect or a pass. No form was submitted. Accessibility
-  acceptance remains open; production was untouched.
+  before treating this as a defect or a pass. The login page's “Forgot password?”
+  link opened `/admin/security/recovery`, which displayed an email field and
+  “Send recovery link” control; its email field was also reported without an
+  accessible name. The control was not clicked and no form was submitted.
+  Accessibility acceptance remains open; production was untouched.
 - Staging retail/mobile UI spot-check — October 16, approximately 14:24 UTC: in
   the authorized browser, `/api/health/` returned `status: ok` and the retail
   catalogue returned the same two listings as before (35 Red Flowers available,
