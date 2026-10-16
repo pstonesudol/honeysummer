@@ -38,15 +38,17 @@ confirmed.
 
 The job does not automatically escrow the backup key or application encryption
 key. `python -m app.restore_backup <manifest-key>` is a guarded restore tool. The
-isolated Railway `staging-restore-postgres` service and two empty R2 buckets
+isolated Railway `staging-restore-postgres` service and two private R2 buckets
 (`honeysummer-staging-restore-public` and `honeysummer-staging-restore-private`)
-are provisioned; both R2 buckets have public `r2.dev` access disabled and no custom
-domains. Restore-only credentials still need to be configured. The restore tool
-demands an exact typed target confirmation. A staging-only
+are provisioned; both have public `r2.dev` access disabled and no custom domains.
+The restore tool demands an exact typed target confirmation. A staging-only
 `honeysummer-staging-restore-runner` and manual workflow provide the
-private-network execution path. The operator must verify retrieval of both keys
-from approved secure escrow. An isolated restore rehearsal remains required
-before G2 can pass.
+private-network execution path. The October 16, 2026 staging restore completed;
+see the dated G2 evidence in `PRODUCTION_READINESS.md`. The restore used the backup
+key for both database and media decryption. Independent escrow retrieval is not
+yet owner-confirmed; the separate application `SECURITY_ENCRYPTION_KEY` is needed
+for application-level recovery checks, not for decrypting this snapshot. Keep the
+isolated restored data until cleanup is explicitly approved.
 
 ## Staging configuration
 
@@ -97,9 +99,10 @@ before G2 can pass.
 | `GITHUB_REPOSITORY`, `GITHUB_ALERT_REF` | Alert target | Nonsecret; `pstonesudol/honeysummer`, `main` |
 
 Do not reuse the backend's R2 keys for the backup job. Restore access should be a
-separate, short-lived credential that can read the backup bucket and write only to
-temporary restore buckets. No secret values belong in Git, issue comments, this
-runbook, or chat.
+separate, short-lived credential that can read the backup bucket and read/list plus
+write only to temporary restore buckets (the tool checks that each target is empty
+before writing). No secret values belong in Git, issue comments, this runbook, or
+chat.
 
 ## Alert limitations
 
@@ -143,8 +146,9 @@ Restore-only environment variables:
   names identify them as restore targets and differ from source/backup buckets.
 - `RESTORE_BACKUP_R2_ACCESS_KEY_ID`, `RESTORE_BACKUP_R2_SECRET_ACCESS_KEY`:
   read-only access to the backup bucket.
-- `RESTORE_R2_ACCESS_KEY_ID`, `RESTORE_R2_SECRET_ACCESS_KEY`: write-only access
-  to the two isolated restore buckets; never source or production buckets.
+- `RESTORE_R2_ACCESS_KEY_ID`, `RESTORE_R2_SECRET_ACCESS_KEY`: Object Read & Write
+  access to the two isolated restore buckets (read/list is needed for the empty-target
+  guard); never source or production buckets.
 - Existing `R2_ENDPOINT_URL`, `BACKUP_R2_BUCKET`, and escrowed
   `BACKUP_ENCRYPTION_KEY` are also required.
 
