@@ -214,6 +214,12 @@ acceptance row unless the register explicitly says so.
   customer, or finding details were opened. This confirms durable zero-finding
   summaries over this observed window; real-finding alert behavior and longer-term
   monitoring remain open.
+- The next scheduled staging reconciliation succeeded at 15:46:41 UTC; its
+  15:46:31 UTC log said `Inventory and overdue holds reconciled.` Railway
+  reported zero warnings, critical issues, recent failures, and no pending work.
+  The admin session was no longer available for a refreshed persisted-summary
+  check, so this run's finding count remains unverified. No job was manually
+  triggered; production was untouched.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,

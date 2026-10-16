@@ -751,6 +751,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   over that window and the admin's current attention summary, but not alert
   behavior on a real finding or longer-term monitoring; C3/C4 remain open.
   Production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  15:47 UTC: Railway reported the scheduled report-only run succeeded at
+  15:46:41 UTC; its 15:46:31 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, recent failures,
+  and no pending work. The authenticated admin session was no longer available
+  to refresh the persisted finding-count view, so this run's count remains
+  unverified. No job was manually triggered; production was untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,
