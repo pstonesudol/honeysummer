@@ -741,6 +741,12 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   recent failures, and no pending work. This is only an operational snapshot; it
   does not verify durable reconciliation findings or acceptance workflows.
   Production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  15:17 UTC: Railway reported the next scheduled report-only run succeeded at
+  15:16:24 UTC; its 15:16:28 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, recent failures,
+  and no pending work. Persisted finding counts are still awaiting authenticated
+  operator review. No job was manually triggered; production was untouched.
 - Staging invoice/refund audit follow-up — October 16, checked at approximately
   14:11 UTC: the daily scheduled run completed at 04:18:55 UTC with status
   `succeeded`; its 04:18:57 UTC report-only log said “Invoice refund journals

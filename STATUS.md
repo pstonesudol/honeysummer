@@ -198,6 +198,10 @@ acceptance row unless the register explicitly says so.
   `online`), zero warnings/critical issues/recent failures and no pending work.
   This remains an operational snapshot; it does not verify durable report
   contents or acceptance flows.
+- The next scheduled reconciliation succeeded at 15:16:24 UTC; its 15:16:28 UTC
+  log was the generic success message. Railway continued to report zero warnings,
+  critical issues, recent failures and pending work. Persisted finding counts remain
+  unverified pending authenticated operator review.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,
