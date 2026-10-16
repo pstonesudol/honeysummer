@@ -257,7 +257,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   inbox placement. Message headers showed SPF pass, aligned DKIM pass, Microsoft
   DMARC `bestguesspass`/`action=none`, and composite authentication pass, while
   the message was still classified as junk (SCL 5). No explicit DMARC record is
-  published for the staging sending subdomain. Authentication-result review is
+  published for the staging sending subdomain. A public DNS-only recheck on
+  October 16 confirmed the staging Resend DKIM TXT record and the `send` host's
+  MX/SPF records still resolve, while `_dmarc.staging-updates` remains
+  unpublished. Record values were not copied. Authentication-result review is
   complete; optional staging DMARC monitoring, spam placement/reputation work,
   Resend event review, and broader email workflow coverage remain open. A later
   inquiry-email attempt was blocked by required form controls in browser
@@ -647,19 +650,285 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   separately approved production plan. No production resources/configuration
   changed.
 - Staging read-only operations/smoke sample — October 16, approximately
-  03:30–03:45 UTC: Railway reported the five remaining staging services healthy,
+  03:30–04:12 UTC: Railway reported the five remaining staging services healthy,
   no warnings/critical issues or recent failures, and no pending changes. The
-  15-minute reconciliation logs showed successful runs through 03:30:33 UTC. The
+  15-minute reconciliation logs showed successful runs through 04:00:27 UTC. The
   backup run completed at 03:34:51 UTC and logged a completed manifest. The
   invoice/refund audit's latest observed run was October 15 at 04:19 UTC; the
   October 16 04:15 UTC schedule had not yet fired during this sample. Direct
   staging `/api/health/` returned `status: ok`; through the authorized staging
   browser session, the home and order pages rendered and `/api/retail/flowers/`
   returned two listings. An unauthenticated custom-domain request reached the
-  expected Cloudflare Access sign-in gate. No cart/order/payment/customer form was
-  submitted. The generic reconciliation log message does not expose persisted
+  expected Cloudflare Access sign-in gate. HTTP requests to both the staging
+  custom domain and Railway health URL returned 301 redirects to their HTTPS
+  equivalents. No cart/order/payment/customer form was submitted. The generic
+  reconciliation log message does not expose persisted
   finding counts; this short sample is not sustained monitoring or full
   acceptance. Production was untouched.
+- Staging reconciliation spot-check — October 16, approximately 14:08 UTC:
+  Railway reported the 15-minute report-only reconciliation job's latest
+  execution succeeded at 14:02:22 UTC; the latest corresponding log entry at
+  14:02:30 UTC said `Inventory and overdue holds reconciled.` Railway reported
+  zero warnings, critical issues, or recent failures and no pending work. The
+  generic log does not expose finding counts or prove a clean persisted report;
+  this remains an operational spot-check, not sustained monitoring or formal
+  acceptance. No job was manually triggered, no data was changed, and production
+  was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  14:15 UTC: Railway reported the 15-minute report-only job succeeded at
+  14:15:04 UTC; its 14:15:12 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, or recent failures
+  and no pending work. The log still does not expose persisted finding counts.
+  No job was manually triggered; sustained monitoring/formal acceptance remain
+  open, and production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  14:32 UTC: the next scheduled execution succeeded at 14:31:18 UTC; its
+  14:31:24 UTC log said `Inventory and overdue holds reconciled.` Railway
+  continued to report zero warnings, critical issues, recent failures, or pending
+  work. The log does not expose persisted finding counts, so this remains a
+  point-in-time report-only observation rather than accepted reconciliation.
+  Production was untouched.
+- Staging reconciliation log-window review — October 16, approximately 14:35 UTC:
+  the sanitized deploy stream contained 143 `Inventory and overdue holds
+  reconciled.` messages from October 15 03:18:55 through October 16 14:31:24 UTC.
+  The median gap was 15.034 minutes and maximum gap 17.877 minutes; there were no
+  gaps over 20 minutes and no failure/error messages in the 286-entry sample.
+  Railway separately showed no recent failures or active issues. This is evidence
+  of regular report-only execution over this window, but does not reveal persisted
+  finding counts or prove alert handling when a real finding occurs; C3/C4 remain
+  open. Production was untouched.
+- Staging scheduled-backup follow-up — October 16, checked at approximately
+  14:45 UTC: Railway reported the latest scheduled backup completed at 03:34:50
+  UTC; the 03:34:51 UTC log recorded a completed manifest upload. Railway reported
+  zero warnings, critical issues, or recent failures. No backup was manually
+  triggered and no restore/data action was taken. This confirms only the scheduled
+  job's reported completion, not manifest contents or a fresh restore; production
+  was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  14:48 UTC: Railway reported the latest scheduled report-only execution
+  succeeded at 14:47:38 UTC; its 14:47:45 UTC log said
+  `Inventory and overdue holds reconciled.` Railway reported zero warnings,
+   critical issues, or recent failures and no pending work. The generic message
+   still does not expose persisted finding counts. No job was manually triggered;
+   production was untouched.
+- Staging API HTTP-log follow-up — October 16, approximately 14:48 UTC: the
+  latest 501 records covered 14:41–14:48 UTC and were all GET requests (499 HTTP
+  200, two HTTP 302), with no non-GET method or 5xx response. This bounded sample
+  does not establish uptime/SLO and no request was generated for the check;
+  production was untouched.
+- Staging Resend DNS follow-up — October 16, approximately 15:05 UTC: a public
+  DNS-only lookup confirmed the staging Resend DKIM TXT, `send`-host MX, and SPF
+  records resolve; `_dmarc.staging-updates` remains unpublished. No record values
+  were copied or changed. This does not verify message delivery or inbox
+  placement; production was untouched.
+- Staging API HTTP-log follow-up — October 16, approximately 15:06 UTC: a
+  sanitized sample of 415 API records from 15:00–15:04 UTC contained only GETs,
+  all HTTP 200, with no POSTs. This is a bounded smoke-traffic sample, not an
+  uptime/SLO measurement; production was untouched.
+- Staging API HTTP-log follow-up — October 16, approximately 15:10 UTC: the
+  latest 501 sanitized records covered 15:02–15:09 UTC; all were GET requests
+  returning HTTP 200, with no POSTs or 5xx. This remains a short, bounded sample,
+  not uptime/SLO evidence; production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  15:02 UTC: Railway reported the next scheduled report-only run succeeded at
+  15:01:48 UTC; its 15:01:46 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, recent failures,
+  and no pending work. The generic message does not expose persisted finding
+  counts. No job was manually triggered; production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  15:30 UTC: Railway reported the next scheduled report-only run succeeded at
+  15:30:06 UTC; its 15:30:09 UTC log said `Inventory and overdue holds
+  reconciled.` Railway continued to report zero warnings, critical issues, recent
+  failures, and no pending work. No job was manually triggered; production was
+  untouched.
+- Staging persisted reconciliation/attention review — October 16, approximately
+  15:35 UTC: in the authenticated staging admin, the read-only “Needs attention”
+  page showed 20 persisted reconciliation rows, each `Report · 0 findings`, from
+  06:46 through 11:30 EDT (10:46–15:30 UTC). It also showed no unconfirmed order
+  or invoice refunds, failed inquiry emails, unsent confirmations, or wedding
+  quotes/bouquet proposals awaiting review. No individual order/customer/finding
+  records were opened or changed. This confirms durable zero-finding summaries
+  over that window and the admin's current attention summary, but not alert
+  behavior on a real finding or longer-term monitoring; C3/C4 remain open.
+  Production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  15:47 UTC: Railway reported the scheduled report-only run succeeded at
+  15:46:41 UTC; its 15:46:31 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, recent failures,
+  and no pending work. The authenticated admin session was no longer available
+  to refresh the persisted finding-count view, so this run's count remains
+  unverified. No job was manually triggered; production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  16:01 UTC: Railway reported the next scheduled report-only run succeeded at
+  16:01:08 UTC; its 16:00:42 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, recent failures,
+  and no pending work. The persisted-summary view was initially unavailable; a
+  later read-only admin check confirmed the 12:00 PM EDT (16:00 UTC) row as
+  `Report · 0 findings`. No job was manually triggered; production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  16:17 UTC: Railway reported the scheduled report-only run succeeded at
+  16:16:43 UTC; its 16:16:44 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, recent failures,
+  and no pending work. The refreshed admin “Needs attention” page independently
+  showed `12:16 PM EDT · Report · 0 findings`. No job was manually triggered;
+  production was untouched.
+- Staging reconciliation log review — October 16, approximately 17:03 UTC:
+  Railway showed three further scheduled report-only runs succeeded at 16:31:03,
+  16:46:22, and 17:01:58 UTC; corresponding logs at 16:31:06, 16:46:28, and
+  17:02:00 UTC contained the generic `Inventory and overdue holds reconciled.`
+  message. Railway reported zero warnings, critical issues, and recent failures,
+  with no pending work. The admin session had returned to sign-in, so persisted
+  finding counts for these runs were not verified. No job was manually triggered;
+  production was untouched.
+- Staging reconciliation log review — October 16, approximately 18:40 UTC:
+  six subsequent scheduled report-only runs between 17:15 and 18:30 UTC each
+  logged the generic `Inventory and overdue holds reconciled.` message. Railway
+  reported the latest execution succeeded at 18:30:58 UTC, zero warnings, critical
+  issues, recent failures, and no pending work. Persisted finding counts for these
+  runs were not checked because the admin session is signed out. No job was
+  manually triggered; production was untouched.
+- Staging reconciliation follow-up — October 16, approximately 19:11 UTC:
+  Railway reported scheduled runs succeeded at 18:46:53 and 19:01:33 UTC; logs at
+  18:47:05 and 19:01:26 UTC contained the generic `Inventory and overdue holds
+  reconciled.` message. Railway showed zero warnings, critical issues, recent
+  failures, and no pending work. Persisted finding counts were not verified while
+  the admin session was signed out. No job was manually triggered; production was
+  untouched.
+- Staging reconciliation follow-up — October 16, approximately 19:46 UTC:
+  Railway logs showed three further scheduled report-only runs succeeded at
+  19:15:04, 19:31:07, and 19:45:23 UTC, each followed by the generic
+  `Inventory and overdue holds reconciled.` message. The latest execution
+  completed at 19:45:33 UTC. Railway showed zero warnings, critical issues,
+  recent failures, and pending work. Persisted finding counts were not verified
+  while the admin session was signed out. No job was manually triggered;
+  production was untouched.
+- Staging reconciliation follow-up — October 16, approximately 20:17 UTC:
+  the 20:00:40 and 20:15:21 UTC scheduled report-only runs logged the generic
+  success message at 20:00:44 and 20:15:26 UTC. Railway reported the latest run
+  succeeded at 20:15:33 UTC, with zero warnings, critical issues, recent failures,
+  and pending work. Persisted counts were not verified while the admin session was
+  signed out. No job was manually triggered; production was untouched.
+- Staging reconciliation follow-up — October 16, approximately 20:47 UTC:
+  the 20:31:02 and 20:45:07 UTC scheduled report-only runs logged generic success
+  messages at 20:31:09 and 20:45:12 UTC. Railway reported the latest execution
+  succeeded at 20:45:14 UTC, with zero warnings, critical issues, recent failures,
+  and pending work. Persisted finding counts were not verified while admin was
+  signed out. No job was manually triggered; production was untouched.
+- Staging persisted reconciliation/attention follow-up — October 16, approximately
+  21:05 UTC: after the owner restored the staging admin session, the read-only
+  “Needs attention” page showed all 20 most-recent reconciliation rows as
+  `Report · 0 findings`, spanning 12:16–17:01 EDT (16:16–21:01 UTC). It also showed
+  no unconfirmed order/invoice refunds, failed inquiry emails, unsent confirmations,
+  or wedding quotes/bouquet proposals awaiting review. Railway independently
+  reported the 21:01:58 UTC scheduled run succeeded and showed zero warnings,
+  critical issues, recent failures, or pending work. This confirms clean persisted
+  summaries over the visible window, but not real-finding alert behavior or longer-
+  term monitoring; C3/C4 remain open. No job was manually triggered; production
+  was untouched.
+- Staging gallery inventory spot-check — October 16, approximately 21:06 UTC:
+  the authenticated admin Gallery page showed one existing item captioned
+  “Temporary staging upload test,” with `Active` false. The item was not opened,
+  activated, edited, or deleted. This confirms only that an admin record is
+  present; it does not establish current object readability, signed private-media
+  authorization, or backup/restore recovery. Production was untouched.
+- Staging Railway environment status follow-up — October 16, approximately
+  15:06 UTC: all five services reported healthy (three scheduled jobs
+  `cronSucceeded`, two services `online`), with zero warnings, critical issues,
+  recent failures, and no pending work. This is only an operational snapshot; it
+  does not verify durable reconciliation findings or acceptance workflows.
+  Production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  15:17 UTC: Railway reported the next scheduled report-only run succeeded at
+  15:16:24 UTC; its 15:16:28 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, recent failures,
+  and no pending work. Persisted finding counts are still awaiting authenticated
+  operator review. No job was manually triggered; production was untouched.
+- Staging invoice/refund audit follow-up — October 16, checked at approximately
+  14:11 UTC: the daily scheduled run completed at 04:18:55 UTC with status
+  `succeeded`; its 04:18:57 UTC report-only log said “Invoice refund journals
+  agree with supported Stripe payments.” Railway reported zero failures during
+  the preceding 24 hours, with no warnings or critical issues. This verifies this
+  run's aggregate report only; individual invoice/payment cases, alert behavior on
+  a real mismatch, and sustained monitoring remain open. The job was not manually
+  triggered and no financial action was taken; production was untouched.
+- Staging API HTTP-log spot-check — October 16, approximately 14:13 UTC: the
+  latest 501 GET records spanned 04:20–14:13 UTC; 499 returned HTTP 200 and two
+  returned 499 with Railway logging that the client closed before a response
+  (2 ms and 8 ms). No 5xx responses appeared in this sample. This does not
+  identify the client or establish an uptime/SLO result; no request was generated
+  for this check and production was untouched.
+- Staging API HTTP-log follow-up — October 16, approximately 14:32 UTC: the
+  latest 501 GET records covered 14:27–14:32 UTC; all returned HTTP 200, with no
+  5xx responses or upstream errors. This brief sample is not an uptime/SLO
+  measurement and no request was generated for the check; production was
+  untouched.
+- Staging empty-contact-form negative check — October 16, approximately 14:35 UTC:
+  clicking “Send message” with all contact fields blank left the browser on
+  `/contact`. Railway showed only GET requests and no POSTs during the 14:33–14:35
+  UTC window (169 GETs, all HTTP 200). No inquiry or email was submitted. This
+  confirms only that no backend submission occurred; successful inquiry handling,
+  persistence, and delivery remain open. Production was untouched.
+- Staging accessibility follow-up — October 16, approximately 14:41 UTC: at a
+  390px viewport, the browser panel marked various visible custom inquiry,
+  admin-login, wholesale-login, and recovery fields as lacking accessible names.
+  Source inspection confirms explicit label associations in
+  `frontend/src/components/inquiry-form.tsx`, `backend/templates/admin/login.html`,
+  `backend/templates/partials/security_body.html`, and the wholesale sign-in's
+  wrapping `<label>` elements. Treat the panel output as an apparent snapshot/tool
+  discrepancy, not a confirmed label defect. The login's “Forgot password?” link
+  opens `/admin/security/recovery`; its “Send recovery link” control was not
+  clicked. No form was submitted. Assistive-technology verification remains open;
+  production was untouched.
+- Staging retail/mobile UI spot-check — October 16, approximately 14:24 UTC: in
+  the authorized browser, `/api/health/` returned `status: ok` and the retail
+  catalogue returned the same two listings as before (35 Red Flowers available,
+  White Flowers unavailable). At a 390px viewport, `/checkout/retail` showed an
+  empty cart, $0 estimated total and a disabled checkout button. No item was added
+   or checkout submitted. This confirms only a read-only storefront state and does
+   not close deployed purchase/return/webhook checks B3/B5.
+- Staging wholesale checkout unauthenticated view — October 16, approximately
+  14:49 UTC: at 390px, `/checkout/wholesale` displayed “Wholesale checkout
+  requires an approved account” with sign-in/request-access navigation and no
+  order controls. No login, account request, or checkout was attempted. This is
+  only a public UI guard observation, not a backend authorization or approved
+  account checkout test; B5 remains open. Production was untouched.
+- Staging unauthenticated admin view — October 16, approximately 14:50 UTC:
+  visiting `/admin/orders` without an application session redirected to
+  `/admin/login`; no order data was shown. `/admin/security/` displayed a
+  sign-in-required message without account details. These are read-only UI guard
+  observations only; they do not verify authenticated operator authorization,
+  roles, or session security. No credentials or state-changing requests were used;
+  production was untouched.
+- Local form/layout regression run — October 16, 2026: the isolated Playwright
+  suite passed 25/25 checks at 320, 390, 520, 521, 768, 850, 851 and 1440px,
+  covering contact, bouquet and wedding forms, computed accessible names,
+  descriptions, keyboard navigation and control bounds. Assertions were corrected
+  to allow the file input's additional live upload-status description and to
+  compare its inner control against the padded preview wrapper. This used a local
+  fallback server and stubbed API only; it is not deployed-staging evidence and
+  does not close B7. Test-only change is proposed in PR #52.
+- Staging R2 media access spot-check — October 16, 2026: Cloudflare listed two
+  objects in each staging bucket. A metadata-only inspection showed the public
+  objects use `public, max-age=31536000, immutable`; one is a 15,118,440-byte
+  JPEG, so the previously noted legacy oversized public object remains an open
+  cleanup/acceptance exception. A HEAD request through the active staging media
+  custom domain returned HTTP 200 with `image/webp` and the expected immutable
+  cache header for a public object. A HEAD request using a private-bucket object
+  path through that same public hostname returned HTTP 404, with no redirect or
+  content headers, consistent with the private object not being publicly served.
+  Object paths and contents were not recorded or downloaded. This spot-check does
+  not verify signed private-media authorization, upload persistence, full cache
+  policy, or all legacy objects; no data or configuration changed, and production
+  was untouched.
+- Staging backend-origin guard spot-check — October 16, 2026, approximately
+  04:06 UTC: unauthenticated GET requests to the Railway backend's `/admin/login`
+  and `/admin/orders` routes returned HTTP 403 `Origin access denied`, with
+  `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, and `Referrer-Policy: strict-origin`. The backend
+  `/api/health/` route returned HTTP 200 with `status: ok`. This confirms only
+  these unauthenticated direct-origin responses; it does not verify authenticated
+  same-origin admin routing or session behavior. No credentials were used and no
+  state-changing request was sent; production was untouched.
 - Trusted proxy CIDR configuration and trusted client-IP attribution remain
   blocked/open.
 - Backup alert follow-up — October 15, 2026: invoked the backup dispatch helper
