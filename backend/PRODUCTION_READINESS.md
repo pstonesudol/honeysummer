@@ -765,6 +765,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   order controls. No login, account request, or checkout was attempted. This is
   only a public UI guard observation, not a backend authorization or approved
   account checkout test; B5 remains open. Production was untouched.
+- Staging unauthenticated admin view — October 16, approximately 14:50 UTC:
+  visiting `/admin/orders` without an application session redirected to
+  `/admin/login`; no order data was shown. `/admin/security/` displayed a
+  sign-in-required message without account details. These are read-only UI guard
+  observations only; they do not verify authenticated operator authorization,
+  roles, or session security. No credentials or state-changing requests were used;
+  production was untouched.
 - Local form/layout regression run — October 16, 2026: the isolated Playwright
   suite passed 25/25 checks at 320, 390, 520, 521, 768, 850, 851 and 1440px,
   covering contact, bouquet and wedding forms, computed accessible names,

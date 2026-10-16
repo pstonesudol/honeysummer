@@ -204,6 +204,11 @@ acceptance row unless the register explicitly says so.
   access; no checkout controls or order were available. This is a read-only UI
   guard observation only, not API authorization or approved-account checkout
   acceptance.
+- A read-only visit to staging `/admin/orders` without an application login
+  redirected to `/admin/login`; no order data was shown. The staging recovery and
+  account-security pages also showed sign-in required without exposing account
+  details. This checks only unauthenticated UI gating, not authenticated operator
+  authorization or session security.
 - A staging browser accessibility spot-check at 390px on `/order-flowers` showed
   visible custom-request field captions, but the browser panel's accessibility
   summary marked controls as missing names. Source inspection confirms explicit
