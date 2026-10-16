@@ -727,6 +727,12 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   reconciled.` Railway reported zero warnings, critical issues, recent failures,
   and no pending work. The generic message does not expose persisted finding
   counts. No job was manually triggered; production was untouched.
+- Staging Railway environment status follow-up — October 16, approximately
+  15:06 UTC: all five services reported healthy (three scheduled jobs
+  `cronSucceeded`, two services `online`), with zero warnings, critical issues,
+  recent failures, and no pending work. This is only an operational snapshot; it
+  does not verify durable reconciliation findings or acceptance workflows.
+  Production was untouched.
 - Staging invoice/refund audit follow-up — October 16, checked at approximately
   14:11 UTC: the daily scheduled run completed at 04:18:55 UTC with status
   `succeeded`; its 04:18:57 UTC report-only log said “Invoice refund journals

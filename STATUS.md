@@ -187,6 +187,11 @@ acceptance row unless the register explicitly says so.
   generic success message. Railway reported zero warnings, critical issues, and
   recent failures, with no pending work. Persisted finding counts remain
   unverified.
+- A staging Railway environment status check at approximately 15:06 UTC reported
+  all five services healthy (three scheduled jobs `cronSucceeded`, two services
+  `online`), zero warnings/critical issues/recent failures and no pending work.
+  This remains an operational snapshot; it does not verify durable report
+  contents or acceptance flows.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,
