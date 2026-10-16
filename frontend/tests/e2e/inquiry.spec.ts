@@ -7,6 +7,10 @@ const pages = [
   { path: "/order-flowers", kind: "bouquet" },
 ] as const;
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 test.beforeEach(async ({ page }) => {
   // Keep live banner/account polling local and deterministic as well.
   await page.route("**/api/**", async (route) => {
@@ -39,7 +43,11 @@ for (const { path, kind } of pages) {
         // Browser-computed accessible names, not placeholders or snapshot heuristics.
         await expect(control).toHaveAccessibleName(field.label);
         if (field.required) await expect(control).toHaveAttribute("required", "");
-        if (field.help) await expect(control).toHaveAccessibleDescription(field.help);
+        if (field.help) {
+          await expect(control).toHaveAccessibleDescription(
+            new RegExp(`^${escapeRegExp(field.help)}`),
+          );
+        }
         const box = (await control.boundingBox())!;
         expect(box.x).toBeGreaterThanOrEqual(gridBox.x - 1);
         expect(box.x + box.width).toBeLessThanOrEqual(gridBox.x + gridBox.width + 1);
@@ -47,9 +55,18 @@ for (const { path, kind } of pages) {
           expect(box.width).toBeGreaterThanOrEqual(18);
           expect(box.width).toBeLessThan(20);
           expect(Math.abs(box.width - box.height)).toBeLessThan(1);
+        } else if (field.type === "file") {
+          // The file control sits inside the padded upload-preview wrapper.
+          const wrapper = await control.locator("xpath=..").boundingBox();
+          expect(wrapper).not.toBeNull();
+          expect(box.x).toBeGreaterThanOrEqual(wrapper!.x);
+          expect(box.x + box.width).toBeLessThanOrEqual(wrapper!.x + wrapper!.width);
         } else {
           const expectedWidth = width <= 520 || !field.half ? gridBox.width : tracks[0];
-          expect(Math.abs(box.width - expectedWidth)).toBeLessThan(1);
+          expect(
+            Math.abs(box.width - expectedWidth),
+            `${kind}.${field.name} should match its grid column width`,
+          ).toBeLessThan(1);
         }
       }
 
