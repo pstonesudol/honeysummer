@@ -123,8 +123,9 @@ acceptance row unless the register explicitly says so.
   daily schedules. Both first manual runs succeeded with zero findings. A
   controlled GitHub dispatch produced the intended failed alert workflow. A
   workflow-dispatch verification on October 16 (run `38845808631`) emitted the
-  generic reconciliation alert and failed as designed; owner inbox receipt still
-  needs confirmation. Ongoing monitoring and production readiness remain open. See
+  generic reconciliation alert and failed as designed. The owner supplied a
+  screenshot of the corresponding GitHub Actions failure email, confirming
+  receipt. Ongoing monitoring and production readiness remain open. See
   `backend/STAGING_RECONCILIATION_RUNBOOK.md`. No production worker was changed.
 
 ## Production validation summary

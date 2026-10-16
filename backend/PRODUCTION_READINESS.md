@@ -633,12 +633,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   `--apply`. A manual execution of each completed successfully, and both logs
   reported clean results. The reconciliation alert dispatcher was executed from
   the runner's staging Railway environment; GitHub accepted the dispatch and the
-  expected workflow failed with a generic reconciliation alert. Actual owner
-  notification receipt has not been confirmed. On October 16, a controlled
-  workflow-dispatch verification (run `38845808631`) emitted the generic
-  reconciliation alert and failed as designed; this verifies the workflow's
-  notification step, not inbox delivery. C3/C4/D5 remain open pending
-  sustained monitoring, notification receipt, review of future findings, and any
+  expected workflow failed with a generic reconciliation alert. On October 16,
+  a controlled workflow-dispatch verification (run `38845808631`) emitted the
+  generic reconciliation alert and failed as designed. The owner supplied a
+  screenshot of the corresponding GitHub Actions failure email, confirming
+  receipt. This verifies notification delivery for the controlled workflow test,
+  not detection/dispatch of a real reconciliation failure. C3/C4/D5 remain open
+  pending sustained monitoring, review of future findings, and any
   separately approved production plan. No production resources/configuration
   changed.
 - Trusted proxy CIDR configuration and trusted client-IP attribution remain
