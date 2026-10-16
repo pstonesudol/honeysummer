@@ -141,6 +141,14 @@ acceptance row unless the register explicitly says so.
   No cart, order, payment, or customer-submission action was taken. This is a
   point-in-time health/smoke sample, not sustained monitoring or full acceptance;
   the reconciliation log message does not expose persisted finding counts.
+- Staging scheduled-job follow-up — October 16, 2026, checked at approximately
+  14:11 UTC: the daily invoice/refund audit ran at 04:18:55 UTC and succeeded;
+  its report-only log said “Invoice refund journals agree with supported Stripe
+  payments.” Railway reported no failures in the preceding 24 hours and no
+  warnings/criticals. The reconciliation job's latest observed run also succeeded
+  at 14:02 UTC, but its generic log does not expose persisted finding counts.
+  These are point-in-time observations, not sustained monitoring or full
+  acceptance. No production services or financial data were changed.
 
 ## Production validation summary
 

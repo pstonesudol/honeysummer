@@ -674,6 +674,14 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   this remains an operational spot-check, not sustained monitoring or formal
   acceptance. No job was manually triggered, no data was changed, and production
   was untouched.
+- Staging invoice/refund audit follow-up — October 16, checked at approximately
+  14:11 UTC: the daily scheduled run completed at 04:18:55 UTC with status
+  `succeeded`; its 04:18:57 UTC report-only log said “Invoice refund journals
+  agree with supported Stripe payments.” Railway reported zero failures during
+  the preceding 24 hours, with no warnings or critical issues. This verifies this
+  run's aggregate report only; individual invoice/payment cases, alert behavior on
+  a real mismatch, and sustained monitoring remain open. The job was not manually
+  triggered and no financial action was taken; production was untouched.
 - Staging R2 media access spot-check — October 16, 2026: Cloudflare listed two
   objects in each staging bucket. A metadata-only inspection showed the public
   objects use `public, max-age=31536000, immutable`; one is a 15,118,440-byte
