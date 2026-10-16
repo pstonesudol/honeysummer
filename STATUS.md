@@ -270,6 +270,11 @@ acceptance row unless the register explicitly says so.
   wedding/proposal reviews. A separate Railway check confirmed the 21:01:58 UTC
   scheduled run succeeded with no warnings, critical issues, recent failures, or
   pending work. No manual trigger; production untouched.
+- The authenticated staging admin Gallery page showed one existing item captioned
+  “Temporary staging upload test,” with `Active` false. This was a read-only
+  inventory check; the item was not opened, activated, edited, or deleted. Its
+  presence alone does not prove current object readability, private-media
+  authorization, or backup/restore recovery.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,

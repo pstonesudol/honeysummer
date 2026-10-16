@@ -825,6 +825,12 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   summaries over the visible window, but not real-finding alert behavior or longer-
   term monitoring; C3/C4 remain open. No job was manually triggered; production
   was untouched.
+- Staging gallery inventory spot-check — October 16, approximately 21:06 UTC:
+  the authenticated admin Gallery page showed one existing item captioned
+  “Temporary staging upload test,” with `Active` false. The item was not opened,
+  activated, edited, or deleted. This confirms only that an admin record is
+  present; it does not establish current object readability, signed private-media
+  authorization, or backup/restore recovery. Production was untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,
