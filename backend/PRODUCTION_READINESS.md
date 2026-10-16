@@ -721,6 +721,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   records resolve; `_dmarc.staging-updates` remains unpublished. No record values
   were copied or changed. This does not verify message delivery or inbox
   placement; production was untouched.
+- Staging API HTTP-log follow-up — October 16, approximately 15:06 UTC: a
+  sanitized sample of 415 API records from 15:00–15:04 UTC contained only GETs,
+  all HTTP 200, with no POSTs. This is a bounded smoke-traffic sample, not an
+  uptime/SLO measurement; production was untouched.
 - Staging reconciliation follow-up — October 16, checked at approximately
   15:02 UTC: Railway reported the next scheduled report-only run succeeded at
   15:01:48 UTC; its 15:01:46 UTC log said `Inventory and overdue holds
