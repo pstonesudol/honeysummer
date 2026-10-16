@@ -674,6 +674,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   this remains an operational spot-check, not sustained monitoring or formal
   acceptance. No job was manually triggered, no data was changed, and production
   was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  14:15 UTC: Railway reported the 15-minute report-only job succeeded at
+  14:15:04 UTC; its 14:15:12 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, or recent failures
+  and no pending work. The log still does not expose persisted finding counts.
+  No job was manually triggered; sustained monitoring/formal acceptance remain
+  open, and production was untouched.
 - Staging invoice/refund audit follow-up — October 16, checked at approximately
   14:11 UTC: the daily scheduled run completed at 04:18:55 UTC with status
   `succeeded`; its 04:18:57 UTC report-only log said “Invoice refund journals

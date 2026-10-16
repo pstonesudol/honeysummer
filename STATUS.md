@@ -149,6 +149,11 @@ acceptance row unless the register explicitly says so.
   at 14:02 UTC, but its generic log does not expose persisted finding counts.
   These are point-in-time observations, not sustained monitoring or full
   acceptance. No production services or financial data were changed.
+- Reconciliation follow-up at approximately 14:15 UTC: Railway's latest
+  execution completed successfully at 14:15:04 UTC, with the generic success log
+  at 14:15:12 UTC. Railway reported no warnings, critical issues, recent failures,
+  or pending work. The log does not disclose persisted finding counts; report-only
+  reconciliation and sustained monitoring remain open.
 - A sanitized Railway HTTP-log sample checked at approximately 14:13 UTC covered
   501 staging API GETs from 04:20 to 14:13 UTC: 499 returned 200 and two returned
   499 when the client closed the request before a response (2 ms and 8 ms). There
