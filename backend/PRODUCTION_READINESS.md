@@ -576,10 +576,14 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   record does not establish delivery failure. The app's Checkout creation code
   sets an `order_id` metadata value, so this does not appear to be an app-created
   Checkout; no local order exists and the staging catalog has no exact
-  `myproduct` listing. The user recognizes it as intentional and thinks it was
-  either a client or webhook test; the exact source remains unverified. The full
-  report-only reconciliation did not surface this unmatched external test
-  session. It was left untouched; no cancellation/refund was attempted.
+  `myproduct` listing. On October 16, the owner supplied a Stripe Dashboard
+  screenshot showing the line-item product annotated “created by Stripe CLI.”
+  This strongly supports an intentional Stripe CLI/test fixture, although it does
+  not prove which command created the Checkout session itself. It remains an
+  unmatched successful test-mode payment with no local order; the full report-only
+  reconciliation did not surface it. It was left untouched; no cancellation or
+  refund was attempted. Treat it as a known test artifact, not a production or
+  customer transaction, while retaining the mismatch as audit evidence.
 - The single bouquet proposal has a linked Stripe invoice; Stripe reports that
   invoice open, and the proposal has no associated order. No payment, resend or
   additional invoice action was taken. Invoice-paid webhooks and the wider D1/D4
@@ -642,6 +646,20 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   pending sustained monitoring, review of future findings, and any
   separately approved production plan. No production resources/configuration
   changed.
+- Staging read-only operations/smoke sample — October 16, approximately
+  03:30–03:45 UTC: Railway reported the five remaining staging services healthy,
+  no warnings/critical issues or recent failures, and no pending changes. The
+  15-minute reconciliation logs showed successful runs through 03:30:33 UTC. The
+  backup run completed at 03:34:51 UTC and logged a completed manifest. The
+  invoice/refund audit's latest observed run was October 15 at 04:19 UTC; the
+  October 16 04:15 UTC schedule had not yet fired during this sample. Direct
+  staging `/api/health/` returned `status: ok`; through the authorized staging
+  browser session, the home and order pages rendered and `/api/retail/flowers/`
+  returned two listings. An unauthenticated custom-domain request reached the
+  expected Cloudflare Access sign-in gate. No cart/order/payment/customer form was
+  submitted. The generic reconciliation log message does not expose persisted
+  finding counts; this short sample is not sustained monitoring or full
+  acceptance. Production was untouched.
 - Trusted proxy CIDR configuration and trusted client-IP attribution remain
   blocked/open.
 - Backup alert follow-up — October 15, 2026: invoked the backup dispatch helper
