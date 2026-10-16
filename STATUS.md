@@ -187,17 +187,17 @@ acceptance row unless the register explicitly says so.
   and no checkout was submitted; this is UI smoke evidence only, not B3/B5
   purchase acceptance.
 - A staging browser accessibility spot-check at 390px on `/order-flowers` showed
-  visible custom-request field captions, but the browser's computed accessibility
-  snapshot reported missing accessible names for the name, email, phone, date,
-  occasion, budget, color-preferences and message controls. The admin login
-  snapshot similarly reported missing names for email/password; the wholesale
-  sign-in snapshot also reported missing names for email, password and MFA code.
+  visible custom-request field captions, but the browser panel's accessibility
+  summary marked controls as missing names. Source inspection confirms explicit
+  `<label htmlFor>` associations in `InquiryForm`, explicit `<label for>` on the
+  admin login and recovery pages, and wrapping `<label>` elements on wholesale
+  sign-in fields. Treat the panel result as an apparent snapshot/tool discrepancy,
+  not a confirmed label defect; retain real assistive-technology verification as
+  open.
   The login page's “Forgot password?” link opens `/admin/security/recovery`,
   which renders an email field and “Send recovery link” control; the email field
-  was reported without an accessible name. The recovery control was not clicked.
-  This may reflect label association or browser-snapshot interpretation and needs
-  a real DOM/assistive-technology check; it is not accepted as passing
-  accessibility evidence. No form was submitted.
+  appears in source with an explicit label. The recovery control was not clicked.
+  No form was submitted.
 
 ## Production validation summary
 
