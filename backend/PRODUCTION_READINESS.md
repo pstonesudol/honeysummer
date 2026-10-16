@@ -695,6 +695,14 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   (2 ms and 8 ms). No 5xx responses appeared in this sample. This does not
   identify the client or establish an uptime/SLO result; no request was generated
   for this check and production was untouched.
+- Local form/layout regression run — October 16, 2026: the isolated Playwright
+  suite passed 25/25 checks at 320, 390, 520, 521, 768, 850, 851 and 1440px,
+  covering contact, bouquet and wedding forms, computed accessible names,
+  descriptions, keyboard navigation and control bounds. Assertions were corrected
+  to allow the file input's additional live upload-status description and to
+  compare its inner control against the padded preview wrapper. This used a local
+  fallback server and stubbed API only; it is not deployed-staging evidence and
+  does not close B7. Test-only change is proposed in PR #52.
 - Staging R2 media access spot-check — October 16, 2026: Cloudflare listed two
   objects in each staging bucket. A metadata-only inspection showed the public
   objects use `public, max-age=31536000, immutable`; one is a 15,118,440-byte

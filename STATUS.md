@@ -158,6 +158,12 @@ acceptance row unless the register explicitly says so.
   501 staging API GETs from 04:20 to 14:13 UTC: 499 returned 200 and two returned
   499 when the client closed the request before a response (2 ms and 8 ms). There
   were no 5xx responses; treat this as a bounded sample, not an uptime guarantee.
+- An isolated local Playwright inquiry-form/layout run passed 25/25 checks across
+  320–1440px, including labels, mobile navigation keyboard behavior and form
+  control bounds. The test assertions were corrected to allow the file upload's
+  live status text in its accessible description and to account for the padded
+  preview wrapper. This used only a local fallback server; it is not deployed
+  staging evidence and does not close B7.
 
 ## Production validation summary
 
