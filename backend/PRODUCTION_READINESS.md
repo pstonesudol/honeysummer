@@ -257,7 +257,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   inbox placement. Message headers showed SPF pass, aligned DKIM pass, Microsoft
   DMARC `bestguesspass`/`action=none`, and composite authentication pass, while
   the message was still classified as junk (SCL 5). No explicit DMARC record is
-  published for the staging sending subdomain. Authentication-result review is
+  published for the staging sending subdomain. A public DNS-only recheck on
+  October 16 confirmed the staging Resend DKIM TXT record and the `send` host's
+  MX/SPF records still resolve, while `_dmarc.staging-updates` remains
+  unpublished. Record values were not copied. Authentication-result review is
   complete; optional staging DMARC monitoring, spam placement/reputation work,
   Resend event review, and broader email workflow coverage remain open. A later
   inquiry-email attempt was blocked by required form controls in browser
