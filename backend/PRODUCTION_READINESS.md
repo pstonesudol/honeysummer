@@ -565,6 +565,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   changed.
 - Trusted proxy CIDR configuration and trusted client-IP attribution remain
   blocked/open.
+- Backup alert follow-up — October 15, 2026: invoked the backup dispatch helper
+  from the staging backup service environment without running a backup. GitHub
+  accepted the dispatch and the expected failed backup-alert workflow emitted
+  its generic message. This verifies the dispatch token/API/workflow path, not a
+  failure injected into the backup execution itself. Receipt of this specific
+  backup notification remains unconfirmed; G2 restore and key-escrow checks also
+  remain open.
 
 ## Future features
 
