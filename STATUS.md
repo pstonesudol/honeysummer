@@ -161,6 +161,11 @@ acceptance row unless the register explicitly says so.
 - A second sanitized HTTP-log sample at approximately 14:32 UTC covered 501 API
   GET records from 14:27–14:32 UTC; all returned 200, with no 5xx or upstream
   errors. This short recent sample is not an uptime/SLO measurement.
+- The reconciliation log sample at approximately 14:35 UTC contained 143 generic
+  success messages from Oct 15 03:18:55 through Oct 16 14:31:24 UTC; median gap
+  was 15.034 minutes, maximum 17.877 minutes, with no gaps over 20 minutes or
+  failure/error messages. Persisted finding counts and alerting on a real finding
+  remain unverified, so this is monitoring evidence but not formal acceptance.
 - A sanitized Railway HTTP-log sample checked at approximately 14:13 UTC covered
   501 staging API GETs from 04:20 to 14:13 UTC: 499 returned 200 and two returned
   499 when the client closed the request before a response (2 ms and 8 ms). There

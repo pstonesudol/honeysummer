@@ -688,6 +688,15 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   work. The log does not expose persisted finding counts, so this remains a
   point-in-time report-only observation rather than accepted reconciliation.
   Production was untouched.
+- Staging reconciliation log-window review — October 16, approximately 14:35 UTC:
+  the sanitized deploy stream contained 143 `Inventory and overdue holds
+  reconciled.` messages from October 15 03:18:55 through October 16 14:31:24 UTC.
+  The median gap was 15.034 minutes and maximum gap 17.877 minutes; there were no
+  gaps over 20 minutes and no failure/error messages in the 286-entry sample.
+  Railway separately showed no recent failures or active issues. This is evidence
+  of regular report-only execution over this window, but does not reveal persisted
+  finding counts or prove alert handling when a real finding occurs; C3/C4 remain
+  open. Production was untouched.
 - Staging invoice/refund audit follow-up — October 16, checked at approximately
   14:11 UTC: the daily scheduled run completed at 04:18:55 UTC with status
   `succeeded`; its 04:18:57 UTC report-only log said “Invoice refund journals
