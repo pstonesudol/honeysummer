@@ -190,10 +190,11 @@ acceptance row unless the register explicitly says so.
   visible custom-request field captions, but the browser's computed accessibility
   snapshot reported missing accessible names for the name, email, phone, date,
   occasion, budget, color-preferences and message controls. The admin login
-  snapshot similarly reported missing names for email/password. This may reflect
-  label association or browser-snapshot interpretation and needs a real DOM/
-  assistive-technology check; it is not accepted as passing accessibility evidence.
-  No form was submitted.
+  snapshot similarly reported missing names for email/password; the wholesale
+  sign-in snapshot also reported missing names for email, password and MFA code.
+  This may reflect label association or browser-snapshot interpretation and needs
+  a real DOM/assistive-technology check; it is not accepted as passing
+  accessibility evidence. No form was submitted.
 
 ## Production validation summary
 
