@@ -127,6 +127,20 @@ acceptance row unless the register explicitly says so.
   screenshot of the corresponding GitHub Actions failure email, confirming
   receipt. Ongoing monitoring and production readiness remain open. See
   `backend/STAGING_RECONCILIATION_RUNBOOK.md`. No production worker was changed.
+- Staging read-only operations/smoke check — October 16, 2026, approximately
+  03:30–03:45 UTC: Railway reported all five remaining staging services healthy,
+  no warnings/critical issues, no recent failures, and no pending changes. The
+  15-minute reconciliation service logged successful runs through 03:30:33 UTC;
+  the backup service completed at 03:34:51 UTC and logged a new manifest. The
+  invoice/refund audit's latest observed run was October 15 at 04:19 UTC; its
+  October 16 04:15 UTC run had not yet occurred during this check. Direct staging
+  `/api/health/` returned `status: ok`; using the authorized staging browser
+  session, the home/order pages loaded and `/api/retail/flowers/` returned two
+  listings (35 available Red Flowers; White Flowers unavailable). An unauthenticated
+  custom-domain request was shown the Cloudflare Access sign-in page, as expected.
+  No cart, order, payment, or customer-submission action was taken. This is a
+  point-in-time health/smoke sample, not sustained monitoring or full acceptance;
+  the reconciliation log message does not expose persisted finding counts.
 
 ## Production validation summary
 
@@ -154,7 +168,8 @@ acceptance row unless the register explicitly says so.
 6. Phase 7 owner rehearsal and controlled live account/device check.
 7. Phase 13 final content/assets/accessibility/client approval and cutover plan.
 8. Known exceptions to resolve or explicitly isolate: inquiry #4 deletion error,
-   unmatched $30 test-mode Checkout session, historical quote #9 review, legacy
+   unmatched $30 Stripe test-mode Checkout (owner evidence indicates a Stripe CLI
+   test artifact; see the detailed note), historical quote #9 review, legacy
    public full-size JPEG object, private-photo recovery checks, and concurrent
    near-limit upload stress.
 
