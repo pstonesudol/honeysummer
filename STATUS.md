@@ -179,6 +179,9 @@ acceptance row unless the register explicitly says so.
   records from 14:41–14:48 UTC; all were GETs (499 HTTP 200, two HTTP 302), with
   no non-GET method or 5xx. This is a bounded request sample, not an uptime/SLO
   result.
+- A public DNS-only recheck at approximately 15:05 UTC found the staging Resend
+  DKIM TXT, send-host MX and SPF records resolving; `_dmarc.staging-updates`
+  remains absent. No DNS values were copied and no DNS changes were made.
 - Reconciliation follow-up at approximately 15:02 UTC: the next scheduled
   report-only run succeeded at 15:01:48 UTC; its 15:01:46 UTC log contained the
   generic success message. Railway reported zero warnings, critical issues, and

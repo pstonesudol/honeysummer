@@ -716,6 +716,11 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   200, two HTTP 302), with no non-GET method or 5xx response. This bounded sample
   does not establish uptime/SLO and no request was generated for the check;
   production was untouched.
+- Staging Resend DNS follow-up — October 16, approximately 15:05 UTC: a public
+  DNS-only lookup confirmed the staging Resend DKIM TXT, `send`-host MX, and SPF
+  records resolve; `_dmarc.staging-updates` remains unpublished. No record values
+  were copied or changed. This does not verify message delivery or inbox
+  placement; production was untouched.
 - Staging reconciliation follow-up — October 16, checked at approximately
   15:02 UTC: Railway reported the next scheduled report-only run succeeded at
   15:01:48 UTC; its 15:01:46 UTC log said `Inventory and overdue holds
