@@ -28,6 +28,14 @@ custom or `r2.dev` public domain; snapshots under `snapshots/` expire after 14
 days, and the default 7-day incomplete-multipart cleanup is preserved. GitHub
 Actions is the selected failure-alert destination.
 
+Alert-path check — October 15, 2026: the backup dispatch helper was invoked from
+the staging backup service environment without running or changing a backup. The
+GitHub API accepted the dispatch and the expected failed
+`staging-backup-alert.yml` run emitted its generic alert. This verifies the token,
+dispatch endpoint, and workflow behavior; it does not simulate a backup failure
+inside the backup job. Owner receipt of this specific backup alert is not yet
+confirmed.
+
 The job does not automatically escrow the backup key or application encryption
 key. `python -m app.restore_backup <manifest-key>` is a guarded restore tool. The
 isolated Railway `staging-restore-postgres` service and two empty R2 buckets

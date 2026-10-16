@@ -80,7 +80,9 @@ acceptance row unless the register explicitly says so.
   03:30 UTC schedule are provisioned. Two manual runs succeeded; encrypted
   database/media objects and manifests are present in the private R2 bucket with
   14-day retention. An isolated restore Postgres service and two empty private
-  restore buckets are provisioned. Restore rehearsal, failure-alert verification,
+  restore buckets are provisioned. A direct backup-alert dispatch test succeeded
+  and produced the expected failed GitHub workflow; an actual backup-job failure
+  and receipt of this specific notification remain unverified. Restore rehearsal
   and escrow retrieval checks remain open. Production has no backup service and
   was not changed.
 - Reconciliation workers — October 15, 2026: staging-only report-only
