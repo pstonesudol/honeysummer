@@ -757,8 +757,14 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   catalogue returned the same two listings as before (35 Red Flowers available,
   White Flowers unavailable). At a 390px viewport, `/checkout/retail` showed an
   empty cart, $0 estimated total and a disabled checkout button. No item was added
-  or checkout submitted. This confirms only a read-only storefront state and does
-  not close deployed purchase/return/webhook checks B3/B5.
+   or checkout submitted. This confirms only a read-only storefront state and does
+   not close deployed purchase/return/webhook checks B3/B5.
+- Staging wholesale checkout unauthenticated view — October 16, approximately
+  14:49 UTC: at 390px, `/checkout/wholesale` displayed “Wholesale checkout
+  requires an approved account” with sign-in/request-access navigation and no
+  order controls. No login, account request, or checkout was attempted. This is
+  only a public UI guard observation, not a backend authorization or approved
+  account checkout test; B5 remains open. Production was untouched.
 - Local form/layout regression run — October 16, 2026: the isolated Playwright
   suite passed 25/25 checks at 320, 390, 520, 521, 768, 850, 851 and 1440px,
   covering contact, bouquet and wedding forms, computed accessible names,

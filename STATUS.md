@@ -199,6 +199,11 @@ acceptance row unless the register explicitly says so.
   empty cart, $0 estimated total and disabled checkout button. No item was added
   and no checkout was submitted; this is UI smoke evidence only, not B3/B5
   purchase acceptance.
+- A 390px staging visit to `/checkout/wholesale` with no wholesale account showed
+  “Wholesale checkout requires an approved account” and offered sign-in/request
+  access; no checkout controls or order were available. This is a read-only UI
+  guard observation only, not API authorization or approved-account checkout
+  acceptance.
 - A staging browser accessibility spot-check at 390px on `/order-flowers` showed
   visible custom-request field captions, but the browser panel's accessibility
   summary marked controls as missing names. Source inspection confirms explicit
