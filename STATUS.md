@@ -154,6 +154,10 @@ acceptance row unless the register explicitly says so.
   at 14:15:12 UTC. Railway reported no warnings, critical issues, recent failures,
   or pending work. The log does not disclose persisted finding counts; report-only
   reconciliation and sustained monitoring remain open.
+- The next observed reconciliation completed successfully at 14:31:18 UTC; its
+  14:31:24 UTC log was the same generic success message. Railway still reported no
+  warnings, critical issues, recent failures or pending work. Persisted finding
+  counts remain unverified.
 - A sanitized Railway HTTP-log sample checked at approximately 14:13 UTC covered
   501 staging API GETs from 04:20 to 14:13 UTC: 499 returned 200 and two returned
   499 when the client closed the request before a response (2 ms and 8 ms). There
