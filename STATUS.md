@@ -166,6 +166,11 @@ acceptance row unless the register explicitly says so.
   was 15.034 minutes, maximum 17.877 minutes, with no gaps over 20 minutes or
   failure/error messages. Persisted finding counts and alerting on a real finding
   remain unverified, so this is monitoring evidence but not formal acceptance.
+- Read-only staging backup check at approximately 14:45 UTC confirmed Railway's
+  latest scheduled run succeeded at 03:34:50 UTC; its log at 03:34:51 UTC recorded
+  a completed manifest upload. Railway reported no warnings, critical issues or
+  recent failures. No backup was triggered and no data was changed; this does not
+  replace restore validation or verify backup contents.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,

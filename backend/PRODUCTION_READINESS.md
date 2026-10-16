@@ -697,6 +697,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   of regular report-only execution over this window, but does not reveal persisted
   finding counts or prove alert handling when a real finding occurs; C3/C4 remain
   open. Production was untouched.
+- Staging scheduled-backup follow-up — October 16, checked at approximately
+  14:45 UTC: Railway reported the latest scheduled backup completed at 03:34:50
+  UTC; the 03:34:51 UTC log recorded a completed manifest upload. Railway reported
+  zero warnings, critical issues, or recent failures. No backup was manually
+  triggered and no restore/data action was taken. This confirms only the scheduled
+  job's reported completion, not manifest contents or a fresh restore; production
+  was untouched.
 - Staging invoice/refund audit follow-up — October 16, checked at approximately
   14:11 UTC: the daily scheduled run completed at 04:18:55 UTC with status
   `succeeded`; its 04:18:57 UTC report-only log said “Invoice refund journals
