@@ -175,6 +175,10 @@ acceptance row unless the register explicitly says so.
   report-only run succeeded at 14:47:38 UTC and logged the generic success message
   at 14:47:45 UTC. Railway reported zero warnings, critical issues, or recent
   failures and no pending work. Persisted finding counts remain unverified.
+- A sanitized API HTTP-log sample checked at approximately 14:48 UTC covered 501
+  records from 14:41–14:48 UTC; all were GETs (499 HTTP 200, two HTTP 302), with
+  no non-GET method or 5xx. This is a bounded request sample, not an uptime/SLO
+  result.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,

@@ -708,8 +708,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   14:48 UTC: Railway reported the latest scheduled report-only execution
   succeeded at 14:47:38 UTC; its 14:47:45 UTC log said
   `Inventory and overdue holds reconciled.` Railway reported zero warnings,
-  critical issues, or recent failures and no pending work. The generic message
-  still does not expose persisted finding counts. No job was manually triggered;
+   critical issues, or recent failures and no pending work. The generic message
+   still does not expose persisted finding counts. No job was manually triggered;
+   production was untouched.
+- Staging API HTTP-log follow-up — October 16, approximately 14:48 UTC: the
+  latest 501 records covered 14:41–14:48 UTC and were all GET requests (499 HTTP
+  200, two HTTP 302), with no non-GET method or 5xx response. This bounded sample
+  does not establish uptime/SLO and no request was generated for the check;
   production was untouched.
 - Staging invoice/refund audit follow-up — October 16, checked at approximately
   14:11 UTC: the daily scheduled run completed at 04:18:55 UTC with status
