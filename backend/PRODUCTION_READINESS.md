@@ -739,9 +739,18 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   15:30 UTC: Railway reported the next scheduled report-only run succeeded at
   15:30:06 UTC; its 15:30:09 UTC log said `Inventory and overdue holds
   reconciled.` Railway continued to report zero warnings, critical issues, recent
-  failures, and no pending work. Persisted finding counts remain pending
-  authenticated operator review. No job was manually triggered; production was
+  failures, and no pending work. No job was manually triggered; production was
   untouched.
+- Staging persisted reconciliation/attention review — October 16, approximately
+  15:35 UTC: in the authenticated staging admin, the read-only “Needs attention”
+  page showed 20 persisted reconciliation rows, each `Report · 0 findings`, from
+  06:46 through 11:30 EDT (10:46–15:30 UTC). It also showed no unconfirmed order
+  or invoice refunds, failed inquiry emails, unsent confirmations, or wedding
+  quotes/bouquet proposals awaiting review. No individual order/customer/finding
+  records were opened or changed. This confirms durable zero-finding summaries
+  over that window and the admin's current attention summary, but not alert
+  behavior on a real finding or longer-term monitoring; C3/C4 remain open.
+  Production was untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,

@@ -206,6 +206,14 @@ acceptance row unless the register explicitly says so.
   15:30:09 UTC log was the generic success message. Railway continued to report
   no warnings, critical issues, recent failures, or pending work. Persisted finding
   counts still await authenticated operator review.
+- After the owner opened the staging admin session, the read-only “Needs attention”
+  page showed the latest 20 persisted reconciliation rows, all `Report · 0 findings`,
+  spanning 06:46–11:30 EDT on Oct 16 (10:46–15:30 UTC). It also showed no
+  unconfirmed refunds/invoice refunds, failed inquiry emails, unsent confirmations,
+  or review-required wedding quotes/bouquet proposals. No individual order,
+  customer, or finding details were opened. This confirms durable zero-finding
+  summaries over this observed window; real-finding alert behavior and longer-term
+  monitoring remain open.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,
