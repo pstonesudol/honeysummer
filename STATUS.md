@@ -236,6 +236,12 @@ acceptance row unless the register explicitly says so.
   zero warnings, critical issues, and recent failures, with no pending work. The
   admin session had returned to sign-in, so persisted counts for these three runs
   are unverified. No manual trigger; production untouched.
+- A read-only reconciliation log review at 18:40 UTC found six additional
+  scheduled runs between 17:15 and 18:30 UTC, each with the generic success log;
+  Railway's latest execution completed successfully at 18:30:58 UTC. The service
+  reported zero warnings, critical issues and recent failures, with no pending
+  work. Persisted finding counts for these runs were not checked because the admin
+  session is signed out. No manual trigger; production untouched.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,
