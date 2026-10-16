@@ -422,8 +422,9 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     `STAGING_BACKUP_SETUP_REVIEW.md`. The staging-only cron service completed two
     manual runs, each producing an encrypted database dump, four media objects,
     and a final manifest. Its private R2 destination has 14-day snapshot retention.
-    A separate staging restore Postgres service and two restore buckets are
-    provisioned with public access disabled. On October 16, 2026 UTC, snapshot
+    A separate staging restore Postgres service and two restore buckets were
+    provisioned with public access disabled for the rehearsal. On October 16,
+    2026 UTC, snapshot
     `snapshots/2026/10/15/e79086d9ea1c4aa589a5e6a1acad831e/manifest.json.hsbackup`
     was restored through the guarded workflow to
     `staging-restore-postgres.railway.internal/railway` and the isolated public
@@ -466,8 +467,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
       staging service values using hidden terminal prompts; no key material was
       shared. The configured application key passed a synthetic round-trip, but
       the restored database contained no MFA or queued-security-mail ciphertext
-      to validate against it. Still open: cleanup approval plus secure cleanup of
-      the restored database/media and temporary restore credential values. On October
+      to validate against it. After explicit owner approval, cleanup removed the
+      restore runner, restore Postgres and its 5 GB volume, both restore buckets,
+      and their four restored media objects. Follow-up Railway/R2 inventory found
+      no restore service, volume, bucket, or pending cleanup operation; staging
+      app/Postgres/jobs and the encrypted backup bucket remain. The short-lived
+      restore credentials were attached to the deleted restore resources and are
+      no longer present there. Production was untouched. On October
       16 a controlled in-process exception replaced `create_backup` before any
       storage operation; the backup job dispatched
       `staging-backup-alert.yml` (run `38831354476`), which emitted the generic
@@ -477,7 +483,11 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
       The backup encryption key also encrypts copied media;
       `SECURITY_ENCRYPTION_KEY` is a separate application key and was not needed
       for this raw archive restore.
-      G2 remains open until the remaining recovery and operational checks pass.
+      The staging logical recovery rehearsal is complete. The G2 production
+      acceptance checkbox remains open: production backup policy, isolated restore
+      evidence, operational monitoring, and launch sign-off are not established by
+      staging evidence. The managed restore service lacked `pg_amcheck` and the
+      `amcheck` extension, so low-level page verification was unavailable.
   - The October 11 note that R2 was blocked predates the October 13 creation of
     staging public/private media buckets. Those media buckets are not reused for
     database backups. Restore must use the isolated restore targets and scoped
@@ -487,7 +497,9 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     the working production database. A logical restore to a disposable Postgres
     verifies logical recovery, not native snapshot restore. Back up the separate
     application `SECURITY_ENCRYPTION_KEY` separately and preserve the backed-up
-    public/private media. G2 remains open.
+    public/private media. Staging targets used for the October rehearsal have been
+    cleaned up; provision fresh isolated targets for any future restore. Production
+    G2 remains open.
 - [ ] G3 — Intended domain, redirects, DNS/TLS, Workers routes, Railway origin and email DNS checked before cutover; TTL/rollback/contact plan approved.
 - [ ] G4 — All applicable checks pass with evidence; source feature/owner acceptance or explicit prior waivers reconciled, no unresolved launch blockers, operational sign-off recorded.
 - [ ] G5 — Handoff to Phase 13 for final assets/copy/licensing/SEO/accessibility approval, launch authorization, public cutover and post-cutover smoke/rollback checks.
@@ -622,7 +634,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   reported clean results. The reconciliation alert dispatcher was executed from
   the runner's staging Railway environment; GitHub accepted the dispatch and the
   expected workflow failed with a generic reconciliation alert. Actual owner
-  notification receipt has not been confirmed. C3/C4/D5 remain open pending
+  notification receipt has not been confirmed. On October 16, a controlled
+  workflow-dispatch verification (run `38845808631`) emitted the generic
+  reconciliation alert and failed as designed; this verifies the workflow's
+  notification step, not inbox delivery. C3/C4/D5 remain open pending
   sustained monitoring, notification receipt, review of future findings, and any
   separately approved production plan. No production resources/configuration
   changed.
@@ -635,8 +650,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   failure injected into the backup execution itself. Receipt of this specific
   receipt for the earlier dispatch-only notification was not separately
   confirmed. The later controlled backup-handler run's email receipt is confirmed
-  above. Backup-key escrow retrieval is confirmed; the separate application-key
-  escrow check and restore cleanup approval remain open.
+  above. The owner confirmed escrow retrieval and matching staging values for both
+  encryption keys; the restore resources and temporary restore credentials were
+  subsequently removed with approval. Reconciliation-alert receipt and
+  production backup/restore acceptance remain open.
 
 ## Future features
 

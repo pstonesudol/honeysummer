@@ -48,7 +48,9 @@ The job does not automatically escrow the backup key or application encryption
 key. `python -m app.restore_backup <manifest-key>` is a guarded restore tool. The
 isolated Railway `staging-restore-postgres` service and two private R2 buckets
 (`honeysummer-staging-restore-public` and `honeysummer-staging-restore-private`)
-are provisioned; both have public `r2.dev` access disabled and no custom domains.
+were provisioned for the October 16 restore rehearsal and deleted after approved
+cleanup. Both restore buckets had public `r2.dev` access disabled and no custom
+domains.
 The restore tool demands an exact typed target confirmation. A staging-only
 `honeysummer-staging-restore-runner` and manual workflow provide the
 private-network execution path. The October 16, 2026 staging restore completed;
@@ -60,8 +62,10 @@ retrieved `SECURITY_ENCRYPTION_KEY` from escrow and confirmed it matches the
 staging app service value the same way. No key material was shared. The separate
 application key is not needed to decrypt this snapshot, but supports recovery of
 encrypted MFA and queued-security-mail data; the restored database contained no
-such ciphertext to validate against it. Keep the isolated restored data until
-cleanup is explicitly approved.
+such ciphertext to validate against it. After the completed October 16 rehearsal,
+the owner approved cleanup; the restore runner, Postgres/volume, restore buckets,
+and restored objects have been deleted. Recreate fresh isolated targets before a
+future restore. The encrypted backup bucket and regular staging services remain.
 
 ## Staging configuration
 
@@ -171,8 +175,11 @@ as Railway references to the staging backup service. Set `RESTORE_DATABASE_URL`
 as a reference to `staging-restore-postgres.DATABASE_URL`; keep both restore
 buckets separate and empty until the rehearsal.
 
-This rehearsal requires isolated Postgres and public/private buckets, and explicit
-cleanup approval. G2 remains open until database, media, key recovery and failure
-alerts are rehearsed.
+Each future rehearsal requires fresh isolated Postgres and public/private buckets.
+The October 16 staging rehearsal covered database/media recovery and escrow-key
+retrieval, and its targets were subsequently cleaned up with owner approval. The
+staging recovery exercise is complete; production backup/recovery acceptance and
+operational sign-off remain open. Confirm notification receipt separately for
+each alert path before accepting alerting.
 Production needs its own separately approved policy and recovery evidence; staging
 does not prove production recoverability.

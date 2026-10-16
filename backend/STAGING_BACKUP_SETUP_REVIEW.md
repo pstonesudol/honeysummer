@@ -1,11 +1,15 @@
-# Staging backup and restore setup — current status
+# Staging backup and restore setup — historical review
 
-**Staging backup operational; restore rehearsal pending.** The staging-only
+**Staging restore completed and cleaned up October 16, 2026.** The staging-only
 Railway cron service, daily schedule, private backup bucket, and 14-day snapshot
-retention are configured. Two encrypted snapshots completed successfully. The
-isolated restore Postgres service and two empty restore buckets are provisioned;
-restore-only credentials, alert-path verification, escrow retrieval, and restore
-rehearsal remain outstanding. Production is untouched.
+retention remain configured. Encrypted backups and the isolated database/media
+restore were verified; the owner retrieved both encryption-key escrow copies and
+confirmed they matched the staging values. After explicit approval, the restore
+runner, Postgres/volume, restore buckets, and their contents were removed. The
+backup bucket and routine staging services remain. Reconciliation-alert inbox
+receipt, production recovery acceptance, and other launch checks remain open.
+See `PRODUCTION_READINESS.md` for current acceptance status. Production was
+untouched.
 
 ## Proposed design
 
@@ -35,22 +39,22 @@ environment is `staging`. It has no public domain or volume, uses the staging
 Postgres private network, builds `backup.Dockerfile`, runs
 `uv run --no-sync python -m app.backup`, and is configured for `NEVER` restart
 plus the daily schedule. It has completed two manual staging runs. Secret values
-remain outside IaC and are not read back. Do not consider G2 complete until the
-recovery prerequisites below are met.
+  remain outside IaC and are not read back. The staging rehearsal is recorded
+  below; production G2 acceptance remains open.
 
-Fresh read-only Railway plans were inspected after aligning the existing backend
-source declaration with its current GitHub type and leaving its default restart
-policy unmanaged:
+Provisioning snapshot from before the restore cleanup: fresh read-only Railway
+plans were inspected after aligning the existing backend source declaration with
+its current GitHub type and leaving its default restart policy unmanaged:
 
 - **Before creation:** staging plan was exactly 1 service add, 0 changes, 0
   destroys; production plan was up to date. The staging service was created from
   that plan; no production resource was changed.
 - **Restore resources:** `staging-restore-postgres` with an attached 5 GB volume
-  is online in Railway staging. Two separate empty R2 buckets are provisioned
-  for public/private restore data; both have `r2.dev` disabled and no custom
-  domains.
-- **Current production plan:** up to date; no backup or restore service.
-- **Current staging plan:** no resources to add/destroy; it reports safe config
+  and two separate public/private R2 buckets were provisioned for the rehearsal;
+  both buckets had `r2.dev` disabled and no custom domains. All were subsequently
+  deleted under owner-approved cleanup.
+- **Production plan at that time:** up to date; no backup or restore service.
+- **Staging plan at that time:** no resources to add/destroy; it reported safe config
   normalization diffs only. Review the plan before any future apply and never
   apply this setup to production.
 
@@ -77,52 +81,42 @@ Restore should use a separately provisioned, short-lived credential with read
 access to the backup bucket and write access only to disposable restore targets.
 Do not put secrets in chat, docs, logs, source control, or the status register.
 
-## Recovery acceptance still required
+## Recovery acceptance outcome
 
 The backup writer and tests cover streaming database encryption, copying
 public/private R2 objects, per-object hashes, manifest-last completion, a generic
 GitHub failure dispatch, and an isolated-target restore command. The manual
 GitHub workflow can trigger the proposed Railway cron service once provisioned.
-**This is still not an accepted recovery system.** Complete and review:
+The planned staging recovery rehearsal was completed October 16, 2026. The
+following records the outcome and remaining limitations:
 
-1. Review the restore command's explicit `staging-restore` target guard, exact
+1. The restore command's explicit `staging-restore` target guard, exact
    typed confirmation, empty-database and empty-bucket checks, and no-overwrite
    behavior. It refuses production and non-restore targets and does not drop data.
-2. Configure short-lived restore credentials: read-only on the backup bucket and
-   write-only on the two isolated restore buckets. Rehearse there, never over
-   active staging.
-3. Secure independent escrow and retrieval test for both `BACKUP_ENCRYPTION_KEY`
+2. Short-lived credentials scoped to the backup and isolated restore targets were
+   used for the rehearsal and removed with the restore resources during approved
+   cleanup.
+3. Independent escrow retrieval was confirmed for both `BACKUP_ENCRYPTION_KEY`
    and the application's `SECURITY_ENCRYPTION_KEY`. Do not send either value.
-4. Cross-check media byte counts/hashes and restore content type/cache metadata;
-   verify private restored objects remain private and public restored objects are
-   not routed until explicitly approved.
-5. Manual trigger test: run **Run staging backup now** from `main` in GitHub
+4. Media hashes and plaintext lengths were checked; restored objects decoded, and
+   private reads used the application's private-media function. The private
+   restore bucket had public access disabled.
+5. Manual trigger test: **Run staging backup now** from `main` in GitHub
    Actions and verify the cron run plus completed manifest. Two staging runs
    have succeeded; retain the evidence for the rehearsal record.
-6. Alert test: trigger a synthetic failure, verify the GitHub Actions run fails,
-   and confirm an actual notification reaches the owner. A hard kill, startup
-   failure, missing token or GitHub API outage can bypass the direct dispatch.
-7. Verify the destination is private, lifecycle expiry is correct, credentials are
+6. A controlled backup-handler failure dispatched the GitHub alert and the owner
+   confirmed email receipt. A hard kill, startup failure, missing token or GitHub
+   API outage can bypass the direct dispatch.
+7. The destination is private, lifecycle expiry is configured, credentials are
    bucket-scoped, and a successful scheduled run exits cleanly. Keep a manifest as
    the required completion marker; partial objects without one are not backups.
 
-## Remaining sequence
+## Future restore procedure
 
-1. Add restore-only credentials directly to Railway service
-   `honeysummer-staging-restore-runner`: read/list only on
-   `honeysummer-staging-backups`, and object read/write only on the two restore
-   buckets. Do not reuse the backup writer or application media credentials.
-2. Confirm the backup encryption key and application `SECURITY_ENCRYPTION_KEY`
-   each have independent secure escrow copies and that recovery operators can
-   retrieve them. Never share key material.
-3. Merge and validate the manual restore workflow; dispatch it with the completed
-   manifest key and exact `RESTORE staging-restore <host>/<database>` confirmation.
-   Verify schema/revision state, representative records, four media objects,
-   hashes, metadata, and private/public access behavior.
-4. Run a controlled synthetic failure and confirm the backup runner dispatches
-   the alert workflow and that the owner actually receives the notification.
-5. After recording evidence and confirming the restore, clean up the temporary
-   restore runner, database/volume, and restore buckets under the approved cleanup
-   scope. Keep the encrypted backup bucket and daily schedule.
-6. Record dated evidence in `backend/PRODUCTION_READINESS.md`. Production remains
-   a separate future approval and policy; nothing here authorizes production setup.
+For a future rehearsal, provision fresh isolated targets and short-lived,
+restore-only credentials. Confirm independent escrow retrieval of both keys
+without sharing key material; run the guarded restore and verify the database,
+media and access behavior; record dated evidence; then clean up under explicit
+approval. Keep the encrypted backup bucket and daily schedule. Production recovery
+requires a separate policy and approval; this staging exercise does not authorize
+production setup.
