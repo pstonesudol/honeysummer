@@ -331,6 +331,24 @@ acceptance row unless the register explicitly says so.
   which renders an email field and “Send recovery link” control; the email field
   appears in source with an explicit label. The recovery control was not clicked.
   No form was submitted.
+- Follow-up read-only staging check at 390px confirmed the `/order-flowers`
+  page renders the available Red Flowers listing (35 stems at $5/stem) and a
+  sold-out White Flowers listing (0 available), along with the custom-request
+  form and its visible field captions. The browser accessibility snapshot again
+  marked some fields as missing accessible names despite those captions; this
+  remains an unresolved verification discrepancy, not a confirmed defect.
+  No cart action, request, or submission was made. Railway's latest available
+  snapshot still showed all five staging services without warnings, critical
+  issues, recent failures, or pending work; the most recent recorded scheduled
+  reconciliation remained 23:45:10 UTC Oct 16. No manual job trigger; production
+  untouched.
+- PR #53's backend, frontend, and commit-title checks all completed successfully;
+  the PR remains open and unmerged.
+- A second 390px read-only visit to staging `/checkout/wholesale` showed the
+  approved-account requirement and a sign-in/request-access link, with no checkout
+  controls or order path for an unauthenticated visitor. This verifies only the
+  public UI gate, not backend authorization or approved-account checkout. No
+  account request or checkout was initiated.
 
 ## Production validation summary
 

@@ -846,6 +846,24 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   returned API health `status: ok` and unchanged retail listings (35 available
   Red Flowers at $5/stem; White Flowers unavailable). This bounded sample is not
   uptime/SLO evidence; no submission or order was made. Production was untouched.
+- Staging public retail mobile spot-check — October 16, approximately 23:52 UTC:
+  at 390px, `/order-flowers` rendered Red Flowers (35 stems available at
+  $5/stem) and White Flowers (sold out, 0 available), with the custom-request
+  form and visible captions. The browser accessibility snapshot again marked
+  some form fields as missing accessible names despite visible captions; treat
+  this as an unresolved verification discrepancy, not a confirmed defect. No
+  cart action or form submission was made. A Railway environment snapshot
+  reported all five staging services without warnings, critical issues, recent
+  failures, or pending work; the latest recorded reconciliation remained
+  23:45:10 UTC. This snapshot does not verify later runs or persisted findings.
+  Production was untouched.
+- PR #53 CI follow-up — backend, frontend, and commit-title checks all passed;
+  PR #53 remains open and unmerged.
+- Staging wholesale unauthenticated UI spot-check — October 16, approximately
+  23:53 UTC: the 390px `/checkout/wholesale` page stated that an approved account
+  is required and offered sign-in/request access, with no checkout controls
+  exposed. This does not establish API authorization or approved-account checkout
+  acceptance. No access request or checkout was initiated; production untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,
