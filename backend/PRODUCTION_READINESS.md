@@ -702,6 +702,11 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   (2 ms and 8 ms). No 5xx responses appeared in this sample. This does not
   identify the client or establish an uptime/SLO result; no request was generated
   for this check and production was untouched.
+- Staging API HTTP-log follow-up — October 16, approximately 14:32 UTC: the
+  latest 501 GET records covered 14:27–14:32 UTC; all returned HTTP 200, with no
+  5xx responses or upstream errors. This brief sample is not an uptime/SLO
+  measurement and no request was generated for the check; production was
+  untouched.
 - Staging retail/mobile UI spot-check — October 16, approximately 14:24 UTC: in
   the authorized browser, `/api/health/` returned `status: ok` and the retail
   catalogue returned the same two listings as before (35 Red Flowers available,

@@ -158,6 +158,9 @@ acceptance row unless the register explicitly says so.
   14:31:24 UTC log was the same generic success message. Railway still reported no
   warnings, critical issues, recent failures or pending work. Persisted finding
   counts remain unverified.
+- A second sanitized HTTP-log sample at approximately 14:32 UTC covered 501 API
+  GET records from 14:27–14:32 UTC; all returned 200, with no 5xx or upstream
+  errors. This short recent sample is not an uptime/SLO measurement.
 - A sanitized Railway HTTP-log sample checked at approximately 14:13 UTC covered
   501 staging API GETs from 04:20 to 14:13 UTC: 499 returned 200 and two returned
   499 when the client closed the request before a response (2 ms and 8 ms). There
