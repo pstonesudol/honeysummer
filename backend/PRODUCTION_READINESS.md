@@ -441,12 +441,15 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     matched the restored staging snapshot (5, 10, 10, 5 and 1 respectively). The
     staging application's `SECURITY_ENCRYPTION_KEY` passed a synthetic
     encrypt/decrypt round-trip; the restored database has no nonempty MFA or
-    queued-security-mail ciphertext to test against it. Production was untouched.
+    queued-security-mail ciphertext to test against it. A disposable local
+    invocation of the staging app's `/api/retail/flowers/` handler, connected only
+    to the isolated restore database over a Railway SSH tunnel, returned HTTP 200
+    with two listings. Production was untouched.
     - Still open: owner confirmation of independent escrow retrieval (successful
       snapshot decryption proves the configured backup key works, not that its
-      escrow copy is retrievable); cleanup approval and secure
-      cleanup of the restored database/media and expired credential variables;
-      and receipt confirmation for the backup-specific GitHub alert. On October
+      escrow copy is retrievable); cleanup approval and secure cleanup of the
+      restored database/media and expired credential variables; and receipt
+      confirmation for the backup-specific GitHub alert. On October
       16 a controlled in-process exception replaced `create_backup` before any
       storage operation; the backup job dispatched
       `staging-backup-alert.yml` (run `38831354476`), which emitted the generic
