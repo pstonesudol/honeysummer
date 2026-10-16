@@ -230,6 +230,12 @@ acceptance row unless the register explicitly says so.
   read-only staging admin “Needs attention” page as `12:16 PM EDT · Report · 0
   findings`. Railway reported no warnings, critical issues, recent failures, or
   pending work. No manual trigger; production untouched.
+- Railway's scheduled reconciliation log review at 17:03 UTC found three further
+  successful report-only executions: 16:31:03, 16:46:22 and 17:01:58 UTC, with
+  generic success messages at 16:31:06, 16:46:28 and 17:02:00 UTC. Railway showed
+  zero warnings, critical issues, and recent failures, with no pending work. The
+  admin session had returned to sign-in, so persisted counts for these three runs
+  are unverified. No manual trigger; production untouched.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,
