@@ -673,6 +673,15 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   not verify signed private-media authorization, upload persistence, full cache
   policy, or all legacy objects; no data or configuration changed, and production
   was untouched.
+- Staging backend-origin guard spot-check — October 16, 2026, approximately
+  04:06 UTC: unauthenticated GET requests to the Railway backend's `/admin/login`
+  and `/admin/orders` routes returned HTTP 403 `Origin access denied`, with
+  `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, and `Referrer-Policy: strict-origin`. The backend
+  `/api/health/` route returned HTTP 200 with `status: ok`. This confirms only
+  these unauthenticated direct-origin responses; it does not verify authenticated
+  same-origin admin routing or session behavior. No credentials were used and no
+  state-changing request was sent; production was untouched.
 - Trusted proxy CIDR configuration and trusted client-IP attribution remain
   blocked/open.
 - Backup alert follow-up — October 15, 2026: invoked the backup dispatch helper
