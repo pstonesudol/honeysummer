@@ -33,15 +33,16 @@ the staging backup service environment without running or changing a backup. The
 GitHub API accepted the dispatch and the expected failed
 `staging-backup-alert.yml` run emitted its generic alert. This verifies the token,
 dispatch endpoint, and workflow behavior; it does not simulate a backup failure
-inside the backup job. Owner receipt of this specific backup alert is not yet
-confirmed.
+inside the backup job. Receipt of this earlier dispatch-only alert was not
+separately confirmed.
 
 Failure-handler check — October 16, 2026: in the staging backup service
 environment, `create_backup` was replaced for one local invocation with a
 controlled exception, so no database, media or backup-bucket operation ran. The
 real `main()` failure handler dispatched GitHub workflow run `38831354476`; the
-workflow emitted its expected generic backup alert. Owner receipt of this
-specific notification remains unconfirmed.
+workflow emitted its expected generic backup alert. On October 15 at 8:46 PM,
+the owner supplied a screenshot of the corresponding GitHub Actions failure
+email, confirming receipt of this alert.
 
 The job does not automatically escrow the backup key or application encryption
 key. `python -m app.restore_backup <manifest-key>` is a guarded restore tool. The

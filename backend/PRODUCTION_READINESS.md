@@ -463,14 +463,14 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     not run. Production was untouched.
     - Still open: owner confirmation of independent escrow retrieval (successful
       snapshot decryption proves the configured backup key works, not that its
-      escrow copy is retrievable); cleanup approval and secure cleanup of the
-      restored database/media and expired credential variables; and receipt
-      confirmation for the backup-specific GitHub alert. On October
+      escrow copy is retrievable); and cleanup approval plus secure cleanup of the
+      restored database/media and expired credential variables. On October
       16 a controlled in-process exception replaced `create_backup` before any
       storage operation; the backup job dispatched
       `staging-backup-alert.yml` (run `38831354476`), which emitted the generic
       notification. This exercises the job's failure handler without writing a
-      backup. Owner receipt of this specific notification is not yet confirmed.
+      backup. On October 15 at 8:46 PM, the owner supplied a screenshot of the
+      corresponding GitHub Actions failure email, confirming alert receipt.
       The backup encryption key also encrypts copied media;
       `SECURITY_ENCRYPTION_KEY` is a separate application key and was not needed
       for this raw archive restore.
