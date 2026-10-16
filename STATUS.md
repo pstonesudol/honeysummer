@@ -64,10 +64,15 @@ acceptance row unless the register explicitly says so.
   private inquiry upload renders through admin at 800×800. Private byte equality,
   exact public-key absence, anonymous denial, recovery and legacy media cleanup
   remain open.
-- Payments/orders: unsigned Stripe webhook returned 400; forged payment-return
-  URL did not clear a cart or prove payment. Seven paid staging Checkout sessions
-  matched stored orders; three expired sessions matched cancelled orders. Signed
-  retry/replay/refund/async/failure and concurrency rehearsals remain open.
+- Payments/orders: seven earlier paid staging Checkout sessions matched stored
+  orders; three earlier expired sessions matched cancelled orders. On October 16,
+  a $5 Stripe-test retail Checkout was expired through Stripe; the signed
+  `checkout.session.expired` event applied, a duplicate signed replay was ignored
+  (HTTP 200), and an invalid signature was rejected (HTTP 400). The test order
+  remained expired, the listing returned to 35 available, and a report-only
+  reconciliation recorded zero findings with `applied=false`. No payment was
+  taken. Successful new payment/refund, async/failure, and concurrency rehearsals
+  remain open.
 - Mail/reporting: Resend provider acceptance was observed for selected messages;
   this is not inbox placement. Sales ledger and packing-slip spot checks matched
   the sampled staging data. Queues and logs showed no current failures in limited

@@ -557,13 +557,24 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   displayed item/subtotal and wholesale-access boundary, changed quantity to two
   and confirmed the $10 subtotal, reloaded the page and confirmed the one-item
   cart persisted, navigated to Our Story and confirmed the cart remained, then
-  removed the item. The cart returned to empty; checkout was not started and
-  inventory was not reserved. Separate carts/shared-stock contention and checkout
-  remain untested. At 390px, the cart drawer itself fit the viewport and exposed
+  removed the item. At that time checkout was not started and inventory was not
+  reserved. Separate carts/shared-stock contention remained untested. At 390px,
+  the cart drawer itself fit the viewport and exposed
   a labeled quantity input, remove control and close control; full
   keyboard/focus/screen-reader testing remains open.
   A read-only catalog summary found two retail listings (one purchasable) and no
   wholesale listings, so a wholesale catalog/purchase could not be exercised.
+  - October 16, 2026 Checkout follow-up: confirmed the staging Stripe secret is
+    test-mode. Created a $5 retail Checkout for a synthetic staging test buyer,
+    then expired it through Stripe's test API without payment. Stripe delivered
+    the signed `checkout.session.expired` event; the local order is `expired`,
+    the event ledger records it once as applied, and the listing returned to 35
+    available stems. A second signed delivery of the same event returned HTTP 200
+    without a duplicate ledger row; an invalid signature probe returned HTTP 400.
+    A subsequent report-only reconciliation persisted `applied=false` with zero
+    findings. The browser cart was cleared. No payment was taken and no production
+    service was touched. This does not verify a new successful paid checkout,
+    refund/restock flow, delayed/asynchronous payment, or concurrent purchase.
   On the 390px mobile viewport, the closed navigation control extended beyond the
   right viewport edge (its inspected bounds were x=355–445). The wedding inquiry
   form also retained a two-column layout at that width: its first-column controls
