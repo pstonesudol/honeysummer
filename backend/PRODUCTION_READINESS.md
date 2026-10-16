@@ -682,6 +682,12 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   run's aggregate report only; individual invoice/payment cases, alert behavior on
   a real mismatch, and sustained monitoring remain open. The job was not manually
   triggered and no financial action was taken; production was untouched.
+- Staging API HTTP-log spot-check — October 16, approximately 14:13 UTC: the
+  latest 501 GET records spanned 04:20–14:13 UTC; 499 returned HTTP 200 and two
+  returned 499 with Railway logging that the client closed before a response
+  (2 ms and 8 ms). No 5xx responses appeared in this sample. This does not
+  identify the client or establish an uptime/SLO result; no request was generated
+  for this check and production was untouched.
 - Staging R2 media access spot-check — October 16, 2026: Cloudflare listed two
   objects in each staging bucket. A metadata-only inspection showed the public
   objects use `public, max-age=31536000, immutable`; one is a 15,118,440-byte

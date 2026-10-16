@@ -149,6 +149,10 @@ acceptance row unless the register explicitly says so.
   at 14:02 UTC, but its generic log does not expose persisted finding counts.
   These are point-in-time observations, not sustained monitoring or full
   acceptance. No production services or financial data were changed.
+- A sanitized Railway HTTP-log sample checked at approximately 14:13 UTC covered
+  501 staging API GETs from 04:20 to 14:13 UTC: 499 returned 200 and two returned
+  499 when the client closed the request before a response (2 ms and 8 ms). There
+  were no 5xx responses; treat this as a bounded sample, not an uptime guarantee.
 
 ## Production validation summary
 
