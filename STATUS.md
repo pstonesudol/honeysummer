@@ -84,9 +84,14 @@ acceptance row unless the register explicitly says so.
   restore log reports one database archive, two public objects and two private
   objects; R2 listings confirm both media buckets populated. One prior attempt
   stopped before reading the snapshot because credentials were still staged; it
-  wrote no data. Schema/revision and application-level read checks, independent
-  escrow retrieval confirmation, cleanup approval and backup-alert receipt remain
-  open. Temporary R2 credentials have a 24-hour TTL. Production was untouched.
+  wrote no data. Read-only validation confirmed the restored Alembic revision
+  matches repository head, aggregate ORM reads succeeded for users/orders/items/
+  inquiries/gallery, and the staging application encryption key passed a
+  synthetic encrypt/decrypt round-trip. Independent escrow retrieval confirmation
+  and cleanup approval remain open. A controlled backup exception exercised the
+  job's failure handler and produced the expected GitHub alert workflow; receipt of
+  that specific notification remains unconfirmed. Temporary R2 credentials have
+  a 24-hour TTL. Production was untouched.
 - Reconciliation workers — October 15, 2026: staging-only report-only
   inventory/Checkout and invoice-refund jobs are provisioned at 15-minute and
   daily schedules. Both first manual runs succeeded with zero findings. A

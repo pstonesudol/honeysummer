@@ -435,15 +435,26 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     completed successfully. An earlier attempt crashed before reading the backup
     because the four newly entered credentials were still staged; it made no
     writes. The credentials were activated only in staging and have a 24-hour
-    TTL. Production was untouched.
-    - Still open: query the restored schema/Alembic revision and perform a
-      disposable app-level read; owner confirmation of independent escrow
-      retrieval (successful decryption proves the configured backup key works,
-      not that its escrow copy is retrievable); cleanup approval and secure
+    TTL. A read-only SQL check confirmed restored Alembic revision
+    `d4a7b0c3e6f9`, matching repository head. SQLAlchemy ORM reads succeeded for
+    users, orders, order items, inquiries and gallery images; aggregate counts
+    matched the restored staging snapshot (5, 10, 10, 5 and 1 respectively). The
+    staging application's `SECURITY_ENCRYPTION_KEY` passed a synthetic
+    encrypt/decrypt round-trip; the restored database has no nonempty MFA or
+    queued-security-mail ciphertext to test against it. Production was untouched.
+    - Still open: owner confirmation of independent escrow retrieval (successful
+      snapshot decryption proves the configured backup key works, not that its
+      escrow copy is retrievable); cleanup approval and secure
       cleanup of the restored database/media and expired credential variables;
-      and receipt confirmation for the backup-specific GitHub alert. The backup
-      encryption key also encrypts copied media; `SECURITY_ENCRYPTION_KEY` is a
-      separate application key and was not needed for this raw archive restore.
+      and receipt confirmation for the backup-specific GitHub alert. On October
+      16 a controlled in-process exception replaced `create_backup` before any
+      storage operation; the backup job dispatched
+      `staging-backup-alert.yml` (run `38831354476`), which emitted the generic
+      notification. This exercises the job's failure handler without writing a
+      backup. Owner receipt of this specific notification is not yet confirmed.
+      The backup encryption key also encrypts copied media;
+      `SECURITY_ENCRYPTION_KEY` is a separate application key and was not needed
+      for this raw archive restore.
       G2 remains open until the remaining recovery and operational checks pass.
   - The October 11 note that R2 was blocked predates the October 13 creation of
     staging public/private media buckets. Those media buckets are not reused for

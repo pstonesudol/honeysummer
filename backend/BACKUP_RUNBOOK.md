@@ -36,6 +36,13 @@ dispatch endpoint, and workflow behavior; it does not simulate a backup failure
 inside the backup job. Owner receipt of this specific backup alert is not yet
 confirmed.
 
+Failure-handler check — October 16, 2026: in the staging backup service
+environment, `create_backup` was replaced for one local invocation with a
+controlled exception, so no database, media or backup-bucket operation ran. The
+real `main()` failure handler dispatched GitHub workflow run `38831354476`; the
+workflow emitted its expected generic backup alert. Owner receipt of this
+specific notification remains unconfirmed.
+
 The job does not automatically escrow the backup key or application encryption
 key. `python -m app.restore_backup <manifest-key>` is a guarded restore tool. The
 isolated Railway `staging-restore-postgres` service and two private R2 buckets
