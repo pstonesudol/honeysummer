@@ -650,7 +650,7 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   separately approved production plan. No production resources/configuration
   changed.
 - Staging read-only operations/smoke sample — October 16, approximately
-  03:30–04:06 UTC: Railway reported the five remaining staging services healthy,
+  03:30–04:12 UTC: Railway reported the five remaining staging services healthy,
   no warnings/critical issues or recent failures, and no pending changes. The
   15-minute reconciliation logs showed successful runs through 04:00:27 UTC. The
   backup run completed at 03:34:51 UTC and logged a completed manifest. The
@@ -659,8 +659,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   staging `/api/health/` returned `status: ok`; through the authorized staging
   browser session, the home and order pages rendered and `/api/retail/flowers/`
   returned two listings. An unauthenticated custom-domain request reached the
-  expected Cloudflare Access sign-in gate. No cart/order/payment/customer form was
-  submitted. The generic reconciliation log message does not expose persisted
+  expected Cloudflare Access sign-in gate. HTTP requests to both the staging
+  custom domain and Railway health URL returned 301 redirects to their HTTPS
+  equivalents. No cart/order/payment/customer form was submitted. The generic
+  reconciliation log message does not expose persisted
   finding counts; this short sample is not sustained monitoring or full
   acceptance. Production was untouched.
 - Staging R2 media access spot-check — October 16, 2026: Cloudflare listed two
