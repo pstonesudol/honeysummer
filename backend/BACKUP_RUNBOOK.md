@@ -55,10 +55,12 @@ private-network execution path. The October 16, 2026 staging restore completed;
 see the dated G2 evidence in `PRODUCTION_READINESS.md`. The restore used the backup
 key for both database and media decryption. The owner independently retrieved
 `BACKUP_ENCRYPTION_KEY` from escrow and confirmed an exact match with the staging
-backup service value using hidden terminal prompts; no key material was shared.
-The separate application `SECURITY_ENCRYPTION_KEY` is not needed to decrypt this
-snapshot, but is needed for application-level recovery checks; its independent
-escrow retrieval remains unconfirmed. Keep the isolated restored data until
+backup service value using hidden terminal prompts. The owner also independently
+retrieved `SECURITY_ENCRYPTION_KEY` from escrow and confirmed it matches the
+staging app service value the same way. No key material was shared. The separate
+application key is not needed to decrypt this snapshot, but supports recovery of
+encrypted MFA and queued-security-mail data; the restored database contained no
+such ciphertext to validate against it. Keep the isolated restored data until
 cleanup is explicitly approved.
 
 ## Staging configuration
@@ -143,9 +145,8 @@ history is a secondary diagnostic, not proof of notification.
    or source buckets.
 4. Verify schema/revision state, representative synthetic records and app reads
    using a disposable app configuration. Independently verify escrow retrieval
-   of both `BACKUP_ENCRYPTION_KEY` and `SECURITY_ENCRYPTION_KEY`. The backup-key
-   retrieval/match is confirmed for the October 16 rehearsal; the application-key
-   retrieval remains open.
+   of both `BACKUP_ENCRYPTION_KEY` and `SECURITY_ENCRYPTION_KEY`. Retrieval and
+   staging-value matches for both keys were owner-confirmed on October 16, 2026.
 5. Securely remove plaintext and disposable resources under an approved cleanup
    procedure. Record snapshot ID, target, checks, result, operator and cleanup;
    never record credentials, key material or private-photo contents.

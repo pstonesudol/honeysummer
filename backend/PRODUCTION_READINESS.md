@@ -461,14 +461,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     treated as corruption. A PostgreSQL `pg_amcheck` binary and `amcheck` extension
     were unavailable on the managed restore service, so low-level page checks were
     not run. Production was untouched.
-    - The owner independently retrieved `BACKUP_ENCRYPTION_KEY` from escrow and
-      confirmed an exact match with the staging backup service value using hidden
-      terminal prompts; no key material was shared. Still open: independent
-      escrow retrieval of the separate `SECURITY_ENCRYPTION_KEY` (the configured
-      key passed a synthetic round-trip, but no restored MFA or queued-mail
-      ciphertext was available to validate; the escrow copy itself is not yet
-      confirmed); and cleanup approval plus secure cleanup of the restored
-      database/media and expired credential variables. On October
+    - The owner independently retrieved both `BACKUP_ENCRYPTION_KEY` and
+      `SECURITY_ENCRYPTION_KEY` from escrow and confirmed exact matches with their
+      staging service values using hidden terminal prompts; no key material was
+      shared. The configured application key passed a synthetic round-trip, but
+      the restored database contained no MFA or queued-security-mail ciphertext
+      to validate against it. Still open: cleanup approval plus secure cleanup of
+      the restored database/media and temporary restore credential values. On October
       16 a controlled in-process exception replaced `create_backup` before any
       storage operation; the backup job dispatched
       `staging-backup-alert.yml` (run `38831354476`), which emitted the generic
