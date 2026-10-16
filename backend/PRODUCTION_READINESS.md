@@ -814,6 +814,17 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   succeeded at 20:45:14 UTC, with zero warnings, critical issues, recent failures,
   and pending work. Persisted finding counts were not verified while admin was
   signed out. No job was manually triggered; production was untouched.
+- Staging persisted reconciliation/attention follow-up — October 16, approximately
+  21:05 UTC: after the owner restored the staging admin session, the read-only
+  “Needs attention” page showed all 20 most-recent reconciliation rows as
+  `Report · 0 findings`, spanning 12:16–17:01 EDT (16:16–21:01 UTC). It also showed
+  no unconfirmed order/invoice refunds, failed inquiry emails, unsent confirmations,
+  or wedding quotes/bouquet proposals awaiting review. Railway independently
+  reported the 21:01:58 UTC scheduled run succeeded and showed zero warnings,
+  critical issues, recent failures, or pending work. This confirms clean persisted
+  summaries over the visible window, but not real-finding alert behavior or longer-
+  term monitoring; C3/C4 remain open. No job was manually triggered; production
+  was untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,

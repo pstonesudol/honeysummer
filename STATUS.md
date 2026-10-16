@@ -263,6 +263,13 @@ acceptance row unless the register explicitly says so.
   the latest completed at 20:45:14 UTC with zero warnings, critical issues, recent
   failures, and pending work. Persisted counts remain unverified. No manual
   trigger; production untouched.
+- After staging admin sign-in was restored, the refreshed “Needs attention” page
+  confirmed all 20 most-recent persisted reconciliation rows had `Report · 0
+  findings`, spanning 12:16–17:01 EDT on Oct 16 (16:16–21:01 UTC). The page also
+  showed no unconfirmed refunds, failed inquiry emails, unsent confirmations, or
+  wedding/proposal reviews. A separate Railway check confirmed the 21:01:58 UTC
+  scheduled run succeeded with no warnings, critical issues, recent failures, or
+  pending work. No manual trigger; production untouched.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,
