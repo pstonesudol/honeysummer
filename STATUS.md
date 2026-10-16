@@ -103,11 +103,11 @@ acceptance row unless the register explicitly says so.
   inquiry images were read with the app's private-media function and decoded as
   valid JPEGs. The two public restored images also decoded successfully. The
   restore-private bucket has no custom domain and its managed `r2.dev` public
-  access is disabled. Independent escrow retrieval
-  confirmation and cleanup approval remain open. A controlled backup exception exercised the
-  job's failure handler and produced the expected GitHub alert workflow; receipt of
-  that specific notification remains unconfirmed. Temporary R2 credentials have
-  a 24-hour TTL. Production was untouched.
+  access is disabled. A controlled backup exception exercised the job's failure
+  handler; the owner supplied a screenshot of the corresponding GitHub Actions
+  failure email at 8:46 PM on October 15, confirming receipt for run `38831354476`.
+  Independent escrow retrieval confirmation and cleanup approval remain open.
+  Temporary R2 credentials have a 24-hour TTL. Production was untouched.
 - Reconciliation workers — October 15, 2026: staging-only report-only
   inventory/Checkout and invoice-refund jobs are provisioned at 15-minute and
   daily schedules. Both first manual runs succeeded with zero findings. A
