@@ -102,7 +102,7 @@ acceptance row unless the register explicitly says so.
   tables (389 rows total) deserialized through SQLAlchemy; both private restored
   inquiry images were read with the app's private-media function and decoded as
   valid JPEGs. The two public restored images also decoded successfully. The
-  restore-private bucket has no custom domain and its managed `r2.dev` public
+  restore-private bucket had no custom domain and its managed `r2.dev` public
   access is disabled. A controlled backup exception exercised the job's failure
   handler; the owner supplied a screenshot of the corresponding GitHub Actions
   failure email at 8:46 PM on October 15, confirming receipt for run `38831354476`.
@@ -110,16 +110,23 @@ acceptance row unless the register explicitly says so.
   confirmed an exact match with the staging backup service using hidden terminal
   prompts; no key material was shared. Escrow retrieval for the separate
   `SECURITY_ENCRYPTION_KEY` was also independently retrieved from escrow and
-  matched to the staging app service value using hidden terminal prompts; no key
-  material was shared. Only restore cleanup approval remains open. Temporary R2
-  credentials have a 24-hour TTL. Production was untouched.
+  matched to the staging app service value; no key material was shared. With
+  owner approval, the restore runner, restore Postgres and volume, and both
+  restore buckets (including their four restored objects) were removed. Follow-up
+  Railway/R2 checks found no restore service, volume, bucket, or pending cleanup
+  work; staging app/Postgres/jobs and the encrypted backup bucket remain.
+  Production was untouched. The managed service did not support
+  `pg_amcheck`/`amcheck`, and no restored MFA or queued-security-mail ciphertext
+  was available for application-key validation.
 - Reconciliation workers — October 15, 2026: staging-only report-only
   inventory/Checkout and invoice-refund jobs are provisioned at 15-minute and
   daily schedules. Both first manual runs succeeded with zero findings. A
-  controlled GitHub dispatch produced the intended failed alert workflow; owner
-  notification receipt remains unconfirmed. Ongoing monitoring and production
-  readiness remain open. See `backend/STAGING_RECONCILIATION_RUNBOOK.md`. No
-  production worker was changed.
+  controlled GitHub dispatch produced the intended failed alert workflow. A
+  workflow-dispatch verification on October 16 (run `38845808631`) emitted the
+  generic reconciliation alert and failed as designed. The owner supplied a
+  screenshot of the corresponding GitHub Actions failure email, confirming
+  receipt. Ongoing monitoring and production readiness remain open. See
+  `backend/STAGING_RECONCILIATION_RUNBOOK.md`. No production worker was changed.
 
 ## Production validation summary
 
@@ -135,9 +142,12 @@ acceptance row unless the register explicitly says so.
 
 ## Open launch blockers
 
-1. Automated backups and an isolated restore rehearsal, including media and the
-   application encryption key.
-2. Scheduled reconciliation/security/refund jobs and verified operator alerts.
+1. Production backup/restore policy and an approved production recovery rehearsal;
+   the staging logical restore (including media and escrow-key retrieval) is
+   complete, but does not establish production recoverability.
+2. Production scheduled reconciliation/security/refund jobs and verified operator
+   alerts; staging reconciliation-alert receipt and sustained monitoring remain
+   open as well.
 3. Remaining deployed Stripe, Resend, R2/media and account/security rehearsals.
 4. Phase 12.5 automated quality/release checks.
 5. Phase 12.6 IaC/drift-control baseline.
