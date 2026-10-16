@@ -185,6 +185,9 @@ acceptance row unless the register explicitly says so.
 - A sanitized HTTP-log sample checked at approximately 15:06 UTC covered 415
   staging API records from 15:00–15:04 UTC; all were GETs returning HTTP 200, with
   no POSTs. This is only a bounded smoke-traffic sample, not an uptime/SLO result.
+- A follow-up sanitized HTTP-log sample at approximately 15:10 UTC covered the
+  latest 501 API records from 15:02–15:09 UTC; all were GETs returning HTTP 200,
+  with no POSTs or 5xx. This remains a short, bounded sample.
 - Reconciliation follow-up at approximately 15:02 UTC: the next scheduled
   report-only run succeeded at 15:01:48 UTC; its 15:01:46 UTC log contained the
   generic success message. Railway reported zero warnings, critical issues, and

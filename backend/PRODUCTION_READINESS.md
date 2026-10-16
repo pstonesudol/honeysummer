@@ -725,6 +725,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   sanitized sample of 415 API records from 15:00–15:04 UTC contained only GETs,
   all HTTP 200, with no POSTs. This is a bounded smoke-traffic sample, not an
   uptime/SLO measurement; production was untouched.
+- Staging API HTTP-log follow-up — October 16, approximately 15:10 UTC: the
+  latest 501 sanitized records covered 15:02–15:09 UTC; all were GET requests
+  returning HTTP 200, with no POSTs or 5xx. This remains a short, bounded sample,
+  not uptime/SLO evidence; production was untouched.
 - Staging reconciliation follow-up — October 16, checked at approximately
   15:02 UTC: Railway reported the next scheduled report-only run succeeded at
   15:01:48 UTC; its 15:01:46 UTC log said `Inventory and overdue holds
