@@ -647,9 +647,9 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   separately approved production plan. No production resources/configuration
   changed.
 - Staging read-only operations/smoke sample — October 16, approximately
-  03:30–03:45 UTC: Railway reported the five remaining staging services healthy,
+  03:30–04:06 UTC: Railway reported the five remaining staging services healthy,
   no warnings/critical issues or recent failures, and no pending changes. The
-  15-minute reconciliation logs showed successful runs through 03:30:33 UTC. The
+  15-minute reconciliation logs showed successful runs through 04:00:27 UTC. The
   backup run completed at 03:34:51 UTC and logged a completed manifest. The
   invoice/refund audit's latest observed run was October 15 at 04:19 UTC; the
   October 16 04:15 UTC schedule had not yet fired during this sample. Direct
