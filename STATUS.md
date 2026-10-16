@@ -91,9 +91,14 @@ acceptance row unless the register explicitly says so.
   stopped before reading the snapshot because credentials were still staged; it
   wrote no data. Read-only validation confirmed the restored Alembic revision
   matches repository head, aggregate ORM reads succeeded for users/orders/items/
-  inquiries/gallery, and the staging app's `/api/retail/flowers/` handler returned
+   inquiries/gallery, and the staging app's `/api/retail/flowers/` handler returned
   HTTP 200 with two listings against the restored DB. The application encryption
-  key passed a synthetic encrypt/decrypt round-trip. Independent escrow retrieval confirmation
+  key passed a synthetic encrypt/decrypt round-trip. Additional read-only checks
+  found zero unvalidated constraints or invalid indexes; all 28 foreign keys,
+  27 primary keys, and 15 unique constraints are validated. All populated-table
+  ID sequences match their maximum IDs. Both private media references and the
+  gallery reference match restored R2 objects; one additional public object is
+  unreferenced by current media columns. Independent escrow retrieval confirmation
   and cleanup approval remain open. A controlled backup exception exercised the
   job's failure handler and produced the expected GitHub alert workflow; receipt of
   that specific notification remains unconfirmed. Temporary R2 credentials have

@@ -444,7 +444,15 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     queued-security-mail ciphertext to test against it. A disposable local
     invocation of the staging app's `/api/retail/flowers/` handler, connected only
     to the isolated restore database over a Railway SSH tunnel, returned HTTP 200
-    with two listings. Production was untouched.
+    with two listings. Further read-only checks found no unvalidated public
+    constraints or invalid indexes; all 28 foreign keys, 27 primary keys, and 15
+    unique constraints are validated. Each populated table's ID sequence matched
+    its maximum ID, avoiding an immediate sequence collision on future inserts.
+    The two restored private inquiry-media references and the restored gallery
+    image reference exist in their corresponding R2 buckets. One additional
+    public object is not referenced by current `flower_listings`, `gallery_images`
+    or inquiry media columns; it was retained as part of the snapshot and not
+    treated as corruption. Production was untouched.
     - Still open: owner confirmation of independent escrow retrieval (successful
       snapshot decryption proves the configured backup key works, not that its
       escrow copy is retrievable); cleanup approval and secure cleanup of the
