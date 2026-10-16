@@ -765,6 +765,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   and no pending work. The persisted-summary view was initially unavailable; a
   later read-only admin check confirmed the 12:00 PM EDT (16:00 UTC) row as
   `Report · 0 findings`. No job was manually triggered; production was untouched.
+- Staging reconciliation follow-up — October 16, checked at approximately
+  16:17 UTC: Railway reported the scheduled report-only run succeeded at
+  16:16:43 UTC; its 16:16:44 UTC log said `Inventory and overdue holds
+  reconciled.` Railway reported zero warnings, critical issues, recent failures,
+  and no pending work. The refreshed admin “Needs attention” page independently
+  showed `12:16 PM EDT · Report · 0 findings`. No job was manually triggered;
+  production was untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,
