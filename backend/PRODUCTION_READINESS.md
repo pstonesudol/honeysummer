@@ -665,6 +665,15 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   reconciliation log message does not expose persisted
   finding counts; this short sample is not sustained monitoring or full
   acceptance. Production was untouched.
+- Staging reconciliation spot-check — October 16, approximately 14:08 UTC:
+  Railway reported the 15-minute report-only reconciliation job's latest
+  execution succeeded at 14:02:22 UTC; the latest corresponding log entry at
+  14:02:30 UTC said `Inventory and overdue holds reconciled.` Railway reported
+  zero warnings, critical issues, or recent failures and no pending work. The
+  generic log does not expose finding counts or prove a clean persisted report;
+  this remains an operational spot-check, not sustained monitoring or formal
+  acceptance. No job was manually triggered, no data was changed, and production
+  was untouched.
 - Staging R2 media access spot-check — October 16, 2026: Cloudflare listed two
   objects in each staging bucket. A metadata-only inspection showed the public
   objects use `public, max-age=31536000, immutable`; one is a 15,118,440-byte
