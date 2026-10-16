@@ -448,11 +448,18 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     constraints or invalid indexes; all 28 foreign keys, 27 primary keys, and 15
     unique constraints are validated. Each populated table's ID sequence matched
     its maximum ID, avoiding an immediate sequence collision on future inserts.
+    Full ORM `SELECT`/row-deserialization checks succeeded for all 26 mapped
+    application tables (389 rows). Both restored private inquiry images were read
+    using the application's `read_private_image` function and decoded as valid
+    JPEGs; both public restore-bucket objects decoded as valid images as well.
+    Cloudflare reports no custom domain on the private restore bucket.
     The two restored private inquiry-media references and the restored gallery
     image reference exist in their corresponding R2 buckets. One additional
     public object is not referenced by current `flower_listings`, `gallery_images`
     or inquiry media columns; it was retained as part of the snapshot and not
-    treated as corruption. Production was untouched.
+    treated as corruption. A PostgreSQL `pg_amcheck` binary and `amcheck` extension
+    were unavailable on the managed restore service, so low-level page checks were
+    not run. Production was untouched.
     - Still open: owner confirmation of independent escrow retrieval (successful
       snapshot decryption proves the configured backup key works, not that its
       escrow copy is retrievable); cleanup approval and secure cleanup of the
