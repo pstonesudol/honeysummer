@@ -109,8 +109,10 @@ acceptance row unless the register explicitly says so.
   The owner independently retrieved `BACKUP_ENCRYPTION_KEY` from escrow and
   confirmed an exact match with the staging backup service using hidden terminal
   prompts; no key material was shared. Escrow retrieval for the separate
-  `SECURITY_ENCRYPTION_KEY` and restore cleanup approval remain open. Temporary
-  R2 credentials have a 24-hour TTL. Production was untouched.
+  `SECURITY_ENCRYPTION_KEY` was also independently retrieved from escrow and
+  matched to the staging app service value using hidden terminal prompts; no key
+  material was shared. Only restore cleanup approval remains open. Temporary R2
+  credentials have a 24-hour TTL. Production was untouched.
 - Reconciliation workers — October 15, 2026: staging-only report-only
   inventory/Checkout and invoice-refund jobs are provisioned at 15-minute and
   daily schedules. Both first manual runs succeeded with zero findings. A
