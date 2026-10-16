@@ -171,6 +171,10 @@ acceptance row unless the register explicitly says so.
   a completed manifest upload. Railway reported no warnings, critical issues or
   recent failures. No backup was triggered and no data was changed; this does not
   replace restore validation or verify backup contents.
+- Reconciliation follow-up at approximately 14:48 UTC: the next scheduled
+  report-only run succeeded at 14:47:38 UTC and logged the generic success message
+  at 14:47:45 UTC. Railway reported zero warnings, critical issues, or recent
+  failures and no pending work. Persisted finding counts remain unverified.
 - A click on the empty staging contact form's “Send message” control left the page
   on `/contact`; Railway recorded only 169 GETs and no POSTs between 14:33 and
   14:35 UTC. No inquiry or email was submitted. This is a negative smoke check,
