@@ -452,7 +452,8 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
     application tables (389 rows). Both restored private inquiry images were read
     using the application's `read_private_image` function and decoded as valid
     JPEGs; both public restore-bucket objects decoded as valid images as well.
-    Cloudflare reports no custom domain on the private restore bucket.
+    Cloudflare reports no custom domain on the private restore bucket and confirms
+    its managed `r2.dev` public-access endpoint is disabled.
     The two restored private inquiry-media references and the restored gallery
     image reference exist in their corresponding R2 buckets. One additional
     public object is not referenced by current `flower_listings`, `gallery_images`
