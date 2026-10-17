@@ -446,6 +446,11 @@ acceptance row unless the register explicitly says so.
   `Inventory and overdue holds reconciled.` All five services remained healthy,
   with zero warnings, critical issues, recent failures, or pending work. This is
   report-only point-in-time evidence; no manual trigger or production activity.
+- The 02:15 UTC scheduled staging reconciliation succeeded at 02:15:47 UTC;
+  deploy logs at 02:15:45 UTC showed `Inventory and overdue holds reconciled.`
+  All five services remained healthy, with no warnings, critical issues, recent
+  failures, or pending work. Report-only point-in-time evidence; no manual
+  trigger or production activity.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,
