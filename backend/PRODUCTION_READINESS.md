@@ -940,6 +940,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   issues, recent failures, and pending work. This is a point-in-time
   report-only observation, not sustained monitoring. No manual trigger;
   production untouched.
+- Staging health/catalogue/proxy-log follow-up — October 17, approximately
+  01:09 UTC: `/api/health/` returned `status: ok`; retail API showed Red Flowers
+  available (35 at $5/stem) and White Flowers unavailable (0 at $5/stem), both
+  without photo URLs. A sanitized proxy-log sample from 00:52:03–01:09:06 UTC
+  contained 209 GET requests, all HTTP 200 and zero upstream errors. This is
+  bounded point-in-time evidence only, not uptime/SLO or inventory correctness
+  evidence; no writes. Production untouched.
 - Unauthenticated external-client probe of a staging admin photo URL — October
   17: Cloudflare Access returned its sign-in page before the request reached the
   application. This verifies only the outer Access gate for that client, not the

@@ -420,6 +420,12 @@ acceptance row unless the register explicitly says so.
   critical issues, or recent failures, and no pending work. This remains a
   point-in-time report-only observation; no job was manually triggered and no
   production service was touched.
+- Read-only staging health/catalogue follow-up at 01:09 UTC returned health
+  `status: ok`; retail catalogue showed Red Flowers available (35 at $5/stem)
+  and White Flowers unavailable (0 at $5/stem), with no photo URLs. A sanitized
+  proxy-log sample from 00:52:03–01:09:06 UTC contained 209 GET requests, all
+  HTTP 200 with no upstream errors. This is bounded point-in-time evidence, not
+  uptime/SLO or inventory correctness evidence.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,
