@@ -370,6 +370,26 @@ acceptance row unless the register explicitly says so.
   readability evidence only; it does not verify the private-media signing or
   authorization boundary, public denial for this exact asset, upload persistence
   across restart/restore, or the oversized-JPEG exception.
+- The existing staging-only test inquiry photo (`/admin/inquiries/5/photo`)
+  loaded read-only as an 800×800 image; sanitized Railway HTTP logs recorded GET
+  200 with no upstream error at 00:38 UTC Oct 17. The public `/api/gallery/`
+  endpoint returned `[]`, keeping the inactive gallery fixture unpublished. This
+  confirms current authenticated retrieval and inactive-gallery visibility only;
+  anonymous denial for this photo, raw-byte equality, and restore recovery remain
+  open. No inquiry was created and no email was sent in this check.
+- Another scheduled staging reconciliation succeeded at 00:30:45 UTC Oct 17 and
+  logged the generic success message. The refreshed page showed 20 rows all
+  `Report · 0 findings`, now through 8:30 PM EDT Oct 16 (00:30 UTC Oct 17).
+  Railway still reports no warnings, critical issues, recent failures, or pending
+  work. Reauthentication is required for writes; no write or manual job trigger.
+- A read-only request to `http://staging.hellohoneysummer.com/api/health/`
+  redirected to HTTPS and returned API health `status: ok`. No write request was
+  made; this confirms only current redirect and liveness behavior.
+- An unauthenticated HTTP-client probe of an admin photo URL was intercepted by
+  Cloudflare Access and returned its staging sign-in page before reaching the
+  application. This confirms the outer Access gate from that client, not the
+  application's own session authorization; prior application-session-expiry
+  evidence remains separately documented.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,

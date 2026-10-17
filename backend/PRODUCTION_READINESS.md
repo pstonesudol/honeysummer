@@ -888,6 +888,32 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   not establish the signing/authorization boundary, public denial for this exact
   asset, persistence across restart/restore, or oversized-JPEG exception behavior.
   Production was untouched.
+- Staging private-photo retrieval/inactive-gallery follow-up — October 17,
+  approximately 00:39 UTC: the existing staging-only test inquiry photo at
+  `/admin/inquiries/5/photo` rendered as an 800×800 image in the authenticated
+  admin browser. Sanitized Railway HTTP logs recorded GET 200 with no upstream
+  error. Public `/api/gallery/` returned `[]`, so the inactive gallery fixture
+  remains unpublished. This verifies current signed-in retrieval and inactive
+  visibility only; anonymous denial for this exact photo, raw-byte equality, and
+  backup/restore recovery remain open. No inquiry or email was created by this
+  check; production untouched.
+- Staging scheduled reconciliation follow-up — October 17, approximately
+  00:39 UTC: Railway reported the 00:30:45 UTC scheduled run succeeded and logged
+  `Inventory and overdue holds reconciled.` The renewed read-only attention-page
+  view showed 20 persisted rows all `Report · 0 findings`, through 8:30 PM EDT
+  Oct 16 (00:30 UTC Oct 17). Railway reported zero warnings, critical issues,
+  recent failures, and pending work. Admin reauthentication was required for
+  writes; none were attempted. No manual trigger; production untouched.
+- Staging HTTP-to-HTTPS/health smoke check — October 17: a read-only request to
+  `http://staging.hellohoneysummer.com/api/health/` landed on HTTPS and returned
+  `status: ok`. This verifies the redirect and point-in-time liveness only; no
+  write request was made and it is not uptime/SLO evidence. Production untouched.
+- Unauthenticated external-client probe of a staging admin photo URL — October
+  17: Cloudflare Access returned its sign-in page before the request reached the
+  application. This verifies only the outer Access gate for that client, not the
+  application's admin-session check; the prior observed application-session
+  expiry redirect remains separate evidence. No private image content was
+  returned to the unauthenticated client; production untouched.
 - Supplemental isolated local verification — October 17: from `backend/`,
   `uv run pytest tests/test_media.py tests/test_inquiries.py` passed 36 tests.
   This is implementation-level evidence only; it does not establish hosted
