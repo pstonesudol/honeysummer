@@ -831,6 +831,160 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   activated, edited, or deleted. This confirms only that an admin record is
   present; it does not establish current object readability, signed private-media
   authorization, or backup/restore recovery. Production was untouched.
+- PR #51 readiness-observation documentation merged to `main` at 23:41 UTC;
+  its latest observed checks passed. This merge changed documentation only and
+  did not deploy or alter a production service.
+- Staging reconciliation and read-only API follow-up — October 16, approximately
+  23:46 UTC: Railway logs showed 11 further scheduled report-only runs between
+  21:17 and 23:45 UTC, each with the generic `Inventory and overdue holds
+  reconciled.` message. Railway reported the latest execution succeeded at
+  23:45:10 UTC, zero warnings, critical issues, recent failures, and no pending
+  work. Persisted findings remain verified only through 21:01 UTC; the staging
+  admin session had expired. No job was manually triggered.
+  A sanitized API HTTP-log sample from 23:30:58–23:46:21 UTC contained 116 GETs
+  (115 HTTP 200, one HTTP 302) and zero upstream errors. Read-only browser checks
+  returned API health `status: ok` and unchanged retail listings (35 available
+  Red Flowers at $5/stem; White Flowers unavailable). This bounded sample is not
+  uptime/SLO evidence; no submission or order was made. Production was untouched.
+- Staging public retail mobile spot-check — October 16, approximately 23:52 UTC:
+  at 390px, `/order-flowers` rendered Red Flowers (35 stems available at
+  $5/stem) and White Flowers (sold out, 0 available), with the custom-request
+  form and visible captions. The browser accessibility snapshot again marked
+  some form fields as missing accessible names despite visible captions; treat
+  this as an unresolved verification discrepancy, not a confirmed defect. No
+  cart action or form submission was made. A Railway environment snapshot
+  reported all five staging services without warnings, critical issues, recent
+  failures, or pending work; the latest recorded reconciliation remained
+  23:45:10 UTC. This snapshot does not verify later runs or persisted findings.
+  Production was untouched.
+- PR #53 CI follow-up — backend, frontend, and commit-title checks all passed;
+  PR #53 remains open and unmerged.
+- Staging persisted reconciliation and attention-queue follow-up — October 17,
+  approximately 00:03 UTC: after the owner renewed the admin session, the
+  read-only “Needs attention” page showed all 20 latest persisted reconciliation
+  rows as `Report · 0 findings`, spanning 3:15–8:01 PM EDT Oct 16
+  (19:15–00:01 UTC Oct 17). The page also showed no wedding quotes/proposals
+  awaiting review, unconfirmed order/invoice refunds, failed inquiry emails, or
+  unsent order confirmations. Railway independently reported the 00:01:49 UTC
+  scheduled run succeeded, with zero warnings, critical issues, recent failures,
+  or pending work. This extends clean persisted summaries over the displayed
+  window only; it does not verify real-finding alerts or long-term monitoring.
+  No manual job trigger; production untouched.
+- Staging scheduled reconciliation/attention follow-up — October 17,
+  approximately 00:17 UTC: Railway reported the 00:15:26 UTC scheduled run
+  succeeded; its log said `Inventory and overdue holds reconciled.` with zero
+  warnings, critical issues, recent failures, and pending work. After a read-only
+  refresh, the staging “Needs attention” page showed its 20 latest persisted rows
+  all `Report · 0 findings`, spanning 3:31–8:15 PM EDT Oct 16
+  (19:31–00:15 UTC Oct 17). No wedding/proposal reviews, unconfirmed refunds,
+  failed inquiry emails, or unsent confirmations appeared. The page showed
+  reauthentication required, so no write action was attempted. This extends
+  clean summaries over the visible window only; it does not test real-finding
+  alerts or long-term monitoring. No manual trigger; production untouched.
+- Staging existing-gallery preview check — October 17, approximately 00:04 UTC:
+  with the renewed admin session, the read-only Gallery #1 edit view rendered its
+  existing photo preview. No fields were changed and Save was not clicked. This
+  verifies only authenticated admin-side readability for this record; it does
+  not establish the signing/authorization boundary, public denial for this exact
+  asset, persistence across restart/restore, or oversized-JPEG exception behavior.
+  Production was untouched.
+- Staging private-photo retrieval/inactive-gallery follow-up — October 17,
+  approximately 00:39 UTC: the existing staging-only test inquiry photo at
+  `/admin/inquiries/5/photo` rendered as an 800×800 image in the authenticated
+  admin browser. Sanitized Railway HTTP logs recorded GET 200 with no upstream
+  error. Public `/api/gallery/` returned `[]`, so the inactive gallery fixture
+  remains unpublished. This verifies current signed-in retrieval and inactive
+  visibility only; anonymous denial for this exact photo, raw-byte equality, and
+  backup/restore recovery remain open. No inquiry or email was created by this
+  check; production untouched.
+- Staging scheduled reconciliation follow-up — October 17, approximately
+  00:39 UTC: Railway reported the 00:30:45 UTC scheduled run succeeded and logged
+  `Inventory and overdue holds reconciled.` The renewed read-only attention-page
+  view showed 20 persisted rows all `Report · 0 findings`, through 8:30 PM EDT
+  Oct 16 (00:30 UTC Oct 17). Railway reported zero warnings, critical issues,
+  recent failures, and pending work. Admin reauthentication was required for
+  writes; none were attempted. No manual trigger; production untouched.
+- Staging HTTP-to-HTTPS/health smoke check — October 17: a read-only request to
+  `http://staging.hellohoneysummer.com/api/health/` landed on HTTPS and returned
+  `status: ok`. This verifies the redirect and point-in-time liveness only; no
+  write request was made and it is not uptime/SLO evidence. Production untouched.
+- Staging encrypted-backup artifact/configuration check — October 17,
+  approximately 00:57 UTC: read-only R2 inventory found six objects in the Oct 16
+  snapshot: one database archive, two public and two private media objects, and
+  the completion manifest. Objects use the expected `hsbackup1` encrypted
+  format metadata and include ciphertext digests. The dedicated backup bucket
+  has no custom domains, managed `r2.dev` access is disabled, and its enabled
+  lifecycle expires `snapshots/` after 14 days; the default 7-day incomplete
+  multipart cleanup is intact. This checks inventory and configuration only; it
+  does not decrypt or restore this particular snapshot or verify recovery of
+  newer data. No objects were read or modified; production untouched.
+- Staging R2 private/public boundary inventory — October 17, approximately
+  00:58 UTC: read-only Cloudflare metadata showed dedicated staging public,
+  private and backup buckets. The private bucket had no custom domain, managed
+  `r2.dev` disabled, and two objects under `inquiries/`; the public bucket had
+  the active `media-staging.hellohoneysummer.com` custom domain, managed `r2.dev`
+  disabled, and zero objects under `inquiries/`. This supports configured
+  separation for current stored objects; it does not directly verify anonymous
+  access to the exact private object or the app-session guard for inquiry #5.
+  No object content was fetched or changed; production untouched.
+- Staging public-media object inventory — October 17, approximately 00:58 UTC:
+  metadata-only listing found two public-bucket objects; the largest was the
+  previously observed 15,118,440-byte JPEG. The public gallery API returns `[]`,
+  so the object is not an active gallery entry, but it remains in the bucket
+  addressed by the staging public media domain. No object content was fetched or
+  deleted. Owner decision on retention/cleanup remains open; production untouched.
+- Staging scheduled reconciliation follow-up — October 17, approximately
+  01:04 UTC: Railway reported the scheduled 01:02:17 UTC reconciliation
+  succeeded; deploy logs contained `Inventory and overdue holds reconciled.`
+  Across all five staging services, Railway reported zero warnings, critical
+  issues, recent failures, and pending work. This is a point-in-time
+  report-only observation, not sustained monitoring. No manual trigger;
+  production untouched.
+- Staging health/catalogue/proxy-log follow-up — October 17, approximately
+  01:09 UTC: `/api/health/` returned `status: ok`; retail API showed Red Flowers
+  available (35 at $5/stem) and White Flowers unavailable (0 at $5/stem), both
+  without photo URLs. A sanitized proxy-log sample from 00:52:03–01:09:06 UTC
+  contained 209 GET requests, all HTTP 200 and zero upstream errors. This is
+  bounded point-in-time evidence only, not uptime/SLO or inventory correctness
+  evidence; no writes. Production untouched.
+- Staging scheduled reconciliation follow-up — October 17, approximately
+  01:16 UTC: the normal scheduled run completed successfully at 01:15:15 UTC and
+  logged `Inventory and overdue holds reconciled.` Railway showed five healthy
+  services, zero warnings, critical issues, recent failures and pending work.
+  This remains report-only point-in-time evidence; no manual trigger and
+  production untouched.
+- Unauthenticated external-client probe of a staging admin photo URL — October
+  17: Cloudflare Access returned its sign-in page before the request reached the
+  application. This verifies only the outer Access gate for that client, not the
+  application's admin-session check; the prior observed application-session
+  expiry redirect remains separate evidence. No private image content was
+  returned to the unauthenticated client; production untouched.
+- Staging API request-log follow-up — October 17, approximately 00:53 UTC: the
+  latest 501 sanitized HTTP records spanned 00:04:48–00:52:18 UTC; all were GET
+  requests returning 200, with no upstream errors. This bounded sample is not an
+  uptime/SLO claim; no write was made. Production untouched.
+- Supplemental isolated local verification — October 17: from `backend/`,
+  `uv run pytest tests/test_media.py tests/test_inquiries.py` passed 36 tests.
+  This is implementation-level evidence only; it does not establish hosted
+  staging authorization, object persistence, email delivery, or recovery.
+- Broader local-only verification — October 17: backend `uv run pytest` passed
+  350 tests; three Postgres-dependent tests were skipped. Frontend unit tests
+  passed 23/23; local Playwright inquiry/layout checks passed 25/25; ESLint and
+  TypeScript typecheck passed; `npm audit --omit=dev` found zero production
+  dependency vulnerabilities. Playwright was configured for the isolated local
+  server with an unavailable local API target, not staging. The full npm audit
+  reported eight high-severity issues including development dependencies; none
+  were changed or auto-fixed. These results do not close deployed/provider
+  acceptance checks.
+- Those local Playwright checks assert computed accessible names for all contact,
+  bouquet, and wedding form fields and verify keyboard label-focus/consent
+  behavior. They pass against the local server only; the staging browser
+  snapshot discrepancy and deployed assistive-technology acceptance remain open.
+- Staging wholesale unauthenticated UI spot-check — October 16, approximately
+  23:53 UTC: the 390px `/checkout/wholesale` page stated that an approved account
+  is required and offered sign-in/request access, with no checkout controls
+  exposed. This does not establish API authorization or approved-account checkout
+  acceptance. No access request or checkout was initiated; production untouched.
 - Staging Railway environment status follow-up — October 16, approximately
   15:06 UTC: all five services reported healthy (three scheduled jobs
   `cronSucceeded`, two services `online`), with zero warnings, critical issues,

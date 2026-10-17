@@ -270,6 +270,20 @@ acceptance row unless the register explicitly says so.
   wedding/proposal reviews. A separate Railway check confirmed the 21:01:58 UTC
   scheduled run succeeded with no warnings, critical issues, recent failures, or
   pending work. No manual trigger; production untouched.
+- PR #51 readiness documentation merged to `main` at 23:41 UTC; its latest
+  observed checks passed. The current follow-up worktree is based on the merged
+  main line.
+- A read-only staging reconciliation review at 23:46 UTC found 11 additional
+  scheduled runs between 21:17 and 23:45 UTC, each followed by the generic
+  reconciliation success message. Railway reported the latest run succeeded at
+  23:45:10 UTC, with zero warnings, critical issues, recent failures, and pending
+  work. Persisted finding counts remain verified only through 21:01 UTC; the
+  admin session has since expired. No manual trigger; production untouched.
+- A bounded sanitized API-log sample from 23:30:58 to 23:46:21 UTC contained
+  116 GETs (115 HTTP 200, one HTTP 302) and no upstream errors. Browser read-only
+  checks returned API health `status: ok` and the same retail listings (35 Red
+  Flowers available at $5/stem; White Flowers unavailable). These point-in-time
+  observations are not an uptime/SLO claim. No submission or order was made.
 - The authenticated staging admin Gallery page showed one existing item captioned
   “Temporary staging upload test,” with `Active` false. This was a read-only
   inventory check; the item was not opened, activated, edited, or deleted. Its
@@ -317,6 +331,127 @@ acceptance row unless the register explicitly says so.
   which renders an email field and “Send recovery link” control; the email field
   appears in source with an explicit label. The recovery control was not clicked.
   No form was submitted.
+- Follow-up read-only staging check at 390px confirmed the `/order-flowers`
+  page renders the available Red Flowers listing (35 stems at $5/stem) and a
+  sold-out White Flowers listing (0 available), along with the custom-request
+  form and its visible field captions. The browser accessibility snapshot again
+  marked some fields as missing accessible names despite those captions; this
+  remains an unresolved verification discrepancy, not a confirmed defect.
+  No cart action, request, or submission was made. Railway's latest available
+  snapshot still showed all five staging services without warnings, critical
+  issues, recent failures, or pending work; the most recent recorded scheduled
+  reconciliation remained 23:45:10 UTC Oct 16. No manual job trigger; production
+  untouched.
+- PR #53's initial head (`af84182`) had passing backend, frontend, and
+  commit-title checks. Later documentation-only updates did not show fresh
+  backend/frontend check runs at the time last queried; the PR remains open,
+  unreviewed, and unmerged.
+- After the staging admin session was renewed, the read-only “Needs attention”
+  page showed its latest 20 persisted reconciliation rows all as `Report · 0
+  findings`, spanning 3:15–8:01 PM EDT on Oct 16 (19:15–00:01 UTC Oct 17).
+  The same page showed no wedding quotes or bouquet proposals awaiting review,
+  no unconfirmed order/invoice refunds, no failed inquiry emails, and no unsent
+  order confirmations. Railway independently reported the 00:01:49 UTC scheduled
+  reconciliation succeeded, with zero warnings, critical issues, recent
+  failures, or pending work. This extends clean persisted-summary evidence over
+  the visible 20-run window only; real-finding alert behavior and sustained
+  monitoring remain open. No job was manually triggered; production untouched.
+- The next scheduled staging reconciliation was observed at 00:15:26 UTC Oct 17,
+  succeeded, and logged the generic success message; Railway still reports no
+  warnings, critical issues, recent failures, or pending work. A read-only refresh
+  of “Needs attention” showed 20 persisted rows all `Report · 0 findings`, now
+  spanning 3:31–8:15 PM EDT Oct 16 (19:31–00:15 UTC Oct 17), with no quotes or
+  proposals awaiting review, refunds unconfirmed, failed inquiry emails, or
+  unsent confirmations. The page showed reauthentication required; no save or
+  write action was attempted. No manual job trigger; production untouched.
+- The same renewed session allowed a read-only open of the existing inactive
+  Gallery #1 edit view; its current photo preview rendered. No fields were
+  changed and Save was not clicked. This adds authenticated admin-side
+  readability evidence only; it does not verify the private-media signing or
+  authorization boundary, public denial for this exact asset, upload persistence
+  across restart/restore, or the oversized-JPEG exception.
+- The existing staging-only test inquiry photo (`/admin/inquiries/5/photo`)
+  loaded read-only as an 800×800 image; sanitized Railway HTTP logs recorded GET
+  200 with no upstream error at 00:38 UTC Oct 17. The public `/api/gallery/`
+  endpoint returned `[]`, keeping the inactive gallery fixture unpublished. This
+  confirms current authenticated retrieval and inactive-gallery visibility only;
+  anonymous denial for this photo, raw-byte equality, and restore recovery remain
+  open. No inquiry was created and no email was sent in this check.
+- Another scheduled staging reconciliation succeeded at 00:30:45 UTC Oct 17 and
+  logged the generic success message. The refreshed page showed 20 rows all
+  `Report · 0 findings`, now through 8:30 PM EDT Oct 16 (00:30 UTC Oct 17).
+  Railway still reports no warnings, critical issues, recent failures, or pending
+  work. Reauthentication is required for writes; no write or manual job trigger.
+- A read-only request to `http://staging.hellohoneysummer.com/api/health/`
+  redirected to HTTPS and returned API health `status: ok`. No write request was
+  made; this confirms only current redirect and liveness behavior.
+- An unauthenticated HTTP-client probe of an admin photo URL was intercepted by
+  Cloudflare Access and returned its staging sign-in page before reaching the
+  application. This confirms the outer Access gate from that client, not the
+  application's own session authorization; prior application-session-expiry
+  evidence remains separately documented.
+- A sanitized staging API-log sample at 00:53 UTC covered the latest 501 GET
+  records from 00:04:48–00:52:18 UTC Oct 17: all returned HTTP 200, with zero
+  upstream errors. This bounded sample is not uptime/SLO evidence and did not
+  include write requests.
+- Read-only R2 inventory at 00:57 UTC confirmed the Oct 16 staging backup
+  snapshot contains six encrypted objects: one database archive, two public and
+  two private media objects, and a final manifest. The objects carry the expected
+  encrypted-backup format metadata. The bucket has no custom domains, its managed
+  `r2.dev` endpoint is disabled, and an enabled rule expires `snapshots/` objects
+  after 14 days (with the 7-day incomplete-multipart cleanup intact). This
+  verifies current artifact inventory/configuration, not restoration of this
+  particular snapshot or recovery of today's newer data.
+- Read-only Cloudflare R2 inventory confirmed dedicated staging public, private,
+  and backup buckets. The private bucket has no custom domain and its managed
+  `r2.dev` access is disabled; its two objects are under `inquiries/`. The public
+  bucket has the active `media-staging.hellohoneysummer.com` domain, `r2.dev`
+  disabled, and zero objects under `inquiries/`. This supports the private/public
+  storage boundary for current objects. It does not directly test anonymous
+  access to the exact private object or the app-session guard for test inquiry #5.
+- Public-bucket metadata inventory found two staging objects; the largest is the
+  previously documented 15,118,440-byte JPEG. The public gallery API still
+  returns `[]`, so it is not an active gallery entry, but the object remains in
+  the publicly addressed bucket. I did not fetch or delete it; owner retention or
+  cleanup decision remains open.
+- Scheduled staging reconciliation was observed again at 01:02:17 UTC Oct 17;
+  Railway reported success and deploy logs showed `Inventory and overdue holds
+  reconciled.` The environment still had five healthy services, zero warnings,
+  critical issues, or recent failures, and no pending work. This remains a
+  point-in-time report-only observation; no job was manually triggered and no
+  production service was touched.
+- Read-only staging health/catalogue follow-up at 01:09 UTC returned health
+  `status: ok`; retail catalogue showed Red Flowers available (35 at $5/stem)
+  and White Flowers unavailable (0 at $5/stem), with no photo URLs. A sanitized
+  proxy-log sample from 00:52:03–01:09:06 UTC contained 209 GET requests, all
+  HTTP 200 with no upstream errors. This is bounded point-in-time evidence, not
+  uptime/SLO or inventory correctness evidence.
+- The next scheduled staging reconciliation succeeded at 01:15:15 UTC Oct 17;
+  deploy logs at 01:15:18 UTC showed `Inventory and overdue holds reconciled.`
+  Railway continued to report five healthy services, no warnings, critical
+  issues, recent failures, or pending work. This is another report-only
+  point-in-time observation; no manual trigger or production activity.
+- Supplemental local verification: `uv run pytest tests/test_media.py
+  tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
+  media/inquiry behavior only and does not replace hosted staging authorization,
+  persistence, delivery, or recovery acceptance.
+- Broader local-only verification on the current source: backend `uv run pytest`
+  passed 350 tests with 3 Postgres-dependent tests skipped; frontend unit tests
+  passed 23/23; local Playwright inquiry/layout checks passed 25/25; ESLint and
+  TypeScript typecheck passed; `npm audit --omit=dev` found 0 production
+  dependency vulnerabilities. Playwright used the isolated local server and a
+  dead local API target, not staging. The full npm audit reported 8 high issues
+  including development dependencies; no dependency changes or audit fixes were
+  applied. None of this closes hosted/provider acceptance rows.
+- The local Playwright checks assert browser-computed accessible names for every
+  field on the contact, bouquet, and wedding forms, plus keyboard label focus and
+  consent behavior. They pass locally, but do not resolve the discrepancy in the
+  browser panel's staging snapshot or replace deployed assistive-technology review.
+- A second 390px read-only visit to staging `/checkout/wholesale` showed the
+  approved-account requirement and a sign-in/request-access link, with no checkout
+  controls or order path for an unauthenticated visitor. This verifies only the
+  public UI gate, not backend authorization or approved-account checkout. No
+  account request or checkout was initiated.
 
 ## Production validation summary
 
