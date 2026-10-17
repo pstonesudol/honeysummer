@@ -947,6 +947,12 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   contained 209 GET requests, all HTTP 200 and zero upstream errors. This is
   bounded point-in-time evidence only, not uptime/SLO or inventory correctness
   evidence; no writes. Production untouched.
+- Staging scheduled reconciliation follow-up — October 17, approximately
+  01:16 UTC: the normal scheduled run completed successfully at 01:15:15 UTC and
+  logged `Inventory and overdue holds reconciled.` Railway showed five healthy
+  services, zero warnings, critical issues, recent failures and pending work.
+  This remains report-only point-in-time evidence; no manual trigger and
+  production untouched.
 - Unauthenticated external-client probe of a staging admin photo URL — October
   17: Cloudflare Access returned its sign-in page before the request reached the
   application. This verifies only the outer Access gate for that client, not the

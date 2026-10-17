@@ -426,6 +426,11 @@ acceptance row unless the register explicitly says so.
   proxy-log sample from 00:52:03–01:09:06 UTC contained 209 GET requests, all
   HTTP 200 with no upstream errors. This is bounded point-in-time evidence, not
   uptime/SLO or inventory correctness evidence.
+- The next scheduled staging reconciliation succeeded at 01:15:15 UTC Oct 17;
+  deploy logs at 01:15:18 UTC showed `Inventory and overdue holds reconciled.`
+  Railway continued to report five healthy services, no warnings, critical
+  issues, recent failures, or pending work. This is another report-only
+  point-in-time observation; no manual trigger or production activity.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,
