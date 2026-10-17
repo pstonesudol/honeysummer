@@ -881,6 +881,19 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   `uv run pytest tests/test_media.py tests/test_inquiries.py` passed 36 tests.
   This is implementation-level evidence only; it does not establish hosted
   staging authorization, object persistence, email delivery, or recovery.
+- Broader local-only verification — October 17: backend `uv run pytest` passed
+  350 tests; three Postgres-dependent tests were skipped. Frontend unit tests
+  passed 23/23; local Playwright inquiry/layout checks passed 25/25; ESLint and
+  TypeScript typecheck passed; `npm audit --omit=dev` found zero production
+  dependency vulnerabilities. Playwright was configured for the isolated local
+  server with an unavailable local API target, not staging. The full npm audit
+  reported eight high-severity issues including development dependencies; none
+  were changed or auto-fixed. These results do not close deployed/provider
+  acceptance checks.
+- Those local Playwright checks assert computed accessible names for all contact,
+  bouquet, and wedding form fields and verify keyboard label-focus/consent
+  behavior. They pass against the local server only; the staging browser
+  snapshot discrepancy and deployed assistive-technology acceptance remain open.
 - Staging wholesale unauthenticated UI spot-check — October 16, approximately
   23:53 UTC: the 390px `/checkout/wholesale` page stated that an approved account
   is required and offered sign-in/request access, with no checkout controls

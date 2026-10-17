@@ -366,6 +366,18 @@ acceptance row unless the register explicitly says so.
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,
   persistence, delivery, or recovery acceptance.
+- Broader local-only verification on the current source: backend `uv run pytest`
+  passed 350 tests with 3 Postgres-dependent tests skipped; frontend unit tests
+  passed 23/23; local Playwright inquiry/layout checks passed 25/25; ESLint and
+  TypeScript typecheck passed; `npm audit --omit=dev` found 0 production
+  dependency vulnerabilities. Playwright used the isolated local server and a
+  dead local API target, not staging. The full npm audit reported 8 high issues
+  including development dependencies; no dependency changes or audit fixes were
+  applied. None of this closes hosted/provider acceptance rows.
+- The local Playwright checks assert browser-computed accessible names for every
+  field on the contact, bouquet, and wedding forms, plus keyboard label focus and
+  consent behavior. They pass locally, but do not resolve the discrepancy in the
+  browser panel's staging snapshot or replace deployed assistive-technology review.
 - A second 390px read-only visit to staging `/checkout/wholesale` showed the
   approved-account requirement and a sign-in/request-access link, with no checkout
   controls or order path for an unauthenticated visitor. This verifies only the
