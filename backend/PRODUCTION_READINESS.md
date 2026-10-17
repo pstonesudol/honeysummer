@@ -859,6 +859,17 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   Production was untouched.
 - PR #53 CI follow-up — backend, frontend, and commit-title checks all passed;
   PR #53 remains open and unmerged.
+- Staging persisted reconciliation and attention-queue follow-up — October 17,
+  approximately 00:03 UTC: after the owner renewed the admin session, the
+  read-only “Needs attention” page showed all 20 latest persisted reconciliation
+  rows as `Report · 0 findings`, spanning 3:15–8:01 PM EDT Oct 16
+  (19:15–00:01 UTC Oct 17). The page also showed no wedding quotes/proposals
+  awaiting review, unconfirmed order/invoice refunds, failed inquiry emails, or
+  unsent order confirmations. Railway independently reported the 00:01:49 UTC
+  scheduled run succeeded, with zero warnings, critical issues, recent failures,
+  or pending work. This extends clean persisted summaries over the displayed
+  window only; it does not verify real-finding alerts or long-term monitoring.
+  No manual job trigger; production untouched.
 - Staging wholesale unauthenticated UI spot-check — October 16, approximately
   23:53 UTC: the 390px `/checkout/wholesale` page stated that an approved account
   is required and offered sign-in/request access, with no checkout controls

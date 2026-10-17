@@ -344,6 +344,16 @@ acceptance row unless the register explicitly says so.
   untouched.
 - PR #53's backend, frontend, and commit-title checks all completed successfully;
   the PR remains open and unmerged.
+- After the staging admin session was renewed, the read-only “Needs attention”
+  page showed its latest 20 persisted reconciliation rows all as `Report · 0
+  findings`, spanning 3:15–8:01 PM EDT on Oct 16 (19:15–00:01 UTC Oct 17).
+  The same page showed no wedding quotes or bouquet proposals awaiting review,
+  no unconfirmed order/invoice refunds, no failed inquiry emails, and no unsent
+  order confirmations. Railway independently reported the 00:01:49 UTC scheduled
+  reconciliation succeeded, with zero warnings, critical issues, recent
+  failures, or pending work. This extends clean persisted-summary evidence over
+  the visible 20-run window only; real-finding alert behavior and sustained
+  monitoring remain open. No job was manually triggered; production untouched.
 - A second 390px read-only visit to staging `/checkout/wholesale` showed the
   approved-account requirement and a sign-in/request-access link, with no checkout
   controls or order path for an unauthenticated visitor. This verifies only the
