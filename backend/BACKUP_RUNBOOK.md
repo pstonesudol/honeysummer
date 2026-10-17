@@ -131,7 +131,13 @@ dispatch. Before calling alerting accepted, test a simulated failure and confirm
 receipt through the owner's GitHub notification settings. Railway's own failure
 history is a secondary diagnostic, not proof of notification.
 
-## Recovery procedure (tool implemented; rehearsal not yet completed)
+## Recovery procedure (staging rehearsal completed October 16, 2026)
+
+The October 16 isolated staging rehearsal completed and its temporary targets
+were removed with owner approval (see the G2 evidence in
+`PRODUCTION_READINESS.md`). These steps document a future rehearsal: create fresh
+isolated targets and obtain explicit approval before repeating it. Production
+recovery remains a separate open acceptance item.
 
 1. Select a snapshot by its encrypted manifest key. Configure restore-only
    credentials and target settings as described below, then run

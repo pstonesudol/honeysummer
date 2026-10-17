@@ -908,6 +908,16 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   `http://staging.hellohoneysummer.com/api/health/` landed on HTTPS and returned
   `status: ok`. This verifies the redirect and point-in-time liveness only; no
   write request was made and it is not uptime/SLO evidence. Production untouched.
+- Staging encrypted-backup artifact/configuration check — October 17,
+  approximately 00:57 UTC: read-only R2 inventory found six objects in the Oct 16
+  snapshot: one database archive, two public and two private media objects, and
+  the completion manifest. Objects use the expected `hsbackup1` encrypted
+  format metadata and include ciphertext digests. The dedicated backup bucket
+  has no custom domains, managed `r2.dev` access is disabled, and its enabled
+  lifecycle expires `snapshots/` after 14 days; the default 7-day incomplete
+  multipart cleanup is intact. This checks inventory and configuration only; it
+  does not decrypt or restore this particular snapshot or verify recovery of
+  newer data. No objects were read or modified; production untouched.
 - Unauthenticated external-client probe of a staging admin photo URL — October
   17: Cloudflare Access returned its sign-in page before the request reached the
   application. This verifies only the outer Access gate for that client, not the

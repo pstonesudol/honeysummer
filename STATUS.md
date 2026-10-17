@@ -394,6 +394,14 @@ acceptance row unless the register explicitly says so.
   records from 00:04:48–00:52:18 UTC Oct 17: all returned HTTP 200, with zero
   upstream errors. This bounded sample is not uptime/SLO evidence and did not
   include write requests.
+- Read-only R2 inventory at 00:57 UTC confirmed the Oct 16 staging backup
+  snapshot contains six encrypted objects: one database archive, two public and
+  two private media objects, and a final manifest. The objects carry the expected
+  encrypted-backup format metadata. The bucket has no custom domains, its managed
+  `r2.dev` endpoint is disabled, and an enabled rule expires `snapshots/` objects
+  after 14 days (with the 7-day incomplete-multipart cleanup intact). This
+  verifies current artifact inventory/configuration, not restoration of this
+  particular snapshot or recovery of today's newer data.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,
