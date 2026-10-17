@@ -441,6 +441,11 @@ acceptance row unless the register explicitly says so.
   logs at 01:46:23 UTC showed `Inventory and overdue holds reconciled.` Railway
   again reported five healthy services, zero warnings, critical issues, recent
   failures, and pending work. No manual trigger or production activity.
+- The 02:00 UTC scheduled staging reconciliation also succeeded (Railway
+  completion time 02:00:31 UTC); deploy logs at 02:00:34 UTC showed
+  `Inventory and overdue holds reconciled.` All five services remained healthy,
+  with zero warnings, critical issues, recent failures, or pending work. This is
+  report-only point-in-time evidence; no manual trigger or production activity.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,
