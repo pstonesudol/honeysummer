@@ -968,6 +968,19 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   `Inventory and overdue holds reconciled.` Railway showed five healthy
   services, zero warnings, critical issues, recent failures and pending work.
   Report-only; no manual trigger; production untouched.
+- Approved staging synthetic reconciliation-alert check — October 17,
+  approximately 03:08–03:18 UTC: staging-only Red Flowers listing #2 baseline was
+  35 available / 35 ledger. Inserted one marked `acceptance_test` ledger-only
+  +1 movement. The normal scheduled run persisted reconciliation run #200 at
+  03:16:54 UTC with one finding (`Listing #2: available=35, ledger=36`) and
+  `applied=false`; cron exited nonzero as expected. GitHub Actions received the
+  generic staging reconciliation dispatch and run 38998178156 completed failure
+  as designed. This confirms finding persistence, report-only behavior and
+  workflow dispatch; receipt in the operator's inbox is not verified. Following
+  the recorded finding, inserted a compensating append-only -1 movement; read-only
+  query showed available=35 and ledger=35. A later persisted clean run is still
+  required to close fixture teardown verification. No manual job trigger,
+  payment, customer email or production mutation.
 - Staging scheduled reconciliation follow-up — October 17, approximately
   02:32 UTC: the normal scheduled run completed at 02:31:09 UTC and logged
   `Inventory and overdue holds reconciled.` Railway showed five healthy

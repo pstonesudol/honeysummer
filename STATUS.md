@@ -466,6 +466,18 @@ acceptance row unless the register explicitly says so.
   03:01:31 UTC). Railway still reported five healthy services, no warnings,
   critical issues, recent failures or pending work. Report-only; no manual
   trigger or production activity.
+- Approved staging synthetic alert verification — October 17, approximately
+  03:08–03:18 UTC: after a read-only baseline check showed Red Flowers (listing
+  #2) at 35 available / 35 ledger, inserted one marked `acceptance_test` ledger
+  movement (+1) in staging only. The normal 03:16:54 UTC report persisted as
+  reconciliation run #200 with exactly `Listing #2: available=35, ledger=36`,
+  `applied=false`; the cron exited nonzero as designed. GitHub Actions dispatched
+  the generic staging reconciliation alert (run 38998178156, completed failure
+  as intended). Dispatch/workflow behavior is verified; owner inbox receipt is
+  not. After recording the finding, added a compensating append-only movement
+  (-1); read-only DB check showed 35 available / 35 ledger again. No manual job
+  trigger, payment, customer email or production change. A subsequent persisted
+  clean run still needs verification.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,
