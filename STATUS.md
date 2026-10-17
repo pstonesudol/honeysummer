@@ -342,8 +342,10 @@ acceptance row unless the register explicitly says so.
   issues, recent failures, or pending work; the most recent recorded scheduled
   reconciliation remained 23:45:10 UTC Oct 16. No manual job trigger; production
   untouched.
-- PR #53's backend, frontend, and commit-title checks all completed successfully;
-  the PR remains open and unmerged.
+- PR #53's initial head (`af84182`) had passing backend, frontend, and
+  commit-title checks. Later documentation-only updates did not show fresh
+  backend/frontend check runs at the time last queried; the PR remains open,
+  unreviewed, and unmerged.
 - After the staging admin session was renewed, the read-only “Needs attention”
   page showed its latest 20 persisted reconciliation rows all as `Report · 0
   findings`, spanning 3:15–8:01 PM EDT on Oct 16 (19:15–00:01 UTC Oct 17).
@@ -360,6 +362,10 @@ acceptance row unless the register explicitly says so.
   readability evidence only; it does not verify the private-media signing or
   authorization boundary, public denial for this exact asset, upload persistence
   across restart/restore, or the oversized-JPEG exception.
+- Supplemental local verification: `uv run pytest tests/test_media.py
+  tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
+  media/inquiry behavior only and does not replace hosted staging authorization,
+  persistence, delivery, or recovery acceptance.
 - A second 390px read-only visit to staging `/checkout/wholesale` showed the
   approved-account requirement and a sign-in/request-access link, with no checkout
   controls or order path for an unauthenticated visitor. This verifies only the

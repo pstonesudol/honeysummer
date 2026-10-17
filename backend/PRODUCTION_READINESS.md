@@ -874,9 +874,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   with the renewed admin session, the read-only Gallery #1 edit view rendered its
   existing photo preview. No fields were changed and Save was not clicked. This
   verifies only authenticated admin-side readability for this record; it does
-  not establish the signing/authorization boundary, public denial for this exact
-  asset, persistence across restart/restore, or oversized-JPEG exception behavior.
+   not establish the signing/authorization boundary, public denial for this exact
+   asset, persistence across restart/restore, or oversized-JPEG exception behavior.
   Production was untouched.
+- Supplemental isolated local verification — October 17: from `backend/`,
+  `uv run pytest tests/test_media.py tests/test_inquiries.py` passed 36 tests.
+  This is implementation-level evidence only; it does not establish hosted
+  staging authorization, object persistence, email delivery, or recovery.
 - Staging wholesale unauthenticated UI spot-check — October 16, approximately
   23:53 UTC: the 390px `/checkout/wholesale` page stated that an approved account
   is required and offered sign-in/request access, with no checkout controls
