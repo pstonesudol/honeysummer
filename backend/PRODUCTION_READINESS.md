@@ -914,6 +914,10 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   application's admin-session check; the prior observed application-session
   expiry redirect remains separate evidence. No private image content was
   returned to the unauthenticated client; production untouched.
+- Staging API request-log follow-up — October 17, approximately 00:53 UTC: the
+  latest 501 sanitized HTTP records spanned 00:04:48–00:52:18 UTC; all were GET
+  requests returning 200, with no upstream errors. This bounded sample is not an
+  uptime/SLO claim; no write was made. Production untouched.
 - Supplemental isolated local verification — October 17: from `backend/`,
   `uv run pytest tests/test_media.py tests/test_inquiries.py` passed 36 tests.
   This is implementation-level evidence only; it does not establish hosted

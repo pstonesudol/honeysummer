@@ -390,6 +390,10 @@ acceptance row unless the register explicitly says so.
   application. This confirms the outer Access gate from that client, not the
   application's own session authorization; prior application-session-expiry
   evidence remains separately documented.
+- A sanitized staging API-log sample at 00:53 UTC covered the latest 501 GET
+  records from 00:04:48–00:52:18 UTC Oct 17: all returned HTTP 200, with zero
+  upstream errors. This bounded sample is not uptime/SLO evidence and did not
+  include write requests.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,
