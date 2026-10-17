@@ -918,6 +918,15 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   multipart cleanup is intact. This checks inventory and configuration only; it
   does not decrypt or restore this particular snapshot or verify recovery of
   newer data. No objects were read or modified; production untouched.
+- Staging R2 private/public boundary inventory — October 17, approximately
+  00:58 UTC: read-only Cloudflare metadata showed dedicated staging public,
+  private and backup buckets. The private bucket had no custom domain, managed
+  `r2.dev` disabled, and two objects under `inquiries/`; the public bucket had
+  the active `media-staging.hellohoneysummer.com` custom domain, managed `r2.dev`
+  disabled, and zero objects under `inquiries/`. This supports configured
+  separation for current stored objects; it does not directly verify anonymous
+  access to the exact private object or the app-session guard for inquiry #5.
+  No object content was fetched or changed; production untouched.
 - Unauthenticated external-client probe of a staging admin photo URL — October
   17: Cloudflare Access returned its sign-in page before the request reached the
   application. This verifies only the outer Access gate for that client, not the

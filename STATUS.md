@@ -402,6 +402,13 @@ acceptance row unless the register explicitly says so.
   after 14 days (with the 7-day incomplete-multipart cleanup intact). This
   verifies current artifact inventory/configuration, not restoration of this
   particular snapshot or recovery of today's newer data.
+- Read-only Cloudflare R2 inventory confirmed dedicated staging public, private,
+  and backup buckets. The private bucket has no custom domain and its managed
+  `r2.dev` access is disabled; its two objects are under `inquiries/`. The public
+  bucket has the active `media-staging.hellohoneysummer.com` domain, `r2.dev`
+  disabled, and zero objects under `inquiries/`. This supports the private/public
+  storage boundary for current objects. It does not directly test anonymous
+  access to the exact private object or the app-session guard for test inquiry #5.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,
