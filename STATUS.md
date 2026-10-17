@@ -476,8 +476,20 @@ acceptance row unless the register explicitly says so.
   as intended). Dispatch/workflow behavior is verified; owner inbox receipt is
   not. After recording the finding, added a compensating append-only movement
   (-1); read-only DB check showed 35 available / 35 ledger again. No manual job
-  trigger, payment, customer email or production change. A subsequent persisted
-  clean run still needs verification.
+  trigger, payment, customer email or production change. The clean post-compensation
+  run is separately recorded below.
+- Fixture teardown verification — October 17, 03:32:41 UTC: normal staging
+  reconciliation persisted run #201 with zero findings and `applied=false`;
+  read-only inventory showed Red Flowers at 35 available / 35 ledger after the
+  compensating append-only entry. The staging synthetic-finding test now has a
+  report-only detection, persisted finding, alert-workflow dispatch and clean
+  post-compensation run. Owner notification inbox receipt remains unverified.
+- The scheduled Oct 17 staging backup completed at 03:34:37 UTC. Railway deploy
+  logs reported manifest `snapshots/2026/10/17/ebb88a99c9fd46ed8befc4089c0fb7a4/manifest.json.hsbackup`;
+  metadata-only R2 inventory showed the database archive, two public and two
+  private encrypted media objects, plus the final manifest. Railway reported no
+  warning, critical issue or recent failure. This confirms today's backup
+  artifact, not restoration of this new snapshot.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,

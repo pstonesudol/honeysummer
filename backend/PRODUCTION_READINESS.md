@@ -978,9 +978,24 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   as designed. This confirms finding persistence, report-only behavior and
   workflow dispatch; receipt in the operator's inbox is not verified. Following
   the recorded finding, inserted a compensating append-only -1 movement; read-only
-  query showed available=35 and ledger=35. A later persisted clean run is still
-  required to close fixture teardown verification. No manual job trigger,
+  query showed available=35 and ledger=35. A later persisted clean run is recorded
+  below to close fixture teardown verification. No manual job trigger,
   payment, customer email or production mutation.
+- Staging synthetic fixture cleanup verification — October 17, 03:32:41 UTC:
+  the next normal scheduled run persisted reconciliation #201 with zero findings
+  and `applied=false`; read-only DB query confirmed Red Flowers available=35 and
+  ledger=35 after the marked compensating entry. Detection, persistence,
+  report-only behavior, workflow dispatch and clean post-compensation check are
+  verified. The failed-by-design GitHub Actions run confirms workflow dispatch,
+  not the operator's actual inbox receipt.
+- Scheduled staging backup — October 17: Railway reported success at 03:34:37
+  UTC. Its log recorded manifest
+  `snapshots/2026/10/17/ebb88a99c9fd46ed8befc4089c0fb7a4/manifest.json.hsbackup`.
+  Metadata-only R2 inventory confirmed the database archive, two public and two
+  private encrypted media objects and the final manifest. Railway reported no
+  warning, critical issue or recent failure. Current artifact only; restore of
+  this snapshot remains unverified. No object content fetched or changed;
+  production untouched.
 - Staging scheduled reconciliation follow-up — October 17, approximately
   02:32 UTC: the normal scheduled run completed at 02:31:09 UTC and logged
   `Inventory and overdue holds reconciled.` Railway showed five healthy
