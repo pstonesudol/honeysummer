@@ -958,6 +958,12 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   logged `Inventory and overdue holds reconciled.` Railway showed five healthy
   services, zero warnings, critical issues, recent failures and pending work.
   Report-only point-in-time evidence; no manual trigger; production untouched.
+- Staging scheduled reconciliation follow-up — October 17, approximately
+  01:47 UTC: the normal scheduled run completed successfully at 01:46:22 UTC,
+  about one minute after the quarter-hour boundary, and logged
+  `Inventory and overdue holds reconciled.` Railway showed five healthy
+  services, zero warnings, critical issues, recent failures and pending work.
+  No manual trigger; production untouched.
 - Unauthenticated external-client probe of a staging admin photo URL — October
   17: Cloudflare Access returned its sign-in page before the request reached the
   application. This verifies only the outer Access gate for that client, not the
