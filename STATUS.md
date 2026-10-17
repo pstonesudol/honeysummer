@@ -354,6 +354,12 @@ acceptance row unless the register explicitly says so.
   failures, or pending work. This extends clean persisted-summary evidence over
   the visible 20-run window only; real-finding alert behavior and sustained
   monitoring remain open. No job was manually triggered; production untouched.
+- The same renewed session allowed a read-only open of the existing inactive
+  Gallery #1 edit view; its current photo preview rendered. No fields were
+  changed and Save was not clicked. This adds authenticated admin-side
+  readability evidence only; it does not verify the private-media signing or
+  authorization boundary, public denial for this exact asset, upload persistence
+  across restart/restore, or the oversized-JPEG exception.
 - A second 390px read-only visit to staging `/checkout/wholesale` showed the
   approved-account requirement and a sign-in/request-access link, with no checkout
   controls or order path for an unauthenticated visitor. This verifies only the

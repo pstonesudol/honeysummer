@@ -870,6 +870,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   or pending work. This extends clean persisted summaries over the displayed
   window only; it does not verify real-finding alerts or long-term monitoring.
   No manual job trigger; production untouched.
+- Staging existing-gallery preview check — October 17, approximately 00:04 UTC:
+  with the renewed admin session, the read-only Gallery #1 edit view rendered its
+  existing photo preview. No fields were changed and Save was not clicked. This
+  verifies only authenticated admin-side readability for this record; it does
+  not establish the signing/authorization boundary, public denial for this exact
+  asset, persistence across restart/restore, or oversized-JPEG exception behavior.
+  Production was untouched.
 - Staging wholesale unauthenticated UI spot-check — October 16, approximately
   23:53 UTC: the 390px `/checkout/wholesale` page stated that an approved account
   is required and offered sign-in/request access, with no checkout controls
