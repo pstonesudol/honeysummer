@@ -356,6 +356,14 @@ acceptance row unless the register explicitly says so.
   failures, or pending work. This extends clean persisted-summary evidence over
   the visible 20-run window only; real-finding alert behavior and sustained
   monitoring remain open. No job was manually triggered; production untouched.
+- The next scheduled staging reconciliation was observed at 00:15:26 UTC Oct 17,
+  succeeded, and logged the generic success message; Railway still reports no
+  warnings, critical issues, recent failures, or pending work. A read-only refresh
+  of “Needs attention” showed 20 persisted rows all `Report · 0 findings`, now
+  spanning 3:31–8:15 PM EDT Oct 16 (19:31–00:15 UTC Oct 17), with no quotes or
+  proposals awaiting review, refunds unconfirmed, failed inquiry emails, or
+  unsent confirmations. The page showed reauthentication required; no save or
+  write action was attempted. No manual job trigger; production untouched.
 - The same renewed session allowed a read-only open of the existing inactive
   Gallery #1 edit view; its current photo preview rendered. No fields were
   changed and Save was not clicked. This adds authenticated admin-side

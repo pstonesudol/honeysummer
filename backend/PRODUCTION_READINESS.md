@@ -870,12 +870,23 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   or pending work. This extends clean persisted summaries over the displayed
   window only; it does not verify real-finding alerts or long-term monitoring.
   No manual job trigger; production untouched.
+- Staging scheduled reconciliation/attention follow-up — October 17,
+  approximately 00:17 UTC: Railway reported the 00:15:26 UTC scheduled run
+  succeeded; its log said `Inventory and overdue holds reconciled.` with zero
+  warnings, critical issues, recent failures, and pending work. After a read-only
+  refresh, the staging “Needs attention” page showed its 20 latest persisted rows
+  all `Report · 0 findings`, spanning 3:31–8:15 PM EDT Oct 16
+  (19:31–00:15 UTC Oct 17). No wedding/proposal reviews, unconfirmed refunds,
+  failed inquiry emails, or unsent confirmations appeared. The page showed
+  reauthentication required, so no write action was attempted. This extends
+  clean summaries over the visible window only; it does not test real-finding
+  alerts or long-term monitoring. No manual trigger; production untouched.
 - Staging existing-gallery preview check — October 17, approximately 00:04 UTC:
   with the renewed admin session, the read-only Gallery #1 edit view rendered its
   existing photo preview. No fields were changed and Save was not clicked. This
   verifies only authenticated admin-side readability for this record; it does
-   not establish the signing/authorization boundary, public denial for this exact
-   asset, persistence across restart/restore, or oversized-JPEG exception behavior.
+  not establish the signing/authorization boundary, public denial for this exact
+  asset, persistence across restart/restore, or oversized-JPEG exception behavior.
   Production was untouched.
 - Supplemental isolated local verification — October 17: from `backend/`,
   `uv run pytest tests/test_media.py tests/test_inquiries.py` passed 36 tests.
