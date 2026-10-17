@@ -414,6 +414,12 @@ acceptance row unless the register explicitly says so.
   returns `[]`, so it is not an active gallery entry, but the object remains in
   the publicly addressed bucket. I did not fetch or delete it; owner retention or
   cleanup decision remains open.
+- Scheduled staging reconciliation was observed again at 01:02:17 UTC Oct 17;
+  Railway reported success and deploy logs showed `Inventory and overdue holds
+  reconciled.` The environment still had five healthy services, zero warnings,
+  critical issues, or recent failures, and no pending work. This remains a
+  point-in-time report-only observation; no job was manually triggered and no
+  production service was touched.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,

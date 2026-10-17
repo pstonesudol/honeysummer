@@ -933,6 +933,13 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   so the object is not an active gallery entry, but it remains in the bucket
   addressed by the staging public media domain. No object content was fetched or
   deleted. Owner decision on retention/cleanup remains open; production untouched.
+- Staging scheduled reconciliation follow-up — October 17, approximately
+  01:04 UTC: Railway reported the scheduled 01:02:17 UTC reconciliation
+  succeeded; deploy logs contained `Inventory and overdue holds reconciled.`
+  Across all five staging services, Railway reported zero warnings, critical
+  issues, recent failures, and pending work. This is a point-in-time
+  report-only observation, not sustained monitoring. No manual trigger;
+  production untouched.
 - Unauthenticated external-client probe of a staging admin photo URL — October
   17: Cloudflare Access returned its sign-in page before the request reached the
   application. This verifies only the outer Access gate for that client, not the
