@@ -927,6 +927,12 @@ For **each accepted check**, record its ID, operator, timestamp, deployment/git 
   separation for current stored objects; it does not directly verify anonymous
   access to the exact private object or the app-session guard for inquiry #5.
   No object content was fetched or changed; production untouched.
+- Staging public-media object inventory — October 17, approximately 00:58 UTC:
+  metadata-only listing found two public-bucket objects; the largest was the
+  previously observed 15,118,440-byte JPEG. The public gallery API returns `[]`,
+  so the object is not an active gallery entry, but it remains in the bucket
+  addressed by the staging public media domain. No object content was fetched or
+  deleted. Owner decision on retention/cleanup remains open; production untouched.
 - Unauthenticated external-client probe of a staging admin photo URL — October
   17: Cloudflare Access returned its sign-in page before the request reached the
   application. This verifies only the outer Access gate for that client, not the

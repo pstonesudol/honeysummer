@@ -409,6 +409,11 @@ acceptance row unless the register explicitly says so.
   disabled, and zero objects under `inquiries/`. This supports the private/public
   storage boundary for current objects. It does not directly test anonymous
   access to the exact private object or the app-session guard for test inquiry #5.
+- Public-bucket metadata inventory found two staging objects; the largest is the
+  previously documented 15,118,440-byte JPEG. The public gallery API still
+  returns `[]`, so it is not an active gallery entry, but the object remains in
+  the publicly addressed bucket. I did not fetch or delete it; owner retention or
+  cleanup decision remains open.
 - Supplemental local verification: `uv run pytest tests/test_media.py
   tests/test_inquiries.py` from `backend/` passed all 36 tests. This covers local
   media/inquiry behavior only and does not replace hosted staging authorization,
